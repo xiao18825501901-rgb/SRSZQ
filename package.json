@@ -1,0 +1,32 @@
+{
+  "name": "three-player-connect-four",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Three-Player Connect Four - local web app",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "ai:selfplay": "tsx scripts/ai-selfplay.ts",
+    "ai:benchmark": "tsx scripts/ai-benchmark.ts"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

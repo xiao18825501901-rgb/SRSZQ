@@ -1,0 +1,293 @@
+{
+  "totals": {
+    "combos": 3,
+    "games": 36,
+    "wins": {
+      "A": 11,
+      "B": 12,
+      "C": 13
+    },
+    "draws": 0,
+    "aborted": 0,
+    "internalFallbacks": 0,
+    "wallMs": 313438
+  },
+  "results": [
+    {
+      "combo": "3ply/maxn/selfish",
+      "size": 11,
+      "games": 6,
+      "wins": {
+        "A": 6,
+        "B": 0,
+        "C": 0
+      },
+      "draws": 0,
+      "aborted": 0,
+      "movesTotal": 150,
+      "turnsTotal": 150,
+      "byLevel": {
+        "3ply": {
+          "decisions": 54,
+          "nodes": 34137,
+          "ttHits": 0,
+          "thinkMs": 8654.858899999997,
+          "depthSum": 150,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 432
+        },
+        "maxn": {
+          "decisions": 48,
+          "nodes": 50695,
+          "ttHits": 0,
+          "thinkMs": 37745.06780000001,
+          "depthSum": 147,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 409
+        },
+        "selfish": {
+          "decisions": 48,
+          "nodes": 0,
+          "ttHits": 0,
+          "thinkMs": 1298.2436999999784,
+          "depthSum": 0,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 0
+        }
+      }
+    },
+    {
+      "combo": "3ply/maxn/selfish",
+      "size": 13,
+      "games": 6,
+      "wins": {
+        "A": 5,
+        "B": 1,
+        "C": 0
+      },
+      "draws": 0,
+      "aborted": 0,
+      "movesTotal": 148,
+      "turnsTotal": 148,
+      "byLevel": {
+        "3ply": {
+          "decisions": 53,
+          "nodes": 35197,
+          "ttHits": 0,
+          "thinkMs": 12051.663000000008,
+          "depthSum": 149,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 421
+        },
+        "maxn": {
+          "decisions": 48,
+          "nodes": 40178,
+          "ttHits": 0,
+          "thinkMs": 37027.032999999974,
+          "depthSum": 142,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 408
+        },
+        "selfish": {
+          "decisions": 47,
+          "nodes": 0,
+          "ttHits": 0,
+          "thinkMs": 2499.813899999899,
+          "depthSum": 0,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 0
+        }
+      }
+    },
+    {
+      "combo": "maxn/selfish/3ply",
+      "size": 11,
+      "games": 6,
+      "wins": {
+        "A": 0,
+        "B": 1,
+        "C": 5
+      },
+      "draws": 0,
+      "aborted": 0,
+      "movesTotal": 182,
+      "turnsTotal": 182,
+      "byLevel": {
+        "maxn": {
+          "decisions": 61,
+          "nodes": 52793,
+          "ttHits": 0,
+          "thinkMs": 47181.82110000012,
+          "depthSum": 184,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 523
+        },
+        "selfish": {
+          "decisions": 61,
+          "nodes": 0,
+          "ttHits": 0,
+          "thinkMs": 1476.2959000000264,
+          "depthSum": 0,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 0
+        },
+        "3ply": {
+          "decisions": 60,
+          "nodes": 40911,
+          "ttHits": 0,
+          "thinkMs": 10160.98849999992,
+          "depthSum": 170,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 477
+        }
+      }
+    },
+    {
+      "combo": "maxn/selfish/3ply",
+      "size": 13,
+      "games": 6,
+      "wins": {
+        "A": 0,
+        "B": 0,
+        "C": 6
+      },
+      "draws": 0,
+      "aborted": 0,
+      "movesTotal": 144,
+      "turnsTotal": 144,
+      "byLevel": {
+        "maxn": {
+          "decisions": 48,
+          "nodes": 38043,
+          "ttHits": 0,
+          "thinkMs": 37856.35869999998,
+          "depthSum": 144,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 402
+        },
+        "selfish": {
+          "decisions": 48,
+          "nodes": 0,
+          "ttHits": 0,
+          "thinkMs": 2527.7256000000343,
+          "depthSum": 0,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 0
+        },
+        "3ply": {
+          "decisions": 48,
+          "nodes": 28522,
+          "ttHits": 0,
+          "thinkMs": 10360.370999999926,
+          "depthSum": 132,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 381
+        }
+      }
+    },
+    {
+      "combo": "selfish/3ply/maxn",
+      "size": 11,
+      "games": 6,
+      "wins": {
+        "A": 0,
+        "B": 5,
+        "C": 1
+      },
+      "draws": 0,
+      "aborted": 0,
+      "movesTotal": 163,
+      "turnsTotal": 163,
+      "byLevel": {
+        "selfish": {
+          "decisions": 56,
+          "nodes": 0,
+          "ttHits": 0,
+          "thinkMs": 1560.2378000000317,
+          "depthSum": 0,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 0
+        },
+        "3ply": {
+          "decisions": 56,
+          "nodes": 38964,
+          "ttHits": 0,
+          "thinkMs": 10143.189699999959,
+          "depthSum": 158,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 463
+        },
+        "maxn": {
+          "decisions": 51,
+          "nodes": 44932,
+          "ttHits": 0,
+          "thinkMs": 38824.13499999998,
+          "depthSum": 151,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 452
+        }
+      }
+    },
+    {
+      "combo": "selfish/3ply/maxn",
+      "size": 13,
+      "games": 6,
+      "wins": {
+        "A": 0,
+        "B": 5,
+        "C": 1
+      },
+      "draws": 0,
+      "aborted": 0,
+      "movesTotal": 154,
+      "turnsTotal": 154,
+      "byLevel": {
+        "selfish": {
+          "decisions": 53,
+          "nodes": 0,
+          "ttHits": 0,
+          "thinkMs": 2738.782899999991,
+          "depthSum": 0,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 0
+        },
+        "3ply": {
+          "decisions": 53,
+          "nodes": 36813,
+          "ttHits": 0,
+          "thinkMs": 13934.444499999867,
+          "depthSum": 147,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 434
+        },
+        "maxn": {
+          "decisions": 48,
+          "nodes": 43142,
+          "ttHits": 0,
+          "thinkMs": 37256.46829999983,
+          "depthSum": 142,
+          "wins": 0,
+          "passCount": 0,
+          "candidatesSum": 436
+        }
+      }
+    }
+  ]
+}
