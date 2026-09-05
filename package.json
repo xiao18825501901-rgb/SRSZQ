@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck -w frontend",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:backend": "tsx backend/tests/api.integration.ts",
     "e2e": "node e2e.cjs",
     "ai:selfplay": "tsx scripts/ai-selfplay.ts",
     "ai:benchmark": "tsx scripts/ai-benchmark.ts"
