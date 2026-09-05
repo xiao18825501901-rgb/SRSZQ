@@ -1189,3 +1189,157 @@ body {
 .mm-timer { font-size: 44px; font-weight: 800; color: var(--ds-accent-2); margin: 6px 0; font-variant-numeric: tabular-nums; }
 .mm-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; margin: 8px auto 14px; max-width: 340px; }
 .mm-bar-fill { height: 100%; background: linear-gradient(90deg, var(--ds-accent), var(--ds-accent-2)); transition: width .3s linear; }
+
+/* ============================================================
+   BAC Qualification Timeline Panel（Design System v2 视觉）
+   ============================================================ */
+.bac-panel {
+  background: linear-gradient(180deg, var(--ds-surface-strong), rgba(255,255,255,.02));
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-r-lg);
+  padding: 14px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--ds-shadow-sm);
+  min-width: 0;
+}
+.bac-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.bac-title { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: 1.2px; color: var(--ds-text); }
+.bac-sub { margin: 3px 0 0; font-size: 11px; color: var(--ds-text-3); letter-spacing: .4px; }
+.bac-tag { font-size: 10px; font-weight: 800; letter-spacing: 1px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--ds-border-strong); color: var(--ds-text-2); }
+
+.bac-now {
+  position: relative;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-r-md);
+  padding: 10px 12px;
+  background: rgba(255,255,255,.03);
+  overflow: hidden;
+  transition: border-color var(--ds-dur-2) var(--ds-ease), box-shadow var(--ds-dur-2) var(--ds-ease);
+}
+.bac-now::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(300px 90px at 85% -40%, rgba(124,92,255,.18), transparent 70%);
+  pointer-events: none;
+}
+.bac-now.locked { border-style: dashed; border-color: var(--ds-border-strong); }
+.bac-now.yours {
+  border-color: rgba(124,92,255,.75);
+  box-shadow: 0 0 0 1px rgba(124,92,255,.35), 0 6px 22px rgba(124,92,255,.18);
+  animation: bac-glow 1.8s ease-in-out infinite;
+}
+@keyframes bac-glow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(124,92,255,.28), 0 6px 22px rgba(124,92,255,.14); }
+  50% { box-shadow: 0 0 0 1px rgba(124,92,255,.7), 0 6px 26px rgba(124,92,255,.3); }
+}
+.bac-now-flag {
+  display: inline-block;
+  font-size: 10px; font-weight: 800; letter-spacing: 2px;
+  color: var(--ds-accent-2);
+  background: rgba(124,92,255,.12);
+  border: 1px solid rgba(124,92,255,.45);
+  border-radius: 999px; padding: 2px 10px; margin-bottom: 8px;
+}
+.bac-now-body { display: flex; align-items: center; gap: 10px; }
+.bac-now-info { min-width: 0; flex: 1; }
+.bac-holder-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bac-holder-line b { font-size: 15px; }
+.bac-pill {
+  font-size: 9.5px; font-weight: 800; letter-spacing: 1px;
+  padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--ds-border-strong); color: var(--ds-text-3);
+  background: rgba(255,255,255,.04);
+}
+.bac-pill.win {
+  color: #1a1503;
+  background: linear-gradient(180deg, #ffe08a, #d9b13c);
+  border-color: transparent;
+  box-shadow: 0 2px 10px rgba(217,177,60,.35);
+}
+.bac-now-note { margin-top: 4px; font-size: 11.5px; color: var(--ds-text-2); }
+.bac-now.locked .bac-now-note { color: var(--ds-text-3); }
+
+.bac-orb {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; flex: none;
+  background: rgba(255,255,255,.05);
+  border: 2px solid var(--ds-border-strong);
+  font-weight: 800; user-select: none;
+}
+.bac-orb.none { border-style: dashed; color: var(--ds-text-3); background: transparent; }
+.bac-orb.a { background: var(--ds-a); }
+.bac-orb.b { background: var(--ds-b); }
+.bac-orb.c { background: #fff; }
+
+.bac-window {
+  margin-top: 9px; padding: 7px 10px;
+  border-radius: var(--ds-r-sm);
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--ds-border);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.bac-window.yours { background: rgba(124,92,255,.12); border-color: rgba(124,92,255,.5); }
+.bac-window-star {
+  align-self: flex-start;
+  font-size: 9.5px; font-weight: 900; letter-spacing: 1.6px;
+  color: var(--ds-accent-2);
+}
+.bac-window-en { font-size: 12.5px; font-weight: 600; color: var(--ds-text); }
+.bac-window-zh { font-size: 11px; color: var(--ds-text-3); }
+.bac-ended-note { margin-top: 8px; font-size: 11px; color: var(--ds-warn); font-weight: 700; }
+
+.bac-next-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 10px; font-weight: 800; letter-spacing: 2px; color: var(--ds-text-3);
+  border-bottom: 1px solid var(--ds-border); padding-bottom: 6px;
+}
+.bac-collapse-btn {
+  background: transparent; border: 1px solid var(--ds-border); color: var(--ds-text-2);
+  font-size: 10.5px; border-radius: 999px; padding: 2px 10px; cursor: pointer; font-family: var(--ds-font);
+}
+.bac-collapse-btn:hover { border-color: var(--ds-border-strong); }
+
+.bac-rows { display: flex; flex-direction: column; gap: 3px; }
+.bac-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 8px; border-radius: var(--ds-r-sm);
+  border: 1px solid transparent;
+  font-size: 12px;
+}
+.bac-row .bac-rno { width: 34px; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ds-text-2); }
+.bac-flag { width: 34px; font-size: 8.5px; font-weight: 900; letter-spacing: 1px; }
+.bac-flag.now { color: #1a1503; background: linear-gradient(180deg,#ffe08a,#d9b13c); border-radius: 999px; padding: 1px 4px; text-align: center; }
+.bac-flag.next { color: var(--ds-accent-2); }
+.bac-flag.blank { opacity: 0; }
+.bac-pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ds-text-2); }
+.bac-row.now { background: rgba(217,177,60,.1); border-color: rgba(217,177,60,.4); }
+.bac-row.next { background: rgba(124,92,255,.07); border-color: rgba(124,92,255,.25); }
+.bac-row.you { box-shadow: inset 2px 0 0 var(--ds-accent); }
+.bac-you {
+  font-size: 8.5px; font-weight: 900; letter-spacing: 1px; color: var(--ds-accent-2);
+  border: 1px solid rgba(124,92,255,.5); border-radius: 999px; padding: 1px 6px; background: rgba(124,92,255,.1);
+}
+.bac-foot {
+  font-size: 10.5px; line-height: 1.6; color: var(--ds-text-3);
+  border-top: 1px dashed var(--ds-border); padding-top: 8px;
+}
+
+/* Online 对局布局：棋盘 + 资格时间线侧栏（桌面）/ 下方折叠卡片（移动） */
+.online-layout { display: grid; grid-template-columns: minmax(0, 1fr) 336px; gap: 14px; align-items: start; margin-top: 12px; }
+.online-board-col { min-width: 0; }
+.online-board-col .board { width: min(100%, calc(100vh - 330px)); }
+@media (max-width: 980px) {
+  .online-layout { grid-template-columns: 1fr; }
+  .bac-rows { display: none; }
+  .bac-rows.open { display: flex; }
+  .online-board-col .board { width: min(100%, calc(100vw - 40px)); }
+}
+@media (max-width: 380px) {
+  .bac-holder-line b { font-size: 13px; }
+  .bac-window-en { font-size: 11.5px; }
+}
+
+/* 本地/人机页侧栏内嵌时卡片宽度自适应 */
+.side-col .bac-panel { width: 100%; }

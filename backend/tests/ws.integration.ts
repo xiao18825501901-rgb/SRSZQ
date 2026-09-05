@@ -438,6 +438,102 @@ async function main(): Promise<void> {
     }
   });
 
+  // 7.5) W4-T1/T2：game.start / game.state 携带 BAC qualification（服务器权威）
+  await check('W4 BAC payload：开局 R1 NONE + 未来8轮；随回合推进自动更新', async () => {
+    const c1 = await connect(a.token);
+    try {
+      send(c1, { type: 'queue.join' });
+      const start = await waitFor(c1, 'game.start', 5000);
+      const q0 = start.qualification as any;
+      assert.ok(q0, 'game.start 应包含 qualification');
+      assert.equal(q0.currentRound, 1);
+      assert.equal(q0.currentEligible, null); // R1：NONE
+      assert.equal(q0.upcoming.length, 8, '当前 + 未来 8 轮');
+      assert.deepEqual(q0.upcoming[0], { round: 2, player: null });
+      assert.deepEqual(q0.upcoming[4], { round: 6, player: 'C' }, '引擎真实输出：R6=C');
+      assert.deepEqual(q0.upcoming[5], { round: 7, player: 'B' });
+      assert.deepEqual(q0.upcoming[6], { round: 8, player: 'A' });
+      // 推到 Round 6（turnIndex>=15）：每次 game.state 都带最新 qualification
+      const me = start.yourSeat as string;
+      maybeMove(c1, start.state, me); // 若先手是自己（seat A），用开局状态立即落子（否则无广播可驱动）
+      const deadline = Date.now() + 40000;
+      let reached: any = null;
+      while (Date.now() < deadline && !reached) {
+        const idx = c1.msgs.findIndex((m) => m.type === 'game.state');
+        if (idx >= 0) {
+          const msg = c1.msgs.splice(idx, 1)[0];
+          if (msg.state.turnIndex >= 15) {
+            reached = msg;
+            break;
+          }
+          if (currentPlayerOf(msg.state) === me) maybeMove(c1, msg.state, me);
+        } else {
+          await sleep(20);
+        }
+      }
+      assert.ok(reached, '应推进到 Round 6');
+      assert.equal(reached.qualification.currentRound, 6);
+      assert.equal(reached.qualification.currentEligible, 'C');
+      assert.equal(reached.qualification.upcoming[0].round, 7);
+      assert.equal(reached.qualification.upcoming[0].player, 'B');
+    } finally {
+      close(c1);
+      await sleep(400); // 1H 局：离开宽限后判负清理
+    }
+  });
+
+  // 7.6) W4-T3/T4/T6/T7：三玩家视角一致（多人同步）+ 断线重连后 qualification 恢复
+  await check('W4 BAC 多人同步：三方 qualification 一致；resume 恢复 timeline', async () => {
+    const c1 = await connect(a.token);
+    const c2 = await connect(b.token);
+    const c3 = await connect(cTut.token);
+    let cA2: TestClient | null = null;
+    try {
+      const { gameId, seatOf, state } = await start3H([c1, c2, c3]);
+      const seats = [seatOf.get('A')!, seatOf.get('B')!, seatOf.get('C')!];
+      // 开局首手：A 用 game.start 状态落子（此后各回合由 game.state 广播驱动）
+      maybeMove(seatOf.get('A')!, state, 'A');
+      // 三方各自推进到 Round 6（自己回合才落子；turnIndex>=15 后停止）
+      const seen = new Map<TestClient, any>();
+      const deadline = Date.now() + 40000;
+      while (Date.now() < deadline && seen.size < 3) {
+        for (const c of seats) {
+          const owner = [...seatOf.entries()].find(([, cl]) => cl === c)?.[0];
+          const idx = c.msgs.findIndex((m) => m.type === 'game.state');
+          if (idx < 0) continue;
+          const msg = c.msgs.splice(idx, 1)[0];
+          if (msg.state.turnIndex >= 15) seen.set(c, msg);
+          else if (owner && currentPlayerOf(msg.state) === owner) maybeMove(c, msg.state, owner);
+        }
+        await sleep(15);
+      }
+      assert.equal(seen.size, 3, '三方都应到达 Round 6');
+      const quals = [...seen.values()].map((m) => m.qualification);
+      assert.ok(quals.every((q) => q && q.currentRound === 6 && q.currentEligible === 'C'), '三方 qualification 一致（R6=C）');
+      const q0 = quals[0];
+      assert.ok(quals.every((q) => JSON.stringify(q) === JSON.stringify(q0)), '三方 payload 完全相同');
+      // 断线 → 宽限内 resume → game.start 携带 qualification（刷新页面后 timeline 恢复）
+      close(seatOf.get('A')!);
+      await sleep(120);
+      cA2 = await connect(a.token);
+      send(cA2, { type: 'resume', gameId });
+      const resumed = await waitFor(cA2, 'game.start', 3000).catch((e) => {
+        console.log('[diag] resume err msgs:', cA2?.msgs.map((m) => m.type + ':' + (m.error ?? '')).join(','));
+        throw e;
+      });
+      assert.equal(resumed.gameId, gameId);
+      assert.ok(resumed.qualification, 'resume 应恢复 qualification');
+      assert.equal(resumed.qualification.currentRound, 6);
+      assert.equal(resumed.qualification.currentEligible, 'C');
+    } finally {
+      close(c1);
+      close(c2);
+      close(c3);
+      if (cA2) close(cA2);
+      await sleep(700);
+    }
+  });
+
   // 8) Test6：排行仅 Online 变化 — 好友局拒绝 PLAYER_RESIGN 且不计排位
   await check('Test6 好友局：PLAYER_RESIGN 被拒；不计排位（排行仅 Online）', async () => {
     const before = (await api('GET', '/api/ranking')).json.ranking.find((u: any) => u.id === a.id);

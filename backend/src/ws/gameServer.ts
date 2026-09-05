@@ -11,6 +11,7 @@ import type { Db } from '../db.js';
 import { createInitialState, applyMove, forcePass, skipCurrentPlayer } from '../../../shared/src/game/rules.js';
 import type { GameState } from '../../../shared/src/game/types.js';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves.js';
+import { qualificationFromState } from '../../../shared/src/game/qualification.js';
 import { chooseAIMove } from '../../../shared/src/ai/chooseAIMove.js';
 import type { AILevel } from '../../../shared/src/ai/types.js';
 import { OFFLINE_LEVEL_CONFIG } from '../../../shared/src/ai/config/defaultWeights.js';
@@ -311,6 +312,7 @@ export class GameServer {
           seats: this.publicSeats(room),
           yourSeat: SEATS[i],
           state: room.state,
+          qualification: qualificationFromState(room.state),
         });
       }
     }
@@ -472,7 +474,12 @@ export class GameServer {
   }
 
   private broadcastRoom(room: Room): void {
-    const payload = JSON.stringify({ type: 'game.state', state: room.state, seats: this.publicSeats(room) });
+    const payload = JSON.stringify({
+      type: 'game.state',
+      state: room.state,
+      seats: this.publicSeats(room),
+      qualification: qualificationFromState(room.state),
+    });
     for (const id of room.humanIds) {
       const c = this.clients.get(id);
       if (c?.gameId === room.id && c.ws.readyState === WebSocket.OPEN) c.ws.send(payload);
@@ -662,6 +669,7 @@ export class GameServer {
       seats: this.publicSeats(room),
       yourSeat: seat,
       state: room.state,
+      qualification: qualificationFromState(room.state),
     });
     this.sendRoomEvent(room, { type: 'player.status', seat, status: 'reconnected' });
     void this.maybeRunAI(room);

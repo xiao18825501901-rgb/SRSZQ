@@ -44,8 +44,8 @@ user 对象：`{id, username, avatar, onlineStatus, rating, tutorialCompleted, e
 |---|---|---|
 | hello | {user} | 连接就绪 |
 | queue.joined | {waiting} | 入队 |
-| game.start | {gameId, mode, seats, yourSeat, state} | 开局/续局；AI 座仅含 stars(★1-5) |
-| game.state | {state, seats} | 权威状态广播（每步） |
+| game.start | {gameId, mode, seats, yourSeat, state, qualification} | 开局/续局；AI 座仅含 stars(★1-5)；qualification 见下 |
+| game.state | {state, seats, qualification} | 权威状态广播（每步，含实时资格时间线） |
 | game.end | {status, winner, reason, winnerIds/loserIds/winnerSeats/loserSeats, matchId, timestamp} | 终局（status=won/draw/forfeit/aborted） |
 | MATCH_ENDED | {matchId, mode, reason, winnerIds, loserIds, winnerSeats, loserSeats, timestamp} | **Player Leave System 结算广播**（reason=NORMAL_WIN/PLAYER_FORFEIT/PLAYER_DISCONNECT/TIMEOUT；胜负数组由服务器推导） |
 | player.status | {seat, status, graceMs?} | 座位连接状态：disconnected（进入判负宽限）/ reconnected |
@@ -53,6 +53,35 @@ user 对象：`{id, username, avatar, onlineStatus, rating, tutorialCompleted, e
 
 seats 结构：`{ A/B/C: {kind:'human', username?} | {kind:'ai', stars} }`
 —— **客户端永远看不到真实 AI 档位**（内部档位仅在服务端，权重 random100/tactical200/selfish300/3ply400/maxn500）。
+
+### qualification（BAC 资格时间线 · 服务器权威）
+
+`game.start` 与每次 `game.state` 均携带，由服务器用共享引擎（`shared/src/game/qualification.ts`，
+规则单一来源 `eligibility.ts`）计算，客户端不自行推导：
+
+```json
+{
+  "qualification": {
+    "currentRound": 8,
+    "currentEligible": "A",
+    "upcoming": [
+      { "round": 9, "player": "C" },
+      { "round": 10, "player": "B" },
+      { "round": 11, "player": "A" },
+      { "round": 12, "player": "C" },
+      { "round": 13, "player": "B" },
+      { "round": 14, "player": "A" },
+      { "round": 15, "player": "C" },
+      { "round": 16, "player": "B" }
+    ]
+  }
+}
+```
+
+- `currentEligible`：Round 1–5 = `null`（无人拥有胜权）；Round ≥6 = 引擎真实输出
+  （R6=C, R7=B, R8=A，按 C→B→A 循环）；
+- `upcoming`：当前轮之后的连续 8 轮（lookahead 常量可扩展），`player: null` 表示该轮无胜权；
+- Round 与回合换算：`round = floor(turnIndex/3)+1`（共享引擎 roundFromTurn）。
 
 防作弊：服务端为唯一状态源；非法动作（非本人回合/禁手/占位/越界）一律拒绝，
 客户端不能决定结果；终局与胜负（含离场判负）由服务端引擎推导并落盘。

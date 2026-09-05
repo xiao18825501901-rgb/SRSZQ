@@ -163,6 +163,17 @@ async function main() {
     await sleep(150);
   }
   check('AI 自动应手（日志 ≥2 条）', lines >= 2, `lines=${lines}`);
+  // 5c) BAC Victory Timeline（Human vs AI：同引擎实时显示 + 自动更新到 R6=C）
+  let bac1 = (await cdp.eval(`document.querySelector('.bac-panel')?.innerText || ''`)).replace(/\s+/g, ' ');
+  check('HvAI BAC 面板：ROUND 1 · VICTORY LOCKED · 下次窗口 R6 C', bac1.includes('BAC Victory Timeline') && bac1.includes('ROUND 1') && bac1.includes('VICTORY LOCKED') && bac1.includes('Round 6'), bac1.slice(0, 160));
+  const t1 = Date.now();
+  while (Date.now() - t1 < 60000) {
+    bac1 = (await cdp.eval(`document.querySelector('.bac-panel')?.innerText || ''`)).replace(/\s+/g, ' ');
+    if (bac1.includes('CURRENT · ROUND 6') && bac1.includes('Victory Right')) break;
+    await cdp.eval(`(() => { const el=document.querySelector('.cell.legal'); if(el) el.click(); return true; })()`);
+    await sleep(250);
+  }
+  check('HvAI 推进到 R6：面板实时更新（C 持胜权 + R7/R8 未来窗口）', bac1.includes('ROUND 6') && bac1.includes('Victory Right') && bac1.includes('R7') && bac1.includes('R8'), bac1.slice(0, 180));
   await click('button', '返回大厅');
   await sleep(500);
 
@@ -251,6 +262,21 @@ async function main() {
     check('邀请对局第三人由 AI 补位（★ 且无真实档位名）', /AI ★+/.test(txt2.replace(/\s+/g, ' ')) && !/Random|Tactical|Selfish|3-Ply|MaxN/.test(txt2), txt2.replace(/\s+/g, ' ').slice(0, 130));
     const errs2 = cdp2.events.filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Log.entryAdded' && e.params?.entry?.level === 'error'));
     check('Bob 页面无 JS 错误', errs2.length === 0, `errors=${errs2.length}`);
+    // 6c) BAC Victory Timeline（Online Match：服务器广播 · 双端一致 · 实时更新至 R6=C）
+    const bacRead = (cdpX) => cdpX.eval(`document.querySelector('.bac-panel')?.innerText || ''`).then((t) => String(t).replace(/\s+/g, ' '));
+    let pa = await bacRead(cdp);
+    let pb = await bacRead(cdp2);
+    check('双端 BAC 面板渲染（ROUND 1 · VICTORY LOCKED · 下次窗口 R6 C）', pa.includes('BAC Victory Timeline') && pb.includes('BAC Victory Timeline') && pa.includes('ROUND 1') && pb.includes('ROUND 1') && pa.includes('VICTORY LOCKED') && pb.includes('VICTORY LOCKED') && pa.includes('Round 6') && pb.includes('Round 6'), (pa + ' | ' + pb).slice(0, 200));
+    const t6 = Date.now();
+    while (Date.now() - t6 < 45000) {
+      pa = await bacRead(cdp);
+      pb = await bacRead(cdp2);
+      if (pa.includes('CURRENT · ROUND 6') && pb.includes('CURRENT · ROUND 6')) break;
+      await cdp.eval(`(() => { const el=document.querySelector('.cell.legal'); if(el) el.click(); return true; })()`);
+      await cdp2.eval(`(() => { const el=document.querySelector('.cell.legal'); if(el) el.click(); return true; })()`);
+      await sleep(250);
+    }
+    check('双端实时同步至 R6（资格 C · R7/R8 未来窗口一致）', pa.includes('ROUND 6') && pb.includes('ROUND 6') && pa.includes('Victory Right') && pb.includes('Victory Right') && pa.includes('R7') && pb.includes('R7') && pa.includes('R8') && pb.includes('R8'), (pa + ' | ' + pb).slice(0, 220));
     // 双方离开（服务端中止房间）
     await cdp.eval(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('离开')); if(b) b.click(); return true; })()`);
     await cdp2.eval(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('离开')); if(b) b.click(); return true; })()`);

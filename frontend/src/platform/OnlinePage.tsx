@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Player } from '../../../shared/src/game/types';
 import { Board } from '../components/Board';
+import { BacTimelinePanel } from '../components/BacTimelinePanel';
 import { gameLink } from '../ws';
 import { currentPlayerOf } from '../../../shared/src/game/legalMoves';
 import { Btn } from '../ui';
@@ -202,8 +203,23 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
           </div>
         ))}
       </div>
-      {gameLink.error && <p className="error-text">{gameLink.error}</p>}
-      <Board state={g.state} showLegal={myTurn} showWinning={false} onCellClick={clickCell} />
+      <div className="online-layout">
+        <section className="online-board-col">
+          {gameLink.error && <p className="error-text">{gameLink.error}</p>}
+          <Board state={g.state} showLegal={myTurn} showWinning={false} onCellClick={clickCell} />
+        </section>
+        <aside>
+          {/* BAC 资格时间线：视图来自服务器每帧广播的 qualification（权威），断线重连后由 game.start 恢复 */}
+          <BacTimelinePanel
+            qualification={g.qualification ?? null}
+            state={g.state}
+            mySeat={g.mySeat}
+            seats={g.seats}
+            ended={g.state.status !== 'playing'}
+            winner={g.state.winner}
+          />
+        </aside>
+      </div>
     </div>
   );
 }

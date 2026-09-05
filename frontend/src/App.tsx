@@ -4,7 +4,8 @@ import { PLAYER_COLORS, PLAYER_LABELS } from '../../shared/src/game/types';
 import { useGame } from './hooks/useGame';
 import { Board } from './components/Board';
 import { PlayerCard } from './components/PlayerCard';
-import { QualificationTimeline } from './components/QualificationTimeline';
+import { BacTimelinePanel } from './components/BacTimelinePanel';
+import type { SeatLite } from './components/bacTimelineModel';
 import { MoveHistory } from './components/MoveHistory';
 import { GameControls } from './components/GameControls';
 import { RulesModal } from './components/RulesModal';
@@ -79,6 +80,16 @@ export default function App(props: PlatformHostProps = {}) {
   /** 座位配置（正式规则仅一套；座位对本地对局直接生效） */
   const displaySeats: SeatConfigs = seats;
   const aiActive = countAI(displaySeats) > 0;
+
+  /** BAC 面板用的座位显示信息（AI 只呈现 ★，永不暴露档位名） */
+  const seatLites = useMemo(() => {
+    const out = {} as Record<Player, SeatLite>;
+    for (const p of ['A', 'B', 'C'] as Player[]) {
+      const s = seats[p];
+      out[p] = s.kind === 'ai' ? { kind: 'ai', stars: (AI_LEVEL_STARS[s.level ?? 'random'].match(/★/g) ?? []).length } : { kind: 'human' };
+    }
+    return out;
+  }, [seats]);
 
   const flash = useCallback((kind: NoticeKind, text: string, ms = 4000) => {
     setNotice({ kind, text });
@@ -448,7 +459,12 @@ export default function App(props: PlatformHostProps = {}) {
         </section>
 
         <aside className="side-col">
-          <QualificationTimeline currentRound={round} highlightRound={round} />
+          <BacTimelinePanel
+            state={state}
+            seats={seatLites}
+            ended={state.status !== 'playing'}
+            winner={state.winner}
+          />
           <GameControls
             canUndo={state.moves.length > 0}
             hasMoves={state.moves.length > 0}

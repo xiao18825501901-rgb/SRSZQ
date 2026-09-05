@@ -1,6 +1,7 @@
 /** SRSZQ 前端 WebSocket 客户端（后端 ws://127.0.0.1:8081/ws） */
 import { WS_URL, getToken } from './api';
 import type { GameState, Player } from '../../shared/src/game/types';
+import type { QualificationView } from '../../shared/src/game/qualification';
 
 export type WSHandler = (msg: Record<string, any>) => void;
 
@@ -80,6 +81,8 @@ export interface GameSnapshot {
   seats: Record<Player, SeatView>;
   mySeat: Player;
   state: GameState;
+  /** BAC 资格时间线（服务器权威，随每次 game.state 广播更新） */
+  qualification?: QualificationView | null;
 }
 
 /** 终局详情（来自服务器 MATCH_ENDED / game.end —— 胜负由服务器权威裁决） */
@@ -201,6 +204,7 @@ class GameLink {
           seats: msg.seats as Record<Player, SeatView>,
           mySeat: msg.yourSeat as Player,
           state: msg.state as GameState,
+          qualification: msg.qualification as QualificationView | undefined,
         };
         this.result = '';
         this.error = '';
@@ -208,7 +212,12 @@ class GameLink {
         break;
       }
       case 'game.state':
-        if (this.game) this.game = { ...this.game, state: msg.state as GameState };
+        if (this.game)
+          this.game = {
+            ...this.game,
+            state: msg.state as GameState,
+            qualification: (msg.qualification as QualificationView | undefined) ?? this.game.qualification,
+          };
         break;
       case 'game.end':
       case 'MATCH_ENDED':

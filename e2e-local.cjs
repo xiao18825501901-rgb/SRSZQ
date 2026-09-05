@@ -176,6 +176,14 @@ async function main() {
     await cdp.eval(`(() => { [...document.querySelectorAll('.modal-foot .btn')].find(b => b.textContent.includes('确认'))?.click(); })()`);
     await sleep(400);
   }
+  const shot = async (name) => {
+    if (!process.env.SRSZQ_SHOT_DIR) return;
+    const r = await cdp.send('Page.captureScreenshot', { format: 'png' });
+    const f = path.join(process.env.SRSZQ_SHOT_DIR, name);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, Buffer.from(r.data, 'base64'));
+    console.log('   [shot]', f);
+  };
 
   // ===== 场景 1：默认开局（13×13 · R1-5 无胜权）=====
   await closeStartModal();
@@ -188,10 +196,11 @@ async function main() {
   check('页面不出现 CBA/CBACC/11×11', !/CBA|CBACC|11×11/.test(bodyAll), '');
   check('页面不出现真实 AI 档位名', !/Random|Tactical|Selfish|3-Ply|MaxN/.test(bodyAll), '');
 
-  // 时间轴：R1 视角显示标题序列 + R6 C（R7/R8 在进入 R6 后可见）
-  const tl = (await cdp.eval(`document.querySelector('.timeline')?.innerText || ''`)).replace(/\s+/g, ' ');
-  check('时间轴标题 R6 起 C→B→A 循环', tl.includes('R6 起 C → B → A 循环'), tl.slice(0, 120));
-  check('时间轴注记 R1–5 无人', tl.includes('Round 1–5'), '');
+  // BAC 面板：R1 视角（VICTORY LOCKED + 下次胜权窗口 R6 C）
+  const tl = (await cdp.eval(`document.querySelector('.bac-panel')?.innerText || ''`)).replace(/\s+/g, ' ');
+  check('BAC 面板标题（BAC Victory Timeline + C→B→A）', tl.includes('BAC Victory Timeline') && tl.includes('C → B → A'), tl.slice(0, 140));
+  check('R1 当前轮：ROUND 1 + VICTORY LOCKED + 下次窗口 Round 6', tl.includes('ROUND 1') && tl.includes('VICTORY LOCKED') && tl.includes('Round 6') && tl.includes('C'), tl.slice(0, 200));
+  await shot('bac-r1-locked.png');
 
   // ===== 场景 2：基础轮流落子 =====
   let r = await clickCell(7, 7);
@@ -202,6 +211,8 @@ async function main() {
   check('C 落子 (9,9)', r === 'ok', r);
   st = await statusText();
   check('Round 2 开始 · 轮到 A', st.includes('ROUND 2') && st.includes('玩家 A'), st.slice(0, 70));
+  const tl2 = (await cdp.eval(`document.querySelector('.bac-panel')?.innerText || ''`)).replace(/\s+/g, ' ');
+  check('BAC 面板随落子自动更新（CURRENT ROUND 2）', tl2.includes('ROUND 2') && !tl2.includes('CURRENT · ROUND 1'), tl2.slice(0, 120));
 
   // ===== 场景 3：R6 禁手（无资格成四不可落）=====
   // 15 步导入：turnIndex=15（A，R6，资格 C）；A 在 0-based(5,1..3)=1-based(6,2..4) 三连
@@ -223,8 +234,9 @@ async function main() {
   check('导入 15 步（turnIndex=15 = R6 A 行动）', gs.moves.length === 15 && gs.turnIndex === 15 && P_OF(15) === 'A', `moves=${gs.moves.length} turn=${gs.turnIndex}`);
   st = await statusText();
   check('R6 · 资格 🏆 C', st.includes('ROUND 6') && st.includes('🏆 玩家 C'), st.slice(0, 100));
-  const tl6 = (await cdp.eval(`document.querySelector('.timeline')?.innerText || ''`)).replace(/\s+/g, ' ');
-  check('时间轴 R6 C · R7 B · R8 A（R6 视角）', /R6\s*C/.test(tl6) && /R7\s*B/.test(tl6) && /R8\s*A/.test(tl6), tl6.slice(0, 140));
+  const tl6 = (await cdp.eval(`document.querySelector('.bac-panel')?.innerText || ''`)).replace(/\s+/g, ' ');
+  check('BAC 面板 R6 视角：CURRENT ROUND 6 + C Victory Right + R7/R8', tl6.includes('ROUND 6') && tl6.includes('Player C') && tl6.includes('Victory Right') && tl6.includes('R7') && tl6.includes('R8'), tl6.slice(0, 200));
+  await shot('bac-r6-eligible-C.png');
   r = await clickCell(6, 5); // 1-based (6,5) = 0-based (5,4)：补成 AAAA → 禁手
   gs = await getState();
   check('R6 非资格 A 成四禁手不可点', r === 'forbidden' && gs.moves.length === 15, `click=${r} moves=${gs.moves.length}`);
