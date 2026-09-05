@@ -113,6 +113,25 @@ async function main(): Promise<void> {
     assert.deepEqual(ratings, [...ratings].sort((a, b) => b - a), 'rating 降序');
   });
 
+  // 6) 邀请拒绝：状态 rejected、无好友关系
+  await check('邀请拒绝流程（reject）', async () => {
+    const me = await post('/api/register', { email: 'rej@test.com', username: 'Rejecter', password: 'secret1' });
+    const other = await post('/api/register', { email: 'rej2@test.com', username: 'Rejectee', password: 'secret1' });
+    const inv = await post('/api/invite', { toUsername: 'Rejectee' }, me.json.token);
+    assert.equal(inv.status, 201);
+    const list = await get('/api/invitations', other.json.token);
+    assert.equal(list.json.invitations.length, 1);
+    // 发送者不能替接收者接受（403）
+    const foreign = await post('/api/invite/accept', { id: list.json.invitations[0].id }, me.json.token);
+    assert.equal(foreign.status, 403);
+    const rej = await post('/api/invite/reject', { id: list.json.invitations[0].id }, other.json.token);
+    assert.equal(rej.status, 200);
+    const after = await get('/api/invitations', other.json.token);
+    assert.equal(after.json.invitations.length, 0);
+    const friends = await get('/api/friends', me.json.token);
+    assert.equal(friends.json.friends.length, 0, '拒绝后不应建立好友');
+  });
+
   server.close();
   db.close();
   rmSync(dir, { recursive: true, force: true });
