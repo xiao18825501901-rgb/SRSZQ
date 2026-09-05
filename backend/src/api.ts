@@ -63,7 +63,12 @@ export function requireTutorialDone(res: ServerResponse, user: User | null): boo
   return true;
 }
 
-export function createApi(db: Db): { server: Server; ctx: ApiContext } {
+export interface ApiHooks {
+  /** 邀请被接受 → 创建对局（两真人 + AI 补位，非排位） */
+  onInviteAccepted?: (senderId: string, receiverId: string) => void;
+}
+
+export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: ApiContext } {
   const ctx: ApiContext = {
     db,
     authUser(req) {
@@ -147,6 +152,54 @@ export function createApi(db: Db): { server: Server; ctx: ApiContext } {
         case 'GET /api/ranking': {
           const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? 20)));
           return send(res, 200, { ranking: db.ranking(limit) });
+        }
+        case 'GET /api/invitations': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          return send(res, 200, { invitations: db.listInvitationsFor(user.id) });
+        }
+        case 'POST /api/invite': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          const body = await readJson(req);
+          const toUsername = String(body.toUsername ?? '').trim();
+          const target = db.findUserByUsernameCI(toUsername);
+          if (!target) return send(res, 404, { error: '用户不存在' });
+          if (target.id === user.id) return send(res, 400, { error: '不能邀请自己' });
+          const inv = db.createInvitation(user.id, target.id);
+          return send(res, 201, { invitation: { ...inv, senderName: user.username } });
+        }
+        case 'POST /api/invite/accept': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          const body = await readJson(req);
+          const inv = db.findInvitation(String(body.id ?? ''));
+          if (!inv || inv.status !== 'pending') return send(res, 404, { error: '邀请不存在或已处理' });
+          if (inv.receiver !== user.id) return send(res, 403, { error: '该邀请不是发给你的' });
+          db.setInvitationStatus(inv.id, 'accepted');
+          db.addFriends(inv.sender, inv.receiver);
+          hooks.onInviteAccepted?.(inv.sender, inv.receiver);
+          return send(res, 200, { ok: true });
+        }
+        case 'POST /api/invite/reject': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          const body = await readJson(req);
+          const inv = db.findInvitation(String(body.id ?? ''));
+          if (!inv || inv.status !== 'pending') return send(res, 404, { error: '邀请不存在或已处理' });
+          if (inv.receiver !== user.id) return send(res, 403, { error: '该邀请不是发给你的' });
+          db.setInvitationStatus(inv.id, 'rejected');
+          return send(res, 200, { ok: true });
+        }
+        case 'GET /api/friends': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          const ids = db.listFriends(user.id);
+          const friends = ids
+            .map((id) => db.findUserById(id))
+            .filter((u): u is NonNullable<typeof u> => !!u)
+            .map((u) => ({ id: u.id, username: u.username, avatar: u.avatar, onlineStatus: u.onlineStatus, rating: u.rating }));
+          return send(res, 200, { friends });
         }
         default:
           return send(res, 404, { error: `not found: ${route}` });

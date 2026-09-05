@@ -31,6 +31,14 @@ export interface Db {
   setTutorialCompleted(userId: string, done: boolean): void;
   ranking(limit: number): RankingRow[];
   recordMatchResult(userId: string, delta: number): void;
+  saveGame(input: { id: string; boardSize: number; mode: string; winner: string | null; movesJson: string; createdAt: number }): void;
+  saveMatch(input: { id: string; gameId: string; players: Array<string | null>; result: string | null; isRanked: boolean; createdAt: number }): void;
+  createInvitation(senderId: string, receiverId: string): { id: string; status: string; createdAt: number };
+  listInvitationsFor(userId: string): Array<{ id: string; sender: string; senderName: string; receiver: string; status: string; createdAt: number }>;
+  findInvitation(id: string): { id: string; sender: string; receiver: string; status: string } | null;
+  setInvitationStatus(id: string, status: 'accepted' | 'rejected'): void;
+  addFriends(a: string, b: string): void;
+  listFriends(userId: string): string[];
   close(): void;
 }
 
@@ -180,6 +188,56 @@ export function openDb(path: string): Db {
     recordMatchResult(userId, delta) {
       raw.prepare('UPDATE ranking SET games = games + 1, wins = wins + CASE WHEN ? > 0 THEN 1 ELSE 0 END, score = score + ? WHERE user_id = ?').run(delta, delta, userId);
       raw.prepare('UPDATE users SET rating = MAX(0, rating + ?) WHERE id = ?').run(delta, userId);
+    },
+    saveGame(input) {
+      raw
+        .prepare('INSERT OR REPLACE INTO games (id,board_size,mode,winner,created_at,moves_json) VALUES (?,?,?,?,?,?)')
+        .run(input.id, input.boardSize, input.mode, input.winner, input.createdAt, input.movesJson);
+    },
+    saveMatch(input) {
+      raw
+        .prepare('INSERT OR REPLACE INTO matches (id,game_id,player_a,player_b,player_c,result,is_ranked,created_at) VALUES (?,?,?,?,?,?,?,?)')
+        .run(input.id, input.gameId, input.players[0], input.players[1], input.players[2], input.result, input.isRanked ? 1 : 0, input.createdAt);
+    },
+    createInvitation(senderId, receiverId) {
+      const id = randomUUID();
+      const createdAt = Date.now();
+      raw.prepare("INSERT INTO invitations (id,sender,receiver,status,created_at) VALUES (?,?,?,'pending',?)").run(id, senderId, receiverId, createdAt);
+      return { id, status: 'pending', createdAt };
+    },
+    listInvitationsFor(userId) {
+      const rows = raw
+        .prepare(
+          `SELECT i.id, i.sender, u.username AS senderName, i.receiver, i.status, i.created_at AS createdAt
+           FROM invitations i JOIN users u ON u.id = i.sender
+           WHERE i.receiver = ? AND i.status = 'pending' ORDER BY i.created_at DESC`,
+        )
+        .all(userId) as Array<Record<string, unknown>>;
+      return rows.map((x) => ({
+        id: String(x.id),
+        sender: String(x.sender),
+        senderName: String(x.senderName),
+        receiver: String(x.receiver),
+        status: String(x.status),
+        createdAt: Number(x.createdAt),
+      }));
+    },
+    findInvitation(id) {
+      const r = raw.prepare('SELECT id, sender, receiver, status FROM invitations WHERE id = ?').get(id) as
+        | { id: string; sender: string; receiver: string; status: string }
+        | undefined;
+      return r ?? null;
+    },
+    setInvitationStatus(id, status) {
+      raw.prepare('UPDATE invitations SET status = ? WHERE id = ?').run(status, id);
+    },
+    addFriends(a, b) {
+      raw.prepare('INSERT OR IGNORE INTO friends (user_id,friend_id,status) VALUES (?,?,?)').run(a, b, 'accepted');
+      raw.prepare('INSERT OR IGNORE INTO friends (user_id,friend_id,status) VALUES (?,?,?)').run(b, a, 'accepted');
+    },
+    listFriends(userId) {
+      const rows = raw.prepare('SELECT friend_id FROM friends WHERE user_id = ?').all(userId) as Array<{ friend_id: string }>;
+      return rows.map((x) => String(x.friend_id));
     },
     close() {
       raw.close();

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, applyMove, undoMove } from '../rules';
+import { createInitialState, applyMove, undoMove, forcePass } from '../rules';
 import { getLegalMoves, getWinningPoints, isLegalMove } from '../legalMoves';
 import { hasFourThroughPlacedCell } from '../winDetection';
 import { getEligiblePlayer } from '../eligibility';
-import type { Board, Player } from '../types';
+import type { Board, GameState, Player } from '../types';
 
 /** 直接在空棋盘上摆棋并返回 board（row 0 = 顶行；正式规则棋盘 13/17，测试默认 13） */
 function placeOnEmpty(size: number, moves: Array<[Player, number, number]>): Board {
@@ -260,6 +260,23 @@ describe('getLegalMoves / 自动 Pass', () => {
     expect(last.pass).toBe(true);
     expect(last.player).toBe('C');
     expect(res.state.moves.length).toBe(s.moves.length + 2); // B 落子 + C pass
+  });
+});
+
+describe('forcePass（服务端弃权语义）', () => {
+  it('有合法步也强制 Pass 并推进回合', () => {
+    const s0 = createInitialState(13);
+    expect(getLegalMoves(s0).length).toBe(169); // A 有大量合法步
+    const s1 = forcePass(s0);
+    expect(s1.moves.length).toBe(1);
+    expect(s1.moves[0].pass).toBe(true);
+    expect(s1.moves[0].player).toBe('A');
+    expect(s1.turnIndex).toBe(1); // 轮到 B
+  });
+
+  it('终局后 forcePass 无效', () => {
+    const won: GameState = { ...createInitialState(13), status: 'won', winner: 'A' };
+    expect(forcePass(won)).toBe(won);
   });
 });
 

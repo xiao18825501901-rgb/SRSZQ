@@ -152,6 +152,21 @@ export function skipCurrentPlayer(state: GameState): GameState {
   return applyAutoPassChain(state).state;
 }
 
+/**
+ * 强制当前玩家 Pass（服务端弃权/断线语义：即使有合法步也跳过）。
+ * 与 skipCurrentPlayer 不同 —— 后者只跳过「无合法步」者。
+ */
+export function forcePass(state: GameState): GameState {
+  if (state.status !== 'playing' || state.turnIndex >= state.boardSize * state.boardSize) return state;
+  const s = record(state, {
+    turn: state.turnIndex,
+    round: roundFromTurn(state.turnIndex),
+    player: playerFromTurn(state.turnIndex),
+    pass: true,
+  });
+  return applyAutoPassChain(s).state;
+}
+
 /** 由历史记录重放得到完整状态（用于撤销 / 导入） */
 export function replayMoves(boardSize: BoardSize, moves: MoveRecord[]): GameState {
   const board = makeEmptyBoard(boardSize);

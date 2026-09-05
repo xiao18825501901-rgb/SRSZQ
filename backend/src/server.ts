@@ -1,13 +1,37 @@
-/** SRSZQ backend 启动入口：HTTP API（+ 后续 WebSocket 游戏服务） */
+/** SRSZQ backend 启动入口：HTTP API + WebSocket 游戏服务 */
+import { createServer } from 'node:http';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { openDb } from './db.js';
-import { bootApi } from './api.js';
+import { createApi } from './api.js';
+import { GameServer } from './ws/gameServer.js';
 
 const dataDir = join(process.cwd(), 'data');
 mkdirSync(dataDir, { recursive: true });
 const db = openDb(join(dataDir, 'srszq.sqlite'));
 
-bootApi(db);
+// WebSocket 游戏服务（ws://127.0.0.1:8081）
+const gameServer = new GameServer(db, {
+  queueTimeoutMs: Number(process.env.SRSZQ_QUEUE_TIMEOUT_MS ?? 60_000),
+  aiMoveDelayMs: Number(process.env.SRSZQ_AI_DELAY_MS ?? 350),
+  disconnectSkipMs: Number(process.env.SRSZQ_DISCONNECT_SKIP_MS ?? 30_000),
+});
+const wsPort = Number(process.env.SRSZQ_WS_PORT ?? 8081);
+const wsHttp = createServer();
+gameServer.attach(wsHttp, '/ws');
+wsHttp.listen(wsPort, '127.0.0.1', () => {
+  console.log(`[srszq] WS listening on ws://127.0.0.1:${wsPort}/ws`);
+});
 
-console.log('[srszq] backend ready. Frontend: http://127.0.0.1:5173 · API: http://127.0.0.1:8080');
+// HTTP API（邀请接受 → 开局）
+const { server: apiServer } = createApi(db, {
+  onInviteAccepted: (a, b) => gameServer.startInviteGame(a, b),
+});
+const apiPort = Number(process.env.PORT ?? 8080);
+apiServer.listen(apiPort, '127.0.0.1', () => {
+  console.log(`[srszq] API listening on http://127.0.0.1:${apiPort}`);
+});
+
+console.log('[srszq] backend ready. Frontend: http://127.0.0.1:5173');
+
+export { apiServer, wsHttp, gameServer };
