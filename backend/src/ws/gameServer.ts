@@ -32,6 +32,8 @@ export interface GameServerOptions {
   aiMoveDelayMs?: number; // AI 落子模拟思考延迟
   disconnectSkipMs?: number; // 轮到断线玩家时多久自动跳过
   aiTimeBudgetMs?: number;
+  /** 好友邀请聚合等待：发起 2 个邀请时，等第二位接受或此窗口超时 */
+  inviteGatherMs?: number;
 }
 
 interface Client {
@@ -72,6 +74,14 @@ function pickAiLevel(): AILevel {
   return 'maxn';
 }
 
+/** 邀请会话（好友开房状态机） */
+interface InviteSession {
+  sender: string;
+  targets: Map<string, 'pending' | 'accepted' | 'rejected'>;
+  timer?: ReturnType<typeof setTimeout>;
+  started: boolean;
+}
+
 export class GameServer {
   private db: Db;
   private opts: Required<GameServerOptions>;
@@ -79,8 +89,10 @@ export class GameServer {
   private clients = new Map<string, Client>();
   private queue: Client[] = [];
   private queueTimer: ReturnType<typeof setTimeout> | null = null;
+  private queueStartAt = 0;
   private rooms = new Map<string, Room>();
   private userGame = new Map<string, string>(); // userId -> gameId
+  private inviteSessions = new Map<string, InviteSession>();
 
   constructor(db: Db, opts: GameServerOptions = {}) {
     this.db = db;
@@ -89,6 +101,7 @@ export class GameServer {
       aiMoveDelayMs: opts.aiMoveDelayMs ?? 350,
       disconnectSkipMs: opts.disconnectSkipMs ?? 30_000,
       aiTimeBudgetMs: opts.aiTimeBudgetMs ?? 250,
+      inviteGatherMs: opts.inviteGatherMs ?? 30_000,
     };
     this.wss = new WebSocketServer({ noServer: true });
   }
@@ -144,10 +157,17 @@ export class GameServer {
         if (this.queue.some((c) => c.userId === client.userId)) return;
         this.db.touchOnline(client.userId, 'matching');
         this.queue.push(client);
-        this.sendTo(client.ws, { type: 'queue.joined', waiting: this.queue.length });
-        if (this.queueTimer === null) {
+        const first = this.queueTimer === null;
+        if (first) {
+          this.queueStartAt = Date.now();
           this.queueTimer = setTimeout(() => this.flushQueue(true), this.opts.queueTimeoutMs);
         }
+        this.sendTo(client.ws, {
+          type: 'queue.joined',
+          waiting: this.queue.length,
+          timeoutMs: this.opts.queueTimeoutMs,
+          queueStartAt: this.queueStartAt,
+        });
         if (this.queue.length >= 3) this.flushQueue(false);
         break;
       }
@@ -192,12 +212,15 @@ export class GameServer {
       this.queueTimer = null;
     }
     const humans = this.queue.splice(0, this.queue.length);
+    this.queueStartAt = 0;
     if (humans.length === 0) return;
     if (humans.length >= 3 || timedOut) {
+      // 1 人 → H+AI+AI；2 人 → H+H+AI（startRoom 内补齐）；0 人不会到这里
       this.startRoom(humans.map((c) => c.userId));
     } else {
       // 理论不达：不足 3 人且未超时 → 放回队列等下一人
       this.queue.unshift(...humans);
+      this.queueStartAt = Date.now();
       this.queueTimer = setTimeout(() => this.flushQueue(true), this.opts.queueTimeoutMs);
     }
   }
@@ -250,12 +273,85 @@ export class GameServer {
     void this.maybeRunAI(room);
   }
 
-  /** 供邀请流程使用：两真人 + 1 AI 的非排位对局 */
+  /**
+   * 好友邀请状态机（WAITING → INVITED → ACCEPTED → GATHER → ROOM_READY/AI_FILL → STARTED）
+   * - 只邀请了 1 人：其接受后立即 2 真人 + 1 AI；
+   * - 邀请了 2 人：第一位接受后进入 GATHER（等第二位）；
+   *   第二位接受 → 3 真人（无 AI）；等待窗超时仍只有 1 人 → 2 真人 + 1 AI；全拒 → 清理。
+   */
+  registerInvitation(senderId: string, receiverId: string): void {
+    let s = this.inviteSessions.get(senderId);
+    if (!s) {
+      s = { sender: senderId, targets: new Map(), started: false };
+      this.inviteSessions.set(senderId, s);
+    }
+    if (!s.targets.has(receiverId)) s.targets.set(receiverId, 'pending');
+  }
+
+  onInviteRejected(senderId: string, receiverId: string): void {
+    const s = this.inviteSessions.get(senderId);
+    if (!s) return;
+    s.targets.set(receiverId, 'rejected');
+    this.decideInvite(s);
+  }
+
+  handleInviteAccept(senderId: string, receiverId: string): void {
+    let s = this.inviteSessions.get(senderId);
+    if (!s) {
+      // 无会话（异常路径）：按单邀请处理
+      s = { sender: senderId, targets: new Map([[receiverId, 'accepted']]), started: false };
+      this.inviteSessions.set(senderId, s);
+    }
+    s.targets.set(receiverId, 'accepted');
+    this.decideInvite(s);
+  }
+
+  private decideInvite(s: InviteSession): void {
+    if (s.started) return;
+    const accepted = [...s.targets.entries()].filter(([, st]) => st === 'accepted').map(([id]) => id);
+    const pending = [...s.targets.values()].filter((st) => st === 'pending').length;
+    const total = s.targets.size;
+
+    if (total === 1) {
+      if (accepted.length === 1) this.startInvite(s, [s.sender, accepted[0]]);
+      return;
+    }
+    // 多邀请：全员接受 → 3 真人；有拒绝且只剩 1 接受 → 2H+AI；否则等待窗口
+    if (accepted.length >= 2 && accepted.length === total) {
+      this.startInvite(s, [s.sender, ...accepted]);
+      return;
+    }
+    if (accepted.length === 1 && pending === 0) {
+      this.startInvite(s, [s.sender, accepted[0]]);
+      return;
+    }
+    if (accepted.length >= 1 && !s.timer) {
+      s.timer = setTimeout(() => {
+        s.timer = undefined;
+        if (s.started) return;
+        const acc = [...s.targets.entries()].filter(([, st]) => st === 'accepted').map(([id]) => id);
+        if (acc.length >= 2) this.startInvite(s, [s.sender, ...acc]);
+        else if (acc.length === 1) this.startInvite(s, [s.sender, acc[0]]);
+      }, this.opts.inviteGatherMs);
+    }
+  }
+
+  /** 开房：在线真人 ≥2 才启动（不足则跳过，前端会重试/离开邀请状态） */
+  private startInvite(s: InviteSession, invitedIds: string[]): void {
+    const online = invitedIds.filter((id) => this.clients.has(id));
+    if (online.length < 2) return;
+    s.started = true;
+    if (s.timer) {
+      clearTimeout(s.timer);
+      s.timer = undefined;
+    }
+    this.inviteSessions.delete(s.sender);
+    this.startRoom(online, 'invite');
+  }
+
+  /** 供邀请流程使用：两真人 + 1 AI 的非排位对局（旧接口保留，单邀请直开） */
   startInviteGame(userAId: string, userBId: string): void {
-    const a = this.db.findUserById(userAId);
-    const b = this.db.findUserById(userBId);
-    if (!a || !b) return;
-    this.startRoom([a.id, b.id], 'invite');
+    this.handleInviteAccept(userAId, userBId);
   }
 
   private publicSeats(room: Room): Record<Seat, { kind: string; username?: string; stars?: number }> {
@@ -444,7 +540,9 @@ export class GameServer {
       if (this.queue.length === 0 && this.queueTimer) {
         clearTimeout(this.queueTimer);
         this.queueTimer = null;
+        this.queueStartAt = 0;
       } else if (this.queue.length > 0 && this.queueTimer === null) {
+        this.queueStartAt = Date.now();
         this.queueTimer = setTimeout(() => this.flushQueue(true), this.opts.queueTimeoutMs);
       }
       const user = this.db.findUserById(client.userId);

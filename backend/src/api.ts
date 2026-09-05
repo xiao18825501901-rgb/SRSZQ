@@ -64,8 +64,12 @@ export function requireTutorialDone(res: ServerResponse, user: User | null): boo
 }
 
 export interface ApiHooks {
-  /** 邀请被接受 → 创建对局（两真人 + AI 补位，非排位） */
+  /** 邀请发出 → 服务端登记邀请会话（支持“多邀请聚合”状态机） */
+  onInviteCreated?: (senderId: string, receiverId: string) => void;
+  /** 邀请被接受 → 进入好友对局状态机（1 接受=2H+AI；2 接受=3H） */
   onInviteAccepted?: (senderId: string, receiverId: string) => void;
+  /** 邀请被拒绝 */
+  onInviteRejected?: (senderId: string, receiverId: string) => void;
 }
 
 export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: ApiContext } {
@@ -167,6 +171,7 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           if (!target) return send(res, 404, { error: '用户不存在' });
           if (target.id === user.id) return send(res, 400, { error: '不能邀请自己' });
           const inv = db.createInvitation(user.id, target.id);
+          hooks.onInviteCreated?.(user.id, target.id);
           return send(res, 201, { invitation: { ...inv, senderName: user.username } });
         }
         case 'POST /api/invite/accept': {
@@ -189,6 +194,7 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           if (!inv || inv.status !== 'pending') return send(res, 404, { error: '邀请不存在或已处理' });
           if (inv.receiver !== user.id) return send(res, 403, { error: '该邀请不是发给你的' });
           db.setInvitationStatus(inv.id, 'rejected');
+          hooks.onInviteRejected?.(inv.sender, inv.receiver);
           return send(res, 200, { ok: true });
         }
         case 'GET /api/friends': {

@@ -23,9 +23,11 @@ wsHttp.listen(wsPort, '127.0.0.1', () => {
   console.log(`[srszq] WS listening on ws://127.0.0.1:${wsPort}/ws`);
 });
 
-// HTTP API（邀请接受 → 开局）
+// HTTP API（邀请状态机接线：登记 → 接受/拒绝）
 const { server: apiServer } = createApi(db, {
-  onInviteAccepted: (a, b) => gameServer.startInviteGame(a, b),
+  onInviteCreated: (a, b) => gameServer.registerInvitation(a, b),
+  onInviteAccepted: (a, b) => gameServer.handleInviteAccept(a, b),
+  onInviteRejected: (a, b) => gameServer.onInviteRejected(a, b),
 });
 const apiPort = Number(process.env.PORT ?? 8080);
 apiServer.listen(apiPort, '127.0.0.1', () => {

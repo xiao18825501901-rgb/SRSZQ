@@ -186,6 +186,81 @@ async function main() {
   txt = await bodyText();
   check('邀请发送成功提示', txt.includes('已向') && txt.includes(name2), txt.slice(0, 140));
 
+  // 6b) 双浏览器：Bob 在好友页接受邀请 → 双方自动进入对局（2H+1AI，AI 补位）
+  const PORT2 = 9334;
+  const loginBob = await fetch('http://127.0.0.1:8080/api/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account: name2, password: 'secret1' }),
+  });
+  const bobAuth = await loginBob.json();
+  const profile2 = path.join(os.tmpdir(), 'srszq-e2e2-' + process.pid);
+  fs.rmSync(profile2, { recursive: true, force: true });
+  const proc2 = spawn(EDGE, [
+    '--headless=new', '--disable-gpu', '--no-first-run', '--remote-allow-origins=*',
+    `--remote-debugging-port=${PORT2}`, `--user-data-dir=${profile2}`, '--window-size=1500,1000', FRONT,
+  ], { stdio: 'ignore' });
+  let wsUrl2 = null;
+  for (let i = 0; i < 60 && !wsUrl2; i++) {
+    await sleep(400);
+    try {
+      const list = await getJson(`http://127.0.0.1:${PORT2}/json/list`);
+      const page = list.find((t) => t.type === 'page' && t.url.includes('5173'));
+      if (page) wsUrl2 = page.webSocketDebuggerUrl;
+    } catch { /* noop */ }
+  }
+  let cdp2 = null;
+  if (wsUrl2) {
+    cdp2 = new CDP(wsUrl2);
+    await cdp2.open();
+    await cdp2.send('Runtime.enable');
+    await cdp2.send('Page.enable');
+    await cdp2.send('Log.enable');
+    // 确保页面完成加载（origin 就绪）后再写会话
+    await cdp2.send('Page.navigate', { url: FRONT });
+    let ready2 = false;
+    for (let i = 0; i < 40 && !ready2; i++) {
+      await sleep(300);
+      try {
+        ready2 = (await cdp2.eval(`location.origin === 'http://127.0.0.1:5173' && document.readyState === 'complete'`)) === true;
+      } catch { /* noop */ }
+    }
+    check('Bob 浏览器页面就绪', ready2);
+    await cdp2.eval(`localStorage.setItem('srszq_token', '${bobAuth.token}')`);
+    await cdp2.eval(`localStorage.setItem('srszq_user', ${JSON.stringify(JSON.stringify(bobAuth.user))})`);
+    await cdp2.eval(`location.reload()`);
+    await sleep(1400);
+    await cdp2.eval(`window.location.hash='#/friends'`);
+    await sleep(900);
+    const invText2 = await cdp2.eval(`document.body.innerText`);
+    check('Bob 好友页看到待处理邀请', invText2.includes('邀请你对战'), invText2.replace(/\s+/g, ' ').slice(0, 120));
+    await cdp2.eval(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('接受')); if(b) b.click(); return !!b; })()`);
+    await sleep(600);
+    // 双方自动导航 #/online 并渲染对局
+    let h1 = '', h2 = '';
+    const tt0 = Date.now();
+    while (Date.now() - tt0 < 8000) {
+      h1 = await cdp.eval(`location.hash`);
+      h2 = await cdp2.eval(`location.hash`);
+      if (h1.includes('/online') && h2.includes('/online')) break;
+      await sleep(200);
+    }
+    check('接受邀请后双方自动进入对局页', h1.includes('/online') && h2.includes('/online'), `${h1} / ${h2}`);
+    const cells1 = await cdp.eval(`document.querySelectorAll('.board .cell').length`);
+    const cells2 = await cdp2.eval(`document.querySelectorAll('.board .cell').length`);
+    check('双方渲染 13×13 棋盘', cells1 === 169 && cells2 === 169, `${cells1}/${cells2}`);
+    const txt2 = await cdp2.eval(`document.body.innerText`);
+    check('邀请对局第三人由 AI 补位（★ 且无真实档位名）', /AI ★+/.test(txt2.replace(/\s+/g, ' ')) && !/Random|Tactical|Selfish|3-Ply|MaxN/.test(txt2), txt2.replace(/\s+/g, ' ').slice(0, 130));
+    const errs2 = cdp2.events.filter((e) => e.method === 'Runtime.exceptionThrown' || (e.method === 'Log.entryAdded' && e.params?.entry?.level === 'error'));
+    check('Bob 页面无 JS 错误', errs2.length === 0, `errors=${errs2.length}`);
+    // 双方离开（服务端中止房间）
+    await cdp.eval(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('离开')); if(b) b.click(); return true; })()`);
+    await cdp2.eval(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('离开')); if(b) b.click(); return true; })()`);
+    await sleep(700);
+    cdp2.close();
+  } else {
+    check('第二个浏览器可用', false, 'no wsUrl2');
+  }
+  proc2.kill();
+
   // 7) 本地对局（#/local）渲染并走一手
   await goto('/local');
   await sleep(600);
@@ -203,7 +278,7 @@ async function main() {
   await goto('/online');
   await sleep(1000);
   txt = await bodyText();
-  check('在线排队界面显示', txt.includes('在线匹配') && (txt.includes('排队') || txt.includes('等待')), txt.slice(0, 140));
+  check('在线排队界面显示（Searching players + 倒计时）', txt.includes('Searching players') && txt.includes('正在寻找对手') && /\d+s/.test(txt), txt.slice(0, 150));
   await click('button', '取消并返回');
   await sleep(400);
 

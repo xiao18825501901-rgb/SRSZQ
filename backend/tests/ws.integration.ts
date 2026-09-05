@@ -118,12 +118,16 @@ async function main(): Promise<void> {
   db = openDb(join(dir, 'test.sqlite'));
 
   const wsHttp = createServer();
-  const gs = new GameServer(db, { queueTimeoutMs: 250, aiMoveDelayMs: 10, disconnectSkipMs: 250, aiTimeBudgetMs: 60 });
+  const gs = new GameServer(db, { queueTimeoutMs: 250, aiMoveDelayMs: 10, disconnectSkipMs: 250, aiTimeBudgetMs: 60, inviteGatherMs: 800 });
   gs.attach(wsHttp, '/ws');
   await new Promise<void>((r) => wsHttp.listen(0, '127.0.0.1', r));
   wsBase = `ws://127.0.0.1:${(wsHttp.address() as AddressInfo).port}/ws`;
 
-  const { server: apiServer } = createApi(db, { onInviteAccepted: (x, y) => gs.startInviteGame(x, y) });
+  const { server: apiServer } = createApi(db, {
+    onInviteCreated: (x, y) => gs.registerInvitation(x, y),
+    onInviteAccepted: (x, y) => gs.handleInviteAccept(x, y),
+    onInviteRejected: (x, y) => gs.onInviteRejected(x, y),
+  });
   await new Promise<void>((r) => apiServer.listen(0, '127.0.0.1', r));
   apiBase = `http://127.0.0.1:${(apiServer.address() as AddressInfo).port}`;
 
@@ -304,6 +308,83 @@ async function main(): Promise<void> {
     // 邀请局非排位：games 不应增加
     const after = (await api('GET', '/api/ranking')).json.ranking.find((u: any) => u.id === a.id);
     assert.equal(after?.games ?? 0, gamesBefore, '邀请局不计入排位 games');
+  });
+
+  // 7) 两好友邀请：第二位接受后 → 三真人（无 AI）
+  await check('两个好友接受 → 3 真人开局（无 AI）', async () => {
+    const ca = await connect(a.token);
+    const cb = await connect(b.token);
+    const cc = await connect(cTut.token);
+    try {
+      await api('POST', '/api/invite', { toUsername: 'Bob' }, a.token);
+      await api('POST', '/api/invite', { toUsername: 'Carol' }, a.token);
+      const listB = await api('GET', '/api/invitations', undefined, b.token);
+      const listC = await api('GET', '/api/invitations', undefined, cTut.token);
+      assert.equal(listB.json.invitations.length, 1);
+      assert.equal(listC.json.invitations.length, 1);
+      // 第一位接受 → 不应立即开局（GATHER 窗口 800ms）
+      const accB = await api('POST', '/api/invite/accept', { id: listB.json.invitations[0].id }, b.token);
+      assert.equal(accB.status, 200);
+      await new Promise((r) => setTimeout(r, 300));
+      const early = ca.msgs.filter((m) => m.type === 'game.start');
+      assert.equal(early.length, 0, '第一位接受后应进入 GATHER 等待，而非立即开局');
+      // 第二位接受 → 3 真人开局
+      const accC = await api('POST', '/api/invite/accept', { id: listC.json.invitations[0].id }, cTut.token);
+      assert.equal(accC.status, 200);
+      const [gsA, gsB, gsC] = await Promise.all([
+        waitFor(ca, 'game.start', 4000),
+        waitFor(cb, 'game.start', 4000),
+        waitFor(cc, 'game.start', 4000),
+      ]);
+      assert.equal(gsA.gameId, gsB.gameId);
+      assert.equal(gsB.gameId, gsC.gameId);
+      const seats = Object.values(gsA.seats) as Array<{ kind: string }>;
+      assert.ok(seats.every((s) => s.kind === 'human'), '两好友接受应为三真人');
+      assert.equal(gsA.mode, 'invite');
+    } finally {
+      close(ca);
+      close(cb);
+      close(cc);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  });
+
+  // 8) 两好友邀请但只来一位：等待窗超时 → 2H+1AI
+  await check('两好友邀请仅 1 人接受：GATHER 超时后 2H+1AI', async () => {
+    const ca = await connect(a.token);
+    const cb = await connect(b.token);
+    try {
+      await api('POST', '/api/invite', { toUsername: 'Bob' }, a.token);
+      await api('POST', '/api/invite', { toUsername: 'Carol' }, a.token);
+      const listB = await api('GET', '/api/invitations', undefined, b.token);
+      await api('POST', '/api/invite/accept', { id: listB.json.invitations[0].id }, b.token);
+      const gsA = await waitFor(ca, 'game.start', 5000);
+      await waitFor(cb, 'game.start', 5000);
+      const seats = Object.values(gsA.seats) as Array<{ kind: string }>;
+      assert.equal(seats.filter((s) => s.kind === 'human').length, 2);
+      assert.equal(seats.filter((s) => s.kind === 'ai').length, 1, '超时后补 AI');
+    } finally {
+      close(ca);
+      close(cb);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  });
+
+  // 9) 接受时双方未连接 WS：不应空转占用用户（可再次匹配）
+  await check('离线接受邀请不产生空转房间（用户可再匹配）', async () => {
+    // 不连接任何 WS 直接 accept
+    const inv = await api('POST', '/api/invite', { toUsername: 'Bob' }, a.token);
+    assert.equal(inv.status, 201);
+    const listB = await api('GET', '/api/invitations', undefined, b.token);
+    const acc = await api('POST', '/api/invite/accept', { id: listB.json.invitations[0].id }, b.token);
+    assert.equal(acc.status, 200);
+    await new Promise((r) => setTimeout(r, 300));
+    const c1 = await connect(a.token);
+    send(c1, { type: 'queue.join' });
+    const start = await waitFor(c1, 'game.start', 5000);
+    assert.equal(Object.values(start.seats).filter((s: any) => s.kind === 'human').length, 1, '用户未被空转房间占用');
+    close(c1);
+    await new Promise((r) => setTimeout(r, 200));
   });
 
   await new Promise((r) => setTimeout(r, 200));

@@ -5,6 +5,7 @@ import type { AILevel, SeatConfigs } from '../../../shared/src/ai/types';
 import { PLAYERS } from '../../../shared/src/game/types';
 import App from '../App';
 import { authApi, clearAuth, getCachedUser, getToken, setAuth, type PublicUser } from '../api';
+import { gameLink, resetSocket } from '../ws';
 import { useRoute } from '../router';
 import { OnlinePage } from './OnlinePage';
 
@@ -41,6 +42,20 @@ export function Platform() {
     void refresh();
   }, [refresh]);
 
+  // 全局 GameLink：登录后连接 WS；任何页面收到 game.start（含好友接受开局）→ 自动进入对局页
+  const navPath = route.path;
+  useEffect(() => {
+    if (!user) return;
+    gameLink.attach();
+    const off = gameLink.subscribe(() => {
+      if (gameLink.phase === 'game' && gameLink.game && navPath !== '/online') {
+        route.navigate('/online');
+      }
+    });
+    return () => off();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, navPath]);
+
   const doAuth = async (mode: 'login' | 'register', email: string, username: string, password: string) => {
     setBusy(true);
     setErr('');
@@ -62,6 +77,7 @@ export function Platform() {
       /* ignore */
     }
     clearAuth();
+    resetSocket();
     route.navigate('/');
   };
 
@@ -141,7 +157,9 @@ export function Platform() {
   }
   if (path === '/online') {
     if (!user) return <RedirectTo to="/auth" />;
-    if (!user.tutorialCompleted) return <RedirectTo to="/tutorial" />;
+    // 教学门禁适用于在线匹配/人机；好友邀请开局的进行中对局不受限
+    const inInviteGame = gameLink.phase === 'game' || gameLink.phase === 'end';
+    if (!user.tutorialCompleted && !inInviteGame) return <RedirectTo to="/tutorial" />;
     return (
       <div className="pf-page pf-full">
         {nav}
