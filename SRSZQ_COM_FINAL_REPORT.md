@@ -54,7 +54,7 @@
 
 ## Tests Passed（真实执行）
 - vitest 单测：**64/64**（引擎 v2：R1-5 NONE/R6=C/R7=B/R8=A、13×13、禁手、forcePass…；AI 扫掠；backend 纯函数）
-- `npm run test:backend`：**ALL PASS**（真实 HTTP + SQLite：注册/登录/登出/教学/排行/防泄露）
+- `npm run test:backend`：**ALL PASS**（真实 HTTP + SQLite：注册/登录/登出/教学/排行/防泄露/邀请发送-接受-拒绝/发送者不可代接受 403）
 - `npm run test:ws`：**ALL PASS**（真实 WS 多客户端：门禁 / 1H+2AI 补位(★隐藏) / 3H /
   房间中止清理 / 权威广播+断线强制 Pass+resume / 邀请 2H+1AI 非排位）
 - `npm run e2e`（浏览器平台 E2E）：**ALL PASS**（console 0 错误；注册→教学门禁→大厅→
@@ -78,7 +78,7 @@
 4. 评估函数改进后放开 MaxN 深层迭代（AI_TUNING_REPORT 记录的方向）
 5. PostgreSQL/Redis 切换与多实例扩展（db 仓储接口 + 房间集群化已预留）
 
-## Git（9 提交）
+## Git（10 提交）
 `2b9745a` Initial architecture → `f3fd3a8` Rules v2 → `465a44b` Frontend migration(monorepo) →
 `0ec1421` Backend(foundation) → `7be6a3b` Online multiplayer → `94ad23d` Frontend migration(platform SPA) →
-`fcedad9` Deployment & docs
+`fcedad9` Deployment & docs → `3b802af` Final report → `472b45b` invite reject test
