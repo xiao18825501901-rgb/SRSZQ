@@ -1,7 +1,7 @@
-import type { Player } from '../game/types';
-import { PLAYER_COLORS, PLAYER_LABELS } from '../game/types';
-import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../ai/types';
-import { canSetAISeat, countAI, isAISeat, seatLevel } from '../ai/seats';
+import type { Player } from '../../../shared/src/game/types';
+import { PLAYER_COLORS, PLAYER_LABELS } from '../../../shared/src/game/types';
+import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
+import { canSetAISeat, countAI, isAISeat, seatLevel } from '../../../shared/src/ai/seats';
 
 /** 每座位可选值：人类 + 五档 AI = 每座位六种选择 */
 export type SeatChoice = 'human' | AILevel;

@@ -1,6 +1,6 @@
-import type { Player } from '../game/types';
-import { PLAYER_COLORS, PLAYER_LABELS } from '../game/types';
-import { AI_LEVEL_STARS, type SeatConfig } from '../ai/types';
+import type { Player } from '../../../shared/src/game/types';
+import { PLAYER_COLORS, PLAYER_LABELS } from '../../../shared/src/game/types';
+import { AI_LEVEL_STARS, type SeatConfig } from '../../../shared/src/ai/types';
 
 interface Props {
   player: Player;

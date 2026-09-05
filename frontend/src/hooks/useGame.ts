@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { BoardSize, GameState, Player } from '../game/types';
-import { BOARD_SIZES } from '../game/types';
-import { createInitialState, applyMove, undoMove, undoN, skipCurrentPlayer } from '../game/rules';
-import { eligibleOf, currentPlayerOf, currentRoundOf, currentPlayerIsEligible, getLegalMoves } from '../game/legalMoves';
+import type { BoardSize, GameState, Player } from '../../../shared/src/game/types';
+import { BOARD_SIZES } from '../../../shared/src/game/types';
+import { createInitialState, applyMove, undoMove, undoN, skipCurrentPlayer } from '../../../shared/src/game/rules';
+import { eligibleOf, currentPlayerOf, currentRoundOf, currentPlayerIsEligible, getLegalMoves } from '../../../shared/src/game/legalMoves';
 
 export interface GameController {
   state: GameState;

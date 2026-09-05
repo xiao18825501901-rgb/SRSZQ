@@ -1,0 +1,22 @@
+{
+  "name": "@srszq/backend",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "SRSZQ.com game server: auth / rooms / matchmaking / ranking / social over HTTP + WebSocket",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@srszq/shared": "0.2.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

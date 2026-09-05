@@ -1,4 +1,4 @@
-import type { Player } from '../game/types';
+import type { Player } from '../../../shared/src/game/types';
 
 export interface CellVisual {
   row: number;

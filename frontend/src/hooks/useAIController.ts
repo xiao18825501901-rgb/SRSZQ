@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { GameState, Player } from '../game/types';
-import { currentPlayerOf, getLegalMoves } from '../game/legalMoves';
-import { AI_LEVEL_STARS, type AIDecision, type AILevel, type SeatConfigs } from '../ai/types';
-import { LEVEL_CONFIG } from '../ai/config/defaultWeights';
-import { isAISeat, seatLevel, seatsEqual } from '../ai/seats';
-import { makeSeed } from '../ai/rng';
-import { requestAIMove, type AIJobHandle } from '../ai/worker/aiWorkerClient';
-import { chooseAIMove } from '../ai/chooseAIMove';
+import type { GameState, Player } from '../../../shared/src/game/types';
+import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves';
+import { AI_LEVEL_STARS, type AIDecision, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
+import { LEVEL_CONFIG } from '../../../shared/src/ai/config/defaultWeights';
+import { isAISeat, seatLevel, seatsEqual } from '../../../shared/src/ai/seats';
+import { makeSeed } from '../../../shared/src/ai/rng';
+import { requestAIMove, type AIJobHandle } from '../../../shared/src/ai/worker/aiWorkerClient';
+import { chooseAIMove } from '../../../shared/src/ai/chooseAIMove';
 
 /** AI 思考中的状态（供 UI 锁定棋盘 / 显示） */
 export interface AIThinking {

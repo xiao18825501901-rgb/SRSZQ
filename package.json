@@ -1,29 +1,30 @@
 {
-  "name": "three-player-connect-four",
+  "name": "srszq",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Three-Player Connect Four - local web app",
+  "description": "SRSZQ.com — Global Online Three-Player Four-in-a-Row Strategy Platform (monorepo)",
+  "workspaces": [
+    "shared",
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "dev": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
+    "build": "npm run build -w frontend",
+    "preview": "npm run preview -w frontend",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck -w frontend",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e": "node e2e.cjs",
     "ai:selfplay": "tsx scripts/ai-selfplay.ts",
     "ai:benchmark": "tsx scripts/ai-benchmark.ts"
   },
-  "dependencies": {
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8"
-  },
   "devDependencies": {
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
+    "@types/node": "^24.0.0",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
-    "vite": "^8.2.2",
     "vitest": "^5.0.0"
   },
   "allowScripts": {

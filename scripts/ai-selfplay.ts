@@ -10,17 +10,15 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createInitialState, applyMove, skipCurrentPlayer } from '../src/game/rules';
-import { currentPlayerOf, getLegalMoves } from '../src/game/legalMoves';
-import type { BoardSize, Player } from '../src/game/types';
-import { chooseAIMove } from '../src/ai/chooseAIMove';
-import type { AIDecision, AILevel } from '../src/ai/types';
-import { OFFLINE_LEVEL_CONFIG } from '../src/ai/config/defaultWeights';
-import { mulberry32 } from '../src/ai/rng';
+import { createInitialState, applyMove, skipCurrentPlayer } from '../shared/src/game/rules';
+import { currentPlayerOf, getLegalMoves } from '../shared/src/game/legalMoves';
+import type { BoardSize, Player } from '../shared/src/game/types';
+import { chooseAIMove } from '../shared/src/ai/chooseAIMove';
+import type { AIDecision, AILevel } from '../shared/src/ai/types';
+import { OFFLINE_LEVEL_CONFIG } from '../shared/src/ai/config/defaultWeights';
+import { mulberry32 } from '../shared/src/ai/rng';
 
 type SeatLevels = Record<Player, AILevel>;
-
-const P: Player[] = ['A', 'B', 'C'];
 
 /** 对阵表（座位 A/B/C → 档位），覆盖相邻强度与跳档 */
 const DEFAULT_COMBOS: SeatLevels[] = [
@@ -141,7 +139,7 @@ function main(): void {
 
       for (let g = 0; g < games; g++) {
         const gameSeed = rng.int(0x7fffffff);
-        let s = createInitialState(size, 'BAC');
+        let s = createInitialState(size);
         let guard = 0;
         const MAX_TURNS = 600;
 
@@ -151,7 +149,7 @@ function main(): void {
           const level = combo[cur];
           const legal = getLegalMoves(s);
           if (legal.length === 0) {
-            s = skipCurrentPlayer(s).state ?? s;
+            s = skipCurrentPlayer(s);
             continue;
           }
           const decision: AIDecision = chooseAIMove(s, cur, level, {

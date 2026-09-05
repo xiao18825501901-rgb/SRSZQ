@@ -1,6 +1,6 @@
-import { ELIGIBLE_ORDER } from '../game/types';
-import { getEligiblePlayer } from '../game/eligibility';
-import { PLAYER_COLORS } from '../game/types';
+import { ELIGIBLE_ORDER } from '../../../shared/src/game/types';
+import { getEligiblePlayer } from '../../../shared/src/game/eligibility';
+import { PLAYER_COLORS } from '../../../shared/src/game/types';
 
 interface Props {
   onClose: () => void;

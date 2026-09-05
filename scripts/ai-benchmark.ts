@@ -8,14 +8,13 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { BoardSize, GameState, Player } from '../src/game/types';
-import { createInitialState, applyMove } from '../src/game/rules';
-import { currentPlayerOf, getLegalMoves } from '../src/game/legalMoves';
-import { chooseAIMove } from '../src/ai/chooseAIMove';
-import type { AILevel } from '../src/ai/types';
-import { AI_LEVELS, AI_LEVEL_LABELS } from '../src/ai/types';
-import { OFFLINE_LEVEL_CONFIG } from '../src/ai/config/defaultWeights';
-import { mulberry32 } from '../src/ai/rng';
+import type { BoardSize, GameState } from '../shared/src/game/types';
+import { createInitialState, applyMove } from '../shared/src/game/rules';
+import { currentPlayerOf, getLegalMoves } from '../shared/src/game/legalMoves';
+import { chooseAIMove } from '../shared/src/ai/chooseAIMove';
+import { AI_LEVELS, AI_LEVEL_LABELS } from '../shared/src/ai/types';
+import { OFFLINE_LEVEL_CONFIG } from '../shared/src/ai/config/defaultWeights';
+import { mulberry32 } from '../shared/src/ai/rng';
 
 /** 与测试 helpers 等价的确定性随机中盘生成器（不依赖测试目录） */
 function randomMidGame(seed: number, size: BoardSize, maxMoves = 34): GameState {
@@ -107,28 +106,35 @@ function main(): void {
     passTotal += passes;
     const wallMs = Date.now() - wallStart;
 
-    const row: Record<string, number | string | boolean> = {
+    const avgMs = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+    const p50Ms = pct(times, 50);
+    const p95Ms = pct(times, 95);
+    const maxMs = times.length ? Math.max(...times) : 0;
+    const avgNodes = nodes.length ? nodes.reduce((a, b) => a + b, 0) / nodes.length : 0;
+    const avgDepth = depths.length ? depths.reduce((a, b) => a + b, 0) / depths.length : 0;
+    const avgCandidates = cands.length ? cands.reduce((a, b) => a + b, 0) / cands.length : 0;
+    const row = {
       level,
       label: AI_LEVEL_LABELS[level],
       budgetMs: cfg.timeBudgetMs,
-      states: states,
+      states,
       wallMs,
-      avgMs: times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0,
-      p50Ms: pct(times, 50),
-      p95Ms: pct(times, 95),
-      maxMs: times.length ? Math.max(...times) : 0,
-      avgNodes: nodes.length ? nodes.reduce((a, b) => a + b, 0) / nodes.length : 0,
-      avgDepth: depths.length ? depths.reduce((a, b) => a + b, 0) / depths.length : 0,
+      avgMs,
+      p50Ms,
+      p95Ms,
+      maxMs,
+      avgNodes,
+      avgDepth,
       ttHits: ttHits.reduce((a, b) => a + b, 0),
-      avgCandidates: cands.length ? cands.reduce((a, b) => a + b, 0) / cands.length : 0,
+      avgCandidates,
       passes,
       illegal,
       legal100: illegal === 0,
     };
     out.push(row);
     console.log(
-      `[benchmark] ${AI_LEVEL_LABELS[level].padEnd(9)} avg=${row.avgMs.toFixed(1)}ms  p50=${row.p50Ms}ms  p95=${row.p95Ms}ms  max=${row.maxMs}ms  ` +
-        `nodes=${row.avgNodes.toFixed(0)}  depth=${row.avgDepth.toFixed(2)}  ttHits=${row.ttHits}  cand=${row.avgCandidates.toFixed(0)}  ` +
+      `[benchmark] ${AI_LEVEL_LABELS[level].padEnd(9)} avg=${avgMs.toFixed(1)}ms  p50=${p50Ms}ms  p95=${p95Ms}ms  max=${maxMs}ms  ` +
+        `nodes=${avgNodes.toFixed(0)}  depth=${avgDepth.toFixed(2)}  ttHits=${row.ttHits}  cand=${avgCandidates.toFixed(0)}  ` +
         `pass=${passes}  ILLEGAL=${illegal}`,
     );
   }

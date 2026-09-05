@@ -1,5 +1,5 @@
-import { ELIGIBLE_ORDER, PLAYER_COLORS } from '../game/types';
-import { getEligiblePlayer } from '../game/eligibility';
+import { ELIGIBLE_ORDER, PLAYER_COLORS } from '../../../shared/src/game/types';
+import { getEligiblePlayer } from '../../../shared/src/game/eligibility';
 
 interface Props {
   currentRound: number;

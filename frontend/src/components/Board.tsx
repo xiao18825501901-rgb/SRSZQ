@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { GameState, Player } from '../game/types';
-import { currentPlayerIsEligible, eligibleOf, currentPlayerOf } from '../game/legalMoves';
-import { isLegalMove } from '../game/legalMoves';
-import { getWinningPoints } from '../game/legalMoves';
+import type { GameState, Player } from '../../../shared/src/game/types';
+import { currentPlayerIsEligible, eligibleOf, currentPlayerOf } from '../../../shared/src/game/legalMoves';
+import { isLegalMove } from '../../../shared/src/game/legalMoves';
+import { getWinningPoints } from '../../../shared/src/game/legalMoves';
 import { CellView } from './Cell';
 import type { CellVisual } from './Cell';
 

@@ -1,0 +1,12 @@
+{
+  "name": "@srszq/shared",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "SRSZQ shared pure logic: formal rules v2 engine + AI (single source of truth)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./game/*": "./src/game/*",
+    "./ai/*": "./src/ai/*"
+  }
+}

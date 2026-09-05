@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import type { BoardSize, Player } from '../game/types';
-import { BOARD_SIZES, BOARD_SIZE_LABELS } from '../game/types';
-import { currentRoundOf, currentPlayerOf, eligibleOf } from '../game/legalMoves';
-import { getLegalMoves, getWinningPoints, isBoardFull, getForbiddenCells } from '../game/legalMoves';
-import type { GameState } from '../game/types';
+import type { BoardSize, Player } from '../../../shared/src/game/types';
+import { BOARD_SIZES, BOARD_SIZE_LABELS } from '../../../shared/src/game/types';
+import { currentRoundOf, currentPlayerOf, eligibleOf } from '../../../shared/src/game/legalMoves';
+import { getLegalMoves, getWinningPoints, isBoardFull, getForbiddenCells } from '../../../shared/src/game/legalMoves';
+import type { GameState } from '../../../shared/src/game/types';
 
 interface Props {
   state: GameState;

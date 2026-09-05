@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import type { GameState } from '../game/types';
-import { PLAYER_COLORS } from '../game/types';
-import { AI_LEVEL_STARS, type AIDecision, type SeatConfigs } from '../ai/types';
-import { isAISeat, seatLevel } from '../ai/seats';
+import type { GameState } from '../../../shared/src/game/types';
+import { PLAYER_COLORS } from '../../../shared/src/game/types';
+import { AI_LEVEL_STARS, type AIDecision, type SeatConfigs } from '../../../shared/src/ai/types';
+import { isAISeat, seatLevel } from '../../../shared/src/ai/seats';
 
 interface Props {
   state: GameState;
