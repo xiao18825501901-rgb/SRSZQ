@@ -17,9 +17,9 @@ export function currentRoundOf(state: GameState): number {
   return roundFromTurn(state.turnIndex);
 }
 
-/** 当前 Round 的胜权玩家（Round1-3 为 null） */
+/** 当前 Round 的胜权玩家（Round1-5 为 null） */
 export function eligibleOf(state: GameState): Player | null {
-  return getEligiblePlayer(currentRoundOf(state), state.schedule);
+  return getEligiblePlayer(currentRoundOf(state));
 }
 
 /** 当前玩家是否拥有胜权 */

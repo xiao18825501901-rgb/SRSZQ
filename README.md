@@ -39,12 +39,12 @@ three-player-connect-four/
 ├── src/
 │   ├── game/                  # 纯规则引擎（与 UI 完全分离，可独立测试/复用）
 │   │   ├── types.ts           # 类型：玩家/棋盘/资格顺序/状态
-│   │   ├── eligibility.ts     # 资格顺序：CBA / CBACC / BAC 与 Round 计算
+│   │   ├── eligibility.ts     # 正式资格 v2：R1-5 NONE，R6 起 C→B→A 循环
 │   │   ├── winDetection.ts    # ≥4 连检测（横/竖/主对角/副对角，穿过落子格）
 │   │   ├── legalMoves.ts      # 合法落子 / 禁手 / 胜点 / 棋盘满
 │   │   ├── rules.ts           # 状态机：落子 / 自动Pass / 撤销 / 重放 / 导入校验
 │   │   └── __tests__/         # Vitest 规则测试（66 项）
-│   ├── ai/                    # ★ SRSZQ AI（BAC 人机对弈，Web Worker + 离线脚本共用）
+│   ├── ai/                    # ★ SRSZQ AI（人机对弈，Web Worker + 离线脚本共用）
 │   │   ├── types.ts / seats.ts / rng.ts
 │   │   ├── threatAnalysis.ts / evaluation.ts / moveOrdering.ts
 │   │   ├── search.ts / searchAgents.ts           # MaxN / 3-Ply
@@ -69,37 +69,39 @@ three-player-connect-four/
 
 ---
 
-## 当前规则
+## 当前规则（正式版 v2 —— SRSZQ.com 规则）
 
 - 玩家：A（红）、B（绿）、C（白），固定行动顺序 **A → B → C**。
-- 棋盘：11×11（默认）或 13×13，正方形等格。
+- 棋盘：**13×13（默认）或 17×17**，正方形等格。
 - 一个 Round = A、B、C 各行动一次。
-- **Round 1–3：无人拥有胜权**，任何玩家都不得形成自己的 ≥4 连（禁手）。
-- 从 Round 4 起按所选资格顺序轮转胜权；只有「当前玩家 == 胜权玩家」时，落子形成 ≥4 才获胜。
+- **Round 1–5：无人拥有胜权**，任何玩家都不得形成自己的 ≥4 连（禁手）。
+- **Round ≥ 6：按 C → B → A 循环**授予胜权（R6=C、R7=B、R8=A…）；
+  只有「当前玩家 == 胜权玩家」时，落子形成 ≥4 才获胜。
 - 非资格玩家的「形成 ≥4 落子」为禁手，无法点击。
 - ≥4 即算（4/5/6…连均可），方向含横、竖、两斜。
 - 胜利只能由「当前新落的一颗棋」触发的连线判定（不做全局扫描，杜绝“储存四连”）。
 - 无合法步 → 自动 Pass（回合照常消耗）；若撤销到无合法步状态，界面会提供「跳过」按钮。
 - 棋盘填满无人获胜 → 和棋。
 
-## 三种资格顺序（从 R4 生效）
+## 资格时间轴（正式版 v2）
 
-| 方案 | 周期 | R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 | 说明 |
-|---|---|---|---|
-| **CBA** | C→B→A | C B A C B A C B A C | 原始 baseline，3 轮一循环 |
-| **CBACC** | C→B→A→C→C | C B A C C C B A C C | 5 轮一循环；注意 R7-R9 会出现连续三个 C（规则如此，非 Bug） |
-| **BAC** | B→A→C | B A C B A C B A C | 3 轮一循环 |
+| Round | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 胜权 | — | — | — | — | — | **C** | **B** | **A** | **C** | **B** | **A** | **C** | **B** | **A** |
 
-页面顶部状态栏与「资格时间轴」会实时显示：当前轮胜权、上一轮、未来 5 轮。
+页面顶部状态栏与「资格时间轴」会实时显示：当前轮胜权、上一轮、未来轮次。
+
+> 说明：本仓库 SRSZQ_AI_REPORT.md / AI_TUNING_REPORT.md / AI_BENCHMARK_REPORT.md 为规则 v1
+> （R1-3 NONE / R4 起可选 CBA/CBACC/BAC / 11×11）时期的历史评测存档；git 历史可回溯 v1 基线，
+> 当前代码与正式规则以 v2 为准。
 
 ## 界面功能
 
 - 状态栏：Round / 当前玩家 / 当前胜权（🏆）/ 资格顺序 / 下轮胜权。
-- 玩家卡：棋子数、是否持胜权、禁手点、胜点；AI 座位显示 🤖 AI·档位·星级，思考中显示 THINKING。
-- **AI 座位（BAC 专用）**：开局设置中每个座位可选 人类 / Random / Tactical / Selfish / 3-Ply / MaxN；
+- 玩家卡：棋子数、是否持胜权、禁手点、胜点；AI 座位显示 🤖 AI·★星级（不显示真实档位名），思考中显示 THINKING。
+- **AI 座位**：开局设置中每个座位可选 人类 / AI ★~★★★★★（内部映射 Random…MaxN）；
   每局 0–2 个 AI、至少 1 名人类（禁止三 AI）。AI 与人类共享同一规则引擎，
   思考期间棋盘锁定，AI 走子自动串行，日志带 🤖AI 标记（?debug=1 显示深度/节点/耗时）。
-  悔棋在 AI 局为「悔棋到上一人类回合」。
 - 显示合法落子（小圆点）与禁手（淡红 ✕ + 悬停解释）。
 - 显示胜点（红/绿/白外框，表示各玩家下一手可成 ≥4 的位置）。
 - 棋局日志（Move History）：`Turn 17 — B → (7, 5)`，含自动 Pass 与胜局记录。
@@ -113,8 +115,8 @@ three-player-connect-four/
 
 ```json
 {
-  "boardSize": 11,
-  "schedule": "BAC",
+  "boardSize": 13,
+  "rulesVersion": 2,
   "players": { "A": { "kind": "human" }, "B": { "kind": "ai", "level": "3ply" }, "C": { "kind": "human" } },
   "moves": [
     { "turn": 0, "round": 1, "player": "A", "row": 6, "col": 6 },
@@ -125,14 +127,14 @@ three-player-connect-four/
 ```
 
 坐标均为 1-based（与棋盘坐标一致）；自动 Pass 记录为 `{ "turn": n, "round": r, "player": "X", "pass": true }`。
-`players` 为座位配置（仅 BAC 生效，可缺省 = 全人类）；每步 `ai` 为该步 AI 决策统计（可缺省）。
+`players` 为座位配置（可缺省 = 全人类）；每步 `ai` 为该步 AI 决策统计（可缺省）。
 
 - **导入**：点击 `⤒ Import JSON` 选择文件。系统会逐手校验（玩家顺序、占位、禁手规则、Pass 合法性、终局状态），任一非法会明确报错：`Invalid move at turn 17 (B → (3, 4)): 禁手...`，不会静默接受。
-  带 `players` 的 BAC 文件会恢复座位（旧格式无 players → 默认全人类）。
+  带 `players` 的文件会恢复座位（缺省 → 默认全人类）；旧 v1 文件的 `schedule` 字段被忽略（正式规则只有一套）。
 
 ## 测试 / 调试
 
-- `npm test`：80 项测试（引擎 66 + AI 14：合法性扫掠、禁手专项、战术行为）。
+- `npm test`：正式规则 v2 测试（引擎资格/禁手/胜局/Pass/和棋 + AI 合法性扫掠/禁手专项/战术行为）。
 - `npm run ai:selfplay`：三 AI 自对弈评测（真实胜率/统计，见 AI_TUNING_REPORT.md）。
 - `npm run ai:benchmark`：分档性能基准（耗时/深度/节点/100% 合法性，见 AI_BENCHMARK_REPORT.md）。
 - `?debug=1`：展开 Debug 面板，并暴露 `window.__tcf`（getState/place/undo/pass/newGame/seats/setSeats/aiStats/thinking）供自动化与研究使用。
@@ -141,4 +143,4 @@ three-player-connect-four/
 ## 快捷键/提示
 
 - 单击空格落子；悬停显示当前玩家半透明预览。
-- 修改棋盘尺寸或资格顺序会询问是否开新局（不会静默改动进行中的棋局）。
+- 修改棋盘尺寸或 AI 座位会询问是否开新局（不会静默改动进行中的棋局）。

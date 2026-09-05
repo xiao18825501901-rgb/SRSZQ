@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameState, Player } from '../game/types';
 import { currentPlayerOf, getLegalMoves } from '../game/legalMoves';
-import { AI_LEVEL_LABELS, type AIDecision, type AILevel, type SeatConfigs } from '../ai/types';
+import { AI_LEVEL_STARS, type AIDecision, type AILevel, type SeatConfigs } from '../ai/types';
 import { LEVEL_CONFIG } from '../ai/config/defaultWeights';
 import { isAISeat, seatLevel, seatsEqual } from '../ai/seats';
 import { makeSeed } from '../ai/rng';
@@ -176,7 +176,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
     const legal = getLegalMoves(state);
     // 当前 AI 无合法步：引擎未自动推进（undo 重放后）→ 自动跳过
     if (legal.length === 0) {
-      onAIPassNotice?.(`AI 玩家 ${player}（${AI_LEVEL_LABELS[seatLevel(seats, player)]}）无合法落子，自动 Pass。`);
+      onAIPassNotice?.(`AI 玩家 ${player}（AI ${AI_LEVEL_STARS[seatLevel(seats, player)]}）无合法落子，自动 Pass。`);
       passTurn();
       return;
     }
@@ -204,7 +204,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
       if (!cur || cur.gen !== p.gen) return; // 已取消
       if (r.error || !r.decision) {
         // Worker 失败：主线程同步兜底（小预算），避免 AI 回合卡死
-        onAIError?.(`AI 玩家 ${p.player}（${AI_LEVEL_LABELS[p.level]}）Worker 决策失败：${r.error ?? 'unknown'}，改用主线程兜底。`);
+        onAIError?.(`AI 玩家 ${p.player}（AI ${AI_LEVEL_STARS[p.level]}）Worker 决策失败：${r.error ?? 'unknown'}，改用主线程兜底。`);
         let fallback: AIDecision | null = null;
         try {
           fallback = chooseAIMove(stateRef.current, p.player, p.level, {

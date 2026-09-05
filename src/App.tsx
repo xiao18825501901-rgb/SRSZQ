@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { BoardSize, Player, Schedule } from './game/types';
+import type { BoardSize, Player } from './game/types';
 import { PLAYER_COLORS, PLAYER_LABELS } from './game/types';
 import { useGame } from './hooks/useGame';
 import { Board } from './components/Board';
@@ -16,19 +16,22 @@ import { getWinningPoints, getForbiddenCells } from './game/legalMoves';
 import { getEligiblePlayer } from './game/eligibility';
 import type { GameState } from './game/types';
 import type { AIDecision, AILevel, SeatConfigs } from './ai/types';
-import { AI_LEVEL_LABELS } from './ai/types';
+import { AI_LEVEL_STARS } from './ai/types';
 import { allHumanSeats, countAI, countHuman, isAISeat, parseSeatConfigs, serializeSeats } from './ai/seats';
 import { useAIController, type AIThinking } from './hooks/useAIController';
 
 type NoticeKind = 'info' | 'pass' | 'error';
 
+/** AI 星级展示（平台规范：用户只能看到 ★，看不到真实档位名） */
+const stars = (lvl: AILevel): string => AI_LEVEL_STARS[lvl];
+
 export default function App() {
-  const game = useGame(11, 'CBA');
+  const game = useGame(13);
   const { state } = game;
 
   const [setupOpen, setSetupOpen] = useState(true);
   const [rulesOpen, setRulesOpen] = useState(false);
-  const [pendingSetupChange, setPendingSetupChange] = useState<null | { size?: BoardSize; schedule?: Schedule; players?: SeatConfigs }>(null);
+  const [pendingSetupChange, setPendingSetupChange] = useState<null | { size?: BoardSize; players?: SeatConfigs }>(null);
   const [confirmNewGame, setConfirmNewGame] = useState(false);
   const [showLegal, setShowLegal] = useState(true);
   const [showWinning, setShowWinning] = useState(false);
@@ -46,12 +49,9 @@ export default function App() {
   const eligible = game.eligible;
   const round = game.round;
 
-  /** AI 座位仅在 BAC 模式生效；CBA / CBACC 一律按全人类显示与行动 */
-  const displaySeats: SeatConfigs = useMemo(
-    () => (state.schedule === 'BAC' ? seats : allHumanSeats()),
-    [seats, state.schedule],
-  );
-  const aiActive = state.schedule === 'BAC' && countAI(displaySeats) > 0;
+  /** 座位配置（正式规则仅一套；座位对本地对局直接生效） */
+  const displaySeats: SeatConfigs = seats;
+  const aiActive = countAI(displaySeats) > 0;
 
   const flash = useCallback((kind: NoticeKind, text: string, ms = 4000) => {
     setNotice({ kind, text });
@@ -90,7 +90,7 @@ export default function App() {
     placeStone: game.placeStone,
     passTurn: game.passTurn,
     // 设置弹窗打开期间 AI 不行动（避免选座位时对局已在后台开始）
-    enabled: state.schedule === 'BAC' && !setupOpen,
+    enabled: !setupOpen,
     onAIMove: handleAIMove,
     onAIError: handleAIError,
     onAIPassNotice: handleAIPassNotice,
@@ -147,12 +147,7 @@ export default function App() {
 
   const handleSizeChange = (s: BoardSize) => {
     if (state.moves.length > 0) setPendingSetupChange((p) => ({ ...(p ?? {}), size: s }));
-    else game.newGame(s, state.schedule);
-  };
-
-  const handleScheduleChange = (s: Schedule) => {
-    if (state.moves.length > 0) setPendingSetupChange((p) => ({ ...(p ?? {}), schedule: s }));
-    else game.newGame(state.boardSize, s);
+    else game.newGame(s);
   };
 
   /** 座位选择：每座位 6 选 1（人类 + 五档 AI）；至少 1 人类、至多 2 AI */
@@ -176,7 +171,9 @@ export default function App() {
       const n = countAI(next);
       flash(
         'info',
-        n === 0 ? '已切换为全人类对弈。' : `座位已更新：${['A', 'B', 'C'].filter((p) => next[p as Player].kind === 'ai').map((p) => `玩家 ${p}（${AI_LEVEL_LABELS[(next[p as Player].level ?? 'random') as AILevel]}）`).join('、')} 由 AI 执棋。`,
+        n === 0
+          ? '已切换为全人类对弈。'
+          : `座位已更新：${['A', 'B', 'C'].filter((p) => next[p as Player].kind === 'ai').map((p) => `玩家 ${p}（AI ${stars((next[p as Player].level ?? 'random') as AILevel)}）`).join('、')} 由 AI 执棋。`,
         5000,
       );
     }
@@ -185,7 +182,7 @@ export default function App() {
   const applySetupChange = () => {
     if (!pendingSetupChange) return;
     ai.cancelAll();
-    game.newGame(pendingSetupChange.size ?? state.boardSize, pendingSetupChange.schedule ?? state.schedule);
+    game.newGame(pendingSetupChange.size ?? state.boardSize);
     if (pendingSetupChange.players) setSeats(pendingSetupChange.players);
     setAiStats(new Map());
     setPendingSetupChange(null);
@@ -223,8 +220,8 @@ export default function App() {
   const doExport = () => {
     const payload = {
       boardSize: state.boardSize,
-      schedule: state.schedule,
-      // 座位配置 + AI 决策统计（旧格式无此字段，导入器按全人类处理）
+      rulesVersion: 2,
+      // 座位配置 + AI 决策统计（可选字段；缺省按全人类处理）
       players: serializeSeats(displaySeats),
       moves: state.moves.map((m, i) => {
         const stat = aiStats.get(i);
@@ -252,7 +249,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `connect-four-${state.schedule}-${state.boardSize}x${state.boardSize}-${Date.now()}.json`;
+    a.download = `srszq-${state.boardSize}x${state.boardSize}-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     flash('info', `已导出棋局 JSON（${state.moves.length} 条记录，含座位配置）。`);
@@ -264,18 +261,17 @@ export default function App() {
       try {
         const data = JSON.parse(String(reader.result)) as {
           boardSize?: number;
-          schedule?: Schedule;
+          rulesVersion?: number;
+          schedule?: string; // 旧版文件残留字段（v1 规则），仅容忍存在、不参与判定
           moves?: unknown[];
           players?: unknown;
         };
-        if (data.boardSize !== 11 && data.boardSize !== 13) throw new Error('boardSize 必须是 11 或 13');
-        if (!['CBA', 'CBACC', 'BAC'].includes(data.schedule ?? '')) throw new Error('schedule 必须是 CBA / CBACC / BAC');
+        if (data.boardSize !== 13 && data.boardSize !== 17) throw new Error('boardSize 必须是 13 或 17');
         if (!Array.isArray(data.moves)) throw new Error('缺少 moves 数组');
-        const imported = importMoves(data.boardSize as BoardSize, data.schedule as Schedule, data.moves as never);
+        const imported = importMoves(data.boardSize as BoardSize, data.moves as never);
         const final = imported.status === 'playing' ? applyAutoPassChain(imported).state : imported;
-        // 座位：仅 BAC 且文件带 players 时导入；旧格式 / 其他顺序 → 默认全人类
-        const importedSeats =
-          final.schedule === 'BAC' && data.players ? parseSeatConfigs(data.players) : allHumanSeats();
+        // 座位：文件带 players 时导入；否则默认全人类
+        const importedSeats = data.players ? parseSeatConfigs(data.players) : allHumanSeats();
         ai.cancelAll();
         game.replaceState(final);
         setSeats(importedSeats);
@@ -283,7 +279,7 @@ export default function App() {
         setSetupOpen(false);
         flash(
           'info',
-          `已导入棋局：${final.moves.length} 步 · ${final.boardSize}×${final.boardSize} · ${final.schedule} · ${
+          `已导入棋局：${final.moves.length} 步 · ${final.boardSize}×${final.boardSize} · 正式规则 v2 · ${
             final.status === 'won' ? `胜者 ${final.winner}` : final.status === 'draw' ? '和棋' : '进行中'
           }${countAI(importedSeats) > 0 ? ` · ${countAI(importedSeats)} 个 AI 座位` : ''}`,
           6000,
@@ -309,14 +305,12 @@ export default function App() {
         game.placeStone(row - 1, col - 1);
       },
       undo: () => game.undo(),
-      newGame: (size?: number, sched?: string) =>
-        game.newGame((size as BoardSize) ?? undefined, (sched as Schedule) ?? undefined),
+      newGame: (size?: number) => game.newGame((size as BoardSize) ?? undefined),
       pass: () => game.passTurn(),
       seats: () => serializeSeats(displaySeats),
       setSeats: (raw: unknown) => {
         const next = parseSeatConfigs(raw);
         if (countHuman(next) < 1) return;
-        if (state.schedule !== 'BAC') return;
         if (state.moves.length > 0) return; // 仅开局前可换座位（自动化先 setSeats 再 newGame）
         setSeats(next);
       },
@@ -341,7 +335,7 @@ export default function App() {
         </div>
         <div className="topbar-actions">
           <span className="cfg-chip">
-            {state.boardSize}×{state.boardSize} · {state.schedule}
+            {state.boardSize}×{state.boardSize} · SRSZQ 正式规则
           </span>
           <button className="btn ghost" onClick={() => setRulesOpen(true)}>
             规则说明
@@ -353,7 +347,6 @@ export default function App() {
         current={current}
         round={round}
         eligible={eligible}
-        schedule={state.schedule}
         status={state.status}
         winner={state.winner}
         aiThinking={thinking}
@@ -364,12 +357,12 @@ export default function App() {
         <div className="notice pass passbar">
           {currentIsAI ? (
             <span>
-              AI 玩家 {game.current}（{AI_LEVEL_LABELS[isAISeat(displaySeats, game.current) ? (displaySeats[game.current].level ?? 'random') : 'random']}）没有任何合法落子 —— 将自动跳过。
+              AI 玩家 {game.current}（AI {stars(isAISeat(displaySeats, game.current) ? ((displaySeats[game.current].level ?? 'random') as AILevel) : 'random')}）没有任何合法落子 —— 将自动跳过。
             </span>
           ) : (
             <span>
               玩家 {game.current} 没有任何合法落子 —— 将自动 Pass。
-              {game.eligible ? `（当前胜权：玩家 ${game.eligible}，无合法步不能获胜）` : '（Round 1–3 无人有胜权）'}
+              {game.eligible ? `（当前胜权：玩家 ${game.eligible}，无合法步不能获胜）` : '（Round 1–5 无人有胜权）'}
             </span>
           )}
           {!currentIsAI && (
@@ -391,7 +384,7 @@ export default function App() {
           <Board state={state} showLegal={showLegal} showWinning={showWinning} onCellClick={onPlace} />
           {thinking && (
             <div className="notice info ai-thinking">
-              🤖 AI 思考中… 座位 {thinking.player}（{AI_LEVEL_LABELS[thinking.level]}）正在计算最佳落子，棋盘已锁定。
+              🤖 AI 思考中… 座位 {thinking.player}（AI {stars(thinking.level)}）正在计算最佳落子，棋盘已锁定。
             </div>
           )}
           {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
@@ -418,7 +411,7 @@ export default function App() {
         </section>
 
         <aside className="side-col">
-          <QualificationTimeline schedule={state.schedule} currentRound={round} highlightRound={round} />
+          <QualificationTimeline currentRound={round} highlightRound={round} />
           <GameControls
             canUndo={state.moves.length > 0}
             hasMoves={state.moves.length > 0}
@@ -465,7 +458,7 @@ export default function App() {
         footer={
           <>
             <button className="btn ghost" onClick={() => setSetupOpen(false)}>
-              稍后（默认 11×11 · CBA）
+              稍后（默认 13×13）
             </button>
             <button className="btn primary" onClick={() => setSetupOpen(false)}>
               START GAME
@@ -473,15 +466,15 @@ export default function App() {
           </>
         }
       >
-        <SetupOptions size={state.boardSize} schedule={state.schedule} onSize={handleSizeChange} onSchedule={handleScheduleChange} />
-        <SeatSetup schedule={state.schedule} seats={seats} onChange={handleSeatChoice} />
-        <p className="muted">修改棋盘尺寸 / 资格顺序 / AI 座位会开始新棋局（已有落子时会先询问）。Round 1–3 无人拥有胜权。AI 与人类共享同一规则引擎，AI 永远只走合法点。</p>
+        <SetupOptions size={state.boardSize} onSize={handleSizeChange} />
+        <SeatSetup seats={seats} onChange={handleSeatChoice} />
+        <p className="muted">修改棋盘尺寸 / AI 座位会开始新棋局（已有落子时会先询问）。Round 1–5 无人拥有胜权；R6 起按 C → B → A 循环。AI 与人类共享同一规则引擎，AI 永远只走合法点。</p>
       </Modal>
 
       <ConfirmModal
         open={pendingSetupChange !== null}
         title="修改设置将开始新游戏"
-        message="当前棋局已有落子。修改棋盘尺寸 / 资格顺序 / AI 座位将清空当前棋局并开始新游戏，是否继续？"
+        message="当前棋局已有落子。修改棋盘尺寸 / AI 座位将清空当前棋局并开始新游戏，是否继续？"
         onCancel={() => setPendingSetupChange(null)}
         onConfirm={applySetupChange}
       />
@@ -489,7 +482,7 @@ export default function App() {
       <ConfirmModal
         open={confirmNewGame}
         title="新游戏"
-        message={state.moves.length > 0 ? '是否清空当前棋局并开始新对局？（保留棋盘尺寸、资格顺序与 AI 座位设置）' : '开始一局新游戏？'}
+        message={state.moves.length > 0 ? '是否清空当前棋局并开始新对局？（保留棋盘尺寸与 AI 座位设置）' : '开始一局新游戏？'}
         onCancel={() => setConfirmNewGame(false)}
         onConfirm={() => {
           prevMovesLen.current = 0;
@@ -570,7 +563,7 @@ export default function App() {
         <p>棋盘已满且无人获胜，本局为和棋。</p>
       </Modal>
 
-      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} schedule={state.schedule} />}
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
     </div>
   );
 }
@@ -579,13 +572,12 @@ function StatusBar(props: {
   current: Player;
   round: number;
   eligible: Player | null;
-  schedule: Schedule;
   status: string;
   winner: Player | null;
   aiThinking?: AIThinking | null;
   currentIsAI?: boolean;
 }) {
-  const { current, round, eligible, schedule, status, winner, aiThinking, currentIsAI } = props;
+  const { current, round, eligible, status, winner, aiThinking, currentIsAI } = props;
   const thinking = aiThinking ?? null;
   return (
     <div className="statusbar">
@@ -600,7 +592,7 @@ function StatusBar(props: {
           style={status === 'playing' ? { borderColor: PLAYER_COLORS[current] } : undefined}
         >
           {thinking
-            ? `🤖 AI 思考中（${thinking.player}·${AI_LEVEL_LABELS[thinking.level]}）`
+            ? `🤖 AI 思考中（${thinking.player}·AI ${stars(thinking.level)}）`
             : status === 'playing'
               ? `${currentIsAI ? '🤖 ' : ''}玩家 ${current}${currentIsAI ? '（AI）' : ''}`
               : status === 'won'
@@ -621,23 +613,23 @@ function StatusBar(props: {
         )}
       </div>
       <div className="status-item">
-        <span className="status-label">资格顺序</span>
-        <span className="status-value">{schedule}</span>
+        <span className="status-label">资格规则</span>
+        <span className="status-value">R6 起 C→B→A</span>
       </div>
       <div className="status-item">
         <span className="status-label">下轮胜权（R{round + 1}）</span>
-        <span className="status-value">{round + 1 <= 3 ? '—' : nextEligible(round + 1, schedule)}</span>
+        <span className="status-value">{nextEligible(round + 1)}</span>
       </div>
-      {round <= 3 && (
+      {round <= 5 && (
         <div className="status-item wide">
-          <span className="hint">Round 1–3：无人拥有胜权，所有玩家都不可形成四连（禁手）。</span>
+          <span className="hint">Round 1–5：无人拥有胜权，所有玩家都不可形成四连（禁手）。</span>
         </div>
       )}
     </div>
   );
 }
 
-function nextEligible(round: number, schedule: Schedule): string {
-  const p = getEligiblePlayer(round, schedule);
+function nextEligible(round: number): string {
+  const p = getEligiblePlayer(round);
   return p ?? '—';
 }

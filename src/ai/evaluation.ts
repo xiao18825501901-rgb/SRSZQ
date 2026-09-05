@@ -1,5 +1,6 @@
 import type { GameState, Player } from '../game/types';
-import { getEligiblePlayer } from '../game/eligibility';
+import { ELIGIBLE_START_ROUND } from '../game/types';
+import { firstEligibleRound, getEligiblePlayer } from '../game/eligibility';
 import { currentRoundOf } from '../game/legalMoves';
 import { patternFeatures } from './threatAnalysis';
 import { DEFAULT_WEIGHTS, type EvalWeights } from './config/defaultWeights';
@@ -7,33 +8,28 @@ import { DEFAULT_WEIGHTS, type EvalWeights } from './config/defaultWeights';
 const PLAYERS: readonly Player[] = ['A', 'B', 'C'];
 
 /**
- * 距离玩家 p 下一次获得胜权还有几轮（0 = 当前轮即拥有资格；Round<=3 期间无人有资格）。
- * 用于 BAC 资格感知：越接近自己的资格轮，攻击棋型价值越高。
+ * 距离玩家 p 下一次获得胜权还有几轮（0 = 当前轮即拥有资格；Round 1-5 无人有资格）。
+ * 正式规则 v2：R6=C、R7=B、R8=A，C→B→A 循环。
+ * 用于资格感知：越接近自己的资格轮，攻击棋型价值越高。
  */
 export function roundsUntilEligible(state: GameState, player: Player): number {
   const round = currentRoundOf(state);
-  if (round <= 3) {
+  if (round < ELIGIBLE_START_ROUND) {
     // 尚未进入资格期：看自己第一次获权轮
     const first = firstEligibleRound(player);
     return Math.max(0, first - round);
   }
   let r = round;
   for (let i = 0; i < 6; i++) {
-    if (getEligiblePlayer(r, 'BAC') === player) return r - round;
+    if (getEligiblePlayer(r) === player) return r - round;
     r++;
   }
   return 6;
 }
 
-function firstEligibleRound(player: Player): number {
-  // BAC 周期 B→A→C 从 R4 开始：B@R4, A@R5, C@R6，每 3 轮循环
-  const order: Record<Player, number> = { B: 4, A: 5, C: 6 };
-  return order[player];
-}
-
-/** 某玩家在 BAC 中是否「当前轮拥有资格」（与 state 无关的纯资格查询） */
-export function bacEligibleAtRound(round: number): Player | null {
-  return getEligiblePlayer(round, 'BAC');
+/** 某玩家在正式规则下是否「当前轮拥有资格」（与 state 无关的纯资格查询） */
+export function eligibleAtRound(round: number): Player | null {
+  return getEligiblePlayer(round);
 }
 
 export interface EvalResult {

@@ -1,4 +1,4 @@
-import type { Board, BoardSize, CellPos, GameState, MoveRecord, Player, Schedule } from './types';
+import type { Board, BoardSize, CellPos, GameState, MoveRecord, Player } from './types';
 import { playerFromTurn, roundFromTurn } from './eligibility';
 import { getLegalMoves, isBoardFull } from './legalMoves';
 import { getWinLineThroughCell, hasFourThroughPlacedCell } from './winDetection';
@@ -17,10 +17,9 @@ function makeEmptyBoard(size: number): Board {
   return Array.from({ length: size }, () => Array<null>(size).fill(null));
 }
 
-export function createInitialState(boardSize: BoardSize, schedule: Schedule): GameState {
+export function createInitialState(boardSize: BoardSize): GameState {
   return {
     boardSize,
-    schedule,
     board: makeEmptyBoard(boardSize),
     turnIndex: 0,
     moves: [],
@@ -125,7 +124,7 @@ export function applyMove(state: GameState, row: number, col: number): ApplyResu
 export function undoMove(state: GameState): GameState {
   if (state.moves.length === 0) return state;
   const moves = state.moves.slice(0, -1);
-  return replayMoves(state.boardSize, state.schedule, moves);
+  return replayMoves(state.boardSize, moves);
 }
 
 /**
@@ -142,7 +141,7 @@ export function undoOne(state: GameState): GameState {
 export function undoN(state: GameState, n: number): GameState {
   if (n <= 0 || state.moves.length === 0) return state;
   const keep = Math.max(0, state.moves.length - n);
-  return replayMoves(state.boardSize, state.schedule, state.moves.slice(0, keep));
+  return replayMoves(state.boardSize, state.moves.slice(0, keep));
 }
 
 /**
@@ -154,7 +153,7 @@ export function skipCurrentPlayer(state: GameState): GameState {
 }
 
 /** 由历史记录重放得到完整状态（用于撤销 / 导入） */
-export function replayMoves(boardSize: BoardSize, schedule: Schedule, moves: MoveRecord[]): GameState {
+export function replayMoves(boardSize: BoardSize, moves: MoveRecord[]): GameState {
   const board = makeEmptyBoard(boardSize);
   let turnIndex = 0;
   let status: GameState['status'] = 'playing';
@@ -179,7 +178,6 @@ export function replayMoves(boardSize: BoardSize, schedule: Schedule, moves: Mov
 
   return {
     boardSize,
-    schedule,
     board,
     turnIndex,
     moves: moves.slice(),
@@ -214,15 +212,13 @@ export interface ImportEntry {
  * 导入校验 + 重放：逐条验证（玩家顺序、占位、禁手规则、Pass 合法性），
  * 任一步非法即抛出带回合号的错误；全部合法则返回重放后的终态。
  * 约定：row/col 使用 1-based（与页面坐标一致）。
+ * 旧文件中的 schedule 字段（CBA/CBACC/BAC 旧版规则）不再参与判定；v2 只有一套正式规则。
  */
-export function importMoves(boardSize: BoardSize, schedule: Schedule, entries: ImportEntry[]): GameState {
-  if (!Number.isInteger(boardSize) || (boardSize !== 11 && boardSize !== 13)) {
-    throw new Error('boardSize 必须是 11 或 13');
+export function importMoves(boardSize: BoardSize, entries: ImportEntry[]): GameState {
+  if (!Number.isInteger(boardSize) || (boardSize !== 13 && boardSize !== 17)) {
+    throw new Error('boardSize 必须是 13 或 17');
   }
-  if (schedule !== 'CBA' && schedule !== 'CBACC' && schedule !== 'BAC') {
-    throw new Error(`schedule 必须是 CBA / CBACC / BAC，收到: ${String(schedule)}`);
-  }
-  let s = createInitialState(boardSize, schedule);
+  let s = createInitialState(boardSize);
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     const player = e?.player as Player;

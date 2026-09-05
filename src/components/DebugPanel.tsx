@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import type { BoardSize, Player, Schedule } from '../game/types';
-import { BOARD_SIZES, SCHEDULES, SCHEDULE_LABELS } from '../game/types';
+import type { BoardSize, Player } from '../game/types';
+import { BOARD_SIZES, BOARD_SIZE_LABELS } from '../game/types';
 import { currentRoundOf, currentPlayerOf, eligibleOf } from '../game/legalMoves';
 import { getLegalMoves, getWinningPoints, isBoardFull, getForbiddenCells } from '../game/legalMoves';
 import type { GameState } from '../game/types';
@@ -58,7 +58,7 @@ export function DebugPanel({ state }: Props) {
         </div>
       </div>
       <div className="muted">
-        boardSize={state.boardSize} schedule={state.schedule} moves={state.moves.length}
+        boardSize={state.boardSize} moves={state.moves.length}
       </div>
     </details>
   );
@@ -66,9 +66,7 @@ export function DebugPanel({ state }: Props) {
 
 export function SetupOptions(props: {
   size: BoardSize;
-  schedule: Schedule;
   onSize: (s: BoardSize) => void;
-  onSchedule: (s: Schedule) => void;
   disabled?: boolean;
 }) {
   return (
@@ -78,18 +76,7 @@ export function SetupOptions(props: {
         <div className="btn-group">
           {BOARD_SIZES.map((s) => (
             <button key={s} className={`btn ${props.size === s ? 'primary' : ''}`} disabled={props.disabled} onClick={() => props.onSize(s)}>
-              {s} × {s}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="setup-block">
-        <div className="setup-label">QUALIFICATION · 资格顺序</div>
-        <div className="schedule-cards">
-          {SCHEDULES.map((s) => (
-            <button key={s} className={`schedule-card ${props.schedule === s ? 'selected' : ''}`} disabled={props.disabled} onClick={() => props.onSchedule(s)}>
-              <strong>{s}</strong>
-              <span>{SCHEDULE_LABELS[s]}</span>
+              {BOARD_SIZE_LABELS[s]}
             </button>
           ))}
         </div>

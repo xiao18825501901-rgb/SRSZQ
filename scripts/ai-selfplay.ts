@@ -4,8 +4,7 @@
  * 用法：
  *   npm run ai:selfplay                # 默认：6 组对阵 × 每棋盘 10 局
  *   npm run ai:selfplay -- --games 3   # 快速冒烟
- *   npm run ai:selfplay -- --size 13   # 只跑 13×13
- *
+ *   npm run ai:selfplay -- --size 13   # 只跑 13×13 *
  * 全部决策走与网页相同的 chooseAIMove（引擎合法集唯一来源），
  * 任何 rejected / 内部非法兜底 / 异常都会使进程非零退出 —— 报告数字即真实数字。
  */
@@ -33,7 +32,7 @@ const DEFAULT_COMBOS: SeatLevels[] = [
   { A: '3ply', B: 'maxn', C: 'random' },
 ];
 
-const SIZES: BoardSize[] = [11, 13];
+const SIZES: BoardSize[] = [13, 17];
 
 interface LevelStats {
   decisions: number;
@@ -71,7 +70,7 @@ function parseArgs(argv: string[]): { games: number; sizes: BoardSize[]; combos:
     if (argv[i] === '--games') games = Math.max(1, Number(argv[++i]) || 1);
     else if (argv[i] === '--size') {
       const v = Number(argv[++i]);
-      if (v === 11 || v === 13) {
+      if (v === 13 || v === 17) {
         sizes.length = 0;
         sizes.push(v);
       }

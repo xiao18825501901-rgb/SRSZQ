@@ -52,7 +52,7 @@ export function tacticalAgent(state: GameState, player: Player, rng: RNG): AIDec
   // 3) 未来 2 轮内获权的对手有直接胜点 → 适度预防
   for (const opp of OTHERS[player]) {
     for (let r = round + 1; r <= round + 2; r++) {
-      if (getEligiblePlayer(r, 'BAC') !== opp) continue;
+      if (getEligiblePlayer(r) !== opp) continue;
       const oppWins = winPoints(opp);
       if (oppWins.length > 0) {
         const w = pick(oppWins);

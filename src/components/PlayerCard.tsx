@@ -1,6 +1,6 @@
 import type { Player } from '../game/types';
 import { PLAYER_COLORS, PLAYER_LABELS } from '../game/types';
-import { AI_LEVEL_LABELS, AI_LEVEL_STARS, type SeatConfig } from '../ai/types';
+import { AI_LEVEL_STARS, type SeatConfig } from '../ai/types';
 
 interface Props {
   player: Player;
@@ -28,7 +28,7 @@ export function PlayerCard({ player, stoneCount, isCurrent, hasEligible, forbidd
           <span className={`player-sub ${isAI ? 'ai-tag' : 'human-tag'} ${thinking ? 'thinking' : ''}`}>
             {isAI ? (
               <>
-                {thinking ? '🤔 THINKING…' : '🤖 AI'} · {level ? AI_LEVEL_LABELS[level] : ''} {level ? AI_LEVEL_STARS[level] : ''}
+                {thinking ? '🤔 THINKING…' : '🤖 AI'} · {level ? AI_LEVEL_STARS[level] : ''}
               </>
             ) : (
               <>HUMAN · 人类</>

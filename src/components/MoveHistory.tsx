@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { GameState } from '../game/types';
 import { PLAYER_COLORS } from '../game/types';
-import { AI_LEVEL_LABELS, type AIDecision, type SeatConfigs } from '../ai/types';
+import { AI_LEVEL_STARS, type AIDecision, type SeatConfigs } from '../ai/types';
 import { isAISeat, seatLevel } from '../ai/seats';
 
 interface Props {
@@ -23,7 +23,7 @@ function describeMove(
 ): { text: string; cls: string; title?: string } {
   const m = state.moves[i];
   const turnNo = m.turn + 1;
-  const aiTag = isAISeat(seats, m.player) ? `🤖AI·${AI_LEVEL_LABELS[seatLevel(seats, m.player)]}` : '';
+  const aiTag = isAISeat(seats, m.player) ? `🤖AI·${AI_LEVEL_STARS[seatLevel(seats, m.player)]}` : '';
   const stat = aiStats?.get(i);
   let statTag = '';
   let title: string | undefined;
@@ -34,7 +34,7 @@ function describeMove(
     if (stat.thinkTimeMs !== undefined) parts.push(`${Math.round(stat.thinkTimeMs)}ms`);
     if (stat.ttHits !== undefined) parts.push(`tt${stat.ttHits}`);
     if (stat.candidates !== undefined) parts.push(`k${stat.candidates}`);
-    if (stat.reason) title = stat.reason;
+    if (stat.reason && debug) title = stat.reason; // 调试模式才暴露内部 reason（含档位名）
     if (debug && parts.length > 0) statTag = ` [${parts.join(' ')}]`;
   }
   if (m.pass) {

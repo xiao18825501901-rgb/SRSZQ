@@ -20,7 +20,7 @@ import { mulberry32 } from '../src/ai/rng';
 /** 与测试 helpers 等价的确定性随机中盘生成器（不依赖测试目录） */
 function randomMidGame(seed: number, size: BoardSize, maxMoves = 34): GameState {
   const rng = mulberry32(seed);
-  let s = createInitialState(size, 'BAC');
+  let s = createInitialState(size);
   const target = Math.min(maxMoves, 1 + rng.int(size * size));
   for (let i = 0; i < target; i++) {
     if (s.status !== 'playing') break;
@@ -60,7 +60,7 @@ function main(): void {
     origError(...a);
   };
 
-  console.log(`[benchmark] 每档 ${states} 个随机 BAC 局面（11/13 交替），离线预算见 OFFLINE_LEVEL_CONFIG`);
+  console.log(`[benchmark] 每档 ${states} 个随机局面（13/17 交替），离线预算见 OFFLINE_LEVEL_CONFIG`);
   console.log(`            3ply: ${OFFLINE_LEVEL_CONFIG['3ply'].timeBudgetMs}ms k${OFFLINE_LEVEL_CONFIG['3ply'].candidateK} · maxn: ${OFFLINE_LEVEL_CONFIG.maxn.timeBudgetMs}ms k${OFFLINE_LEVEL_CONFIG.maxn.candidateK}`);
   console.log('');
 
@@ -80,7 +80,7 @@ function main(): void {
     const wallStart = Date.now();
 
     for (let i = 0; i < states; i++) {
-      const s = randomMidGame(0xbeef + i * 7919, i % 2 === 0 ? 11 : 13, 34);
+      const s = randomMidGame(0xbeef + i * 7919, i % 2 === 0 ? 13 : 17, 40);
       if (s.status !== 'playing') continue;
       const player = currentPlayerOf(s);
       const t0 = Date.now();

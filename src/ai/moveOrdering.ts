@@ -49,7 +49,7 @@ export function candidateMoves(state: GameState, k: number, rng?: RNG): OrderedM
   for (const opp of opps) {
     const wp = getWinningPoints(board, opp);
     if (wp.length === 0) continue;
-    const eligibleNow = getEligiblePlayer(round, 'BAC') === opp;
+    const eligibleNow = getEligiblePlayer(round) === opp;
     let threatVal = 0;
     if (eligibleNow) threatVal = 600;
     else {
@@ -57,7 +57,7 @@ export function candidateMoves(state: GameState, k: number, rng?: RNG): OrderedM
       let soon = 0;
       for (let r = round + 1; r <= round + 3; r++) {
         soon++;
-        if (getEligiblePlayer(r, 'BAC') === opp) break;
+        if (getEligiblePlayer(r) === opp) break;
       }
       threatVal = soon <= 2 ? 260 : 90;
     }

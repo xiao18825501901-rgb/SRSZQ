@@ -1,4 +1,4 @@
-/** 基础类型定义 */
+/** SRSZQ.com 正式规则 v2 —— 基础类型定义 */
 
 /** 三名玩家，固定行动顺序 A → B → C */
 export type Player = 'A' | 'B' | 'C';
@@ -7,21 +7,24 @@ export const PLAYERS: readonly Player[] = ['A', 'B', 'C'];
 
 export const PLAYER_ORDER: Record<number, Player> = { 0: 'A', 1: 'B', 2: 'C' };
 
-/** 三种资格顺序（从 Round 4 开始生效） */
-export type Schedule = 'CBA' | 'CBACC' | 'BAC';
+/* ------------------------------------------------------------------ */
+/* 正式资格规则（唯一生效版本，无 schedule 选择）                          */
+/* - Round 1–5：Eligible = NONE（任何玩家不可凭落子获胜；成四 = 禁手）      */
+/* - Round ≥ 6：按 C → B → A 循环（R6=C, R7=B, R8=A, R9=C, …）           */
+/* ------------------------------------------------------------------ */
+export const ELIGIBLE_START_ROUND = 6;
 
-export const SCHEDULES: readonly Schedule[] = ['CBA', 'CBACC', 'BAC'];
+/** R6 起循环的胜权顺序 */
+export const ELIGIBLE_ORDER: readonly Player[] = ['C', 'B', 'A'];
 
-export const SCHEDULE_LABELS: Record<Schedule, string> = {
-  CBA: 'C → B → A',
-  CBACC: 'C → B → A → C → C',
-  BAC: 'B → A → C',
-};
+/** 棋盘尺寸：正式版仅 13×13 与 17×17 */
+export type BoardSize = 13 | 17;
 
-export const SCHEDULE_DESCRIPTIONS: Record<Schedule, string> = {
-  CBA: '从第4轮起按 C→B→A 循环授予胜权（每3轮一个周期）',
-  CBACC: '从第4轮起按 C→B→A→C→C 循环授予胜权（每5轮一个周期，注意周期边界会出现连续 C）',
-  BAC: '从第4轮起按 B→A→C 循环授予胜权（每3轮一个周期）',
+export const BOARD_SIZES: readonly BoardSize[] = [13, 17];
+
+export const BOARD_SIZE_LABELS: Record<BoardSize, string> = {
+  13: '13 × 13',
+  17: '17 × 17',
 };
 
 /** 棋盘格：null = 空 */
@@ -29,10 +32,6 @@ export type Cell = Player | null;
 
 /** board[row][col]，row 0 = 顶行，col 0 = 最左列 */
 export type Board = Cell[][];
-
-export type BoardSize = 11 | 13;
-
-export const BOARD_SIZES: readonly BoardSize[] = [11, 13];
 
 export interface CellPos {
   row: number;
@@ -56,7 +55,6 @@ export type GameStatus = 'playing' | 'won' | 'draw';
 
 export interface GameState {
   boardSize: BoardSize;
-  schedule: Schedule;
   board: Board;
   /** 0-based 全局回合序号；0=A,1=B,2=C */
   turnIndex: number;

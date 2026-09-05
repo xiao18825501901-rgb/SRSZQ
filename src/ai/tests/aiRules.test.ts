@@ -14,14 +14,14 @@ function emptyBoard(n: number): Board {
 }
 
 /** 扫掠：所有档位 AI 的决策必须 100% 属于引擎合法集（或合法 Pass） */
-describe('AI legality sweep (BAC)', () => {
-  it.each(LEVELS)('%s 在大量随机局面上返回合法动作', { timeout: 180000 }, (level) => {
+describe('AI legality sweep（正式规则 v2）', () => {
+  it.each(LEVELS)('%s 在大量随机局面上返回合法动作', { timeout: 240000 }, (level) => {
     const count = level === '3ply' || level === 'maxn' ? 40 : 400;
     const budget = level === 'maxn' ? 150 : level === '3ply' ? 120 : undefined;
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       for (let i = 0; i < count; i++) {
-        const s = randomMidGameState(1000 + i, i % 2 === 0 ? 11 : 13, 30);
+        const s = randomMidGameState(1000 + i, i % 2 === 0 ? 13 : 17, 34);
         if (s.status !== 'playing') continue; // 终局不请求 AI
         const legal = getLegalMoves(s);
         const d = chooseAIMove(s, currentPlayerOf(s), level, { timeBudgetMs: budget, seed: i });
@@ -42,17 +42,17 @@ describe('AI legality sweep (BAC)', () => {
   });
 });
 
-describe('AI 与人类共享引擎规则（BAC）', () => {
+describe('AI 与人类共享引擎规则（正式规则 v2）', () => {
   it('AI 绝不选择禁手（无资格成四）', { timeout: 120000 }, () => {
-    // BAC R4 起点 = turnIndex 9 = A 行动，R4 胜权 = B → A 无资格。
+    // R6 起点 = turnIndex 15 = A 行动，R6 胜权 = C → A 无资格。
     // 构造 A 三连 A(5,0)(5,1)(5,2)（0-based）：(5,3) 会形成 AAAA → 禁手。
-    const board = emptyBoard(11);
+    const board = emptyBoard(13);
     board[5][0] = 'A';
     board[5][1] = 'A';
     board[5][2] = 'A';
     board[9][9] = 'B';
     board[8][8] = 'C';
-    const st: GameState = { ...createInitialState(11, 'BAC'), board, turnIndex: 9 };
+    const st: GameState = { ...createInitialState(13), board, turnIndex: 15 };
     const legal = getLegalMoves(st);
     expect(legal.some((m) => m.row === 5 && m.col === 3)).toBe(false);
     expect(applyMove(st, 5, 3).rejected).toBe('forbidden');
@@ -66,9 +66,9 @@ describe('AI 与人类共享引擎规则（BAC）', () => {
   });
 
   it('座位不匹配抛错；终局请求返回 Pass', () => {
-    const s = createInitialState(11, 'BAC');
+    const s = createInitialState(13);
     expect(() => chooseAIMove(s, 'B', 'random')).toThrow();
-    const s2: GameState = { ...createInitialState(11, 'BAC'), status: 'won', winner: 'A' };
+    const s2: GameState = { ...createInitialState(13), status: 'won', winner: 'A' };
     expect(chooseAIMove(s2, 'A', 'random').pass).toBe(true);
   });
 });

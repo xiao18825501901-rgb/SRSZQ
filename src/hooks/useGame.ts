@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { BoardSize, GameState, Player, Schedule } from '../game/types';
-import { BOARD_SIZES, SCHEDULES } from '../game/types';
+import type { BoardSize, GameState, Player } from '../game/types';
+import { BOARD_SIZES } from '../game/types';
 import { createInitialState, applyMove, undoMove, undoN, skipCurrentPlayer } from '../game/rules';
 import { eligibleOf, currentPlayerOf, currentRoundOf, currentPlayerIsEligible, getLegalMoves } from '../game/legalMoves';
 
@@ -18,7 +18,7 @@ export interface GameController {
   placeStone: (row: number, col: number) => void;
   /** 手动跳过（当前玩家无合法步时使用；引擎会自动处理整条 Pass 链） */
   passTurn: () => void;
-  newGame: (boardSize?: BoardSize, schedule?: Schedule) => void;
+  newGame: (boardSize?: BoardSize) => void;
   undo: () => void;
   /** 原子撤销 n 条记录（不触发中间状态副作用） */
   undoN: (n: number) => void;
@@ -26,8 +26,8 @@ export interface GameController {
   replaceState: (state: GameState) => void;
 }
 
-export function useGame(initialSize: BoardSize = 11, initialSchedule: Schedule = 'CBA'): GameController {
-  const [state, setState] = useState<GameState>(() => createInitialState(initialSize, initialSchedule));
+export function useGame(initialSize: BoardSize = 13): GameController {
+  const [state, setState] = useState<GameState>(() => createInitialState(initialSize));
 
   const current = currentPlayerOf(state);
   const round = currentRoundOf(state);
@@ -55,8 +55,8 @@ export function useGame(initialSize: BoardSize = 11, initialSchedule: Schedule =
     });
   }, []);
 
-  const newGame = useCallback((size?: BoardSize, schedule?: Schedule) => {
-    setState((s) => createInitialState(size ?? s.boardSize, schedule ?? s.schedule));
+  const newGame = useCallback((size?: BoardSize) => {
+    setState((s) => createInitialState(size ?? s.boardSize));
   }, []);
 
   const undo = useCallback(() => {
@@ -94,4 +94,3 @@ export function useGame(initialSize: BoardSize = 11, initialSchedule: Schedule =
 }
 
 export const SIZES = BOARD_SIZES;
-export const SCHEDULE_OPTIONS = SCHEDULES;
