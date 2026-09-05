@@ -82,6 +82,23 @@ export interface GameSnapshot {
   state: GameState;
 }
 
+/** 终局详情（来自服务器 MATCH_ENDED / game.end —— 胜负由服务器权威裁决） */
+export interface EndInfo {
+  status: string; // 'won' | 'draw' | 'forfeit' | 'aborted'
+  reason: string; // NORMAL_WIN | PLAYER_FORFEIT | PLAYER_DISCONNECT | TIMEOUT
+  winnerSeats: Player[];
+  loserSeats: Player[];
+  winnerIds: string[];
+  loserIds: string[];
+}
+
+export interface SeatStatusEvent {
+  seat: Player;
+  status: 'disconnected' | 'reconnected';
+  graceMs?: number;
+  ts: number;
+}
+
 class GameLink {
   phase: GamePhase = 'idle';
   waiting = 0;
@@ -90,6 +107,8 @@ class GameLink {
   error = '';
   game: GameSnapshot | null = null;
   result = '';
+  endInfo: EndInfo | null = null;
+  seatStatus: SeatStatusEvent | null = null;
   private listeners = new Set<() => void>();
   private off: (() => void) | null = null;
 
@@ -114,8 +133,52 @@ class GameLink {
     this.error = '';
     this.game = null;
     this.result = '';
+    this.endInfo = null;
+    this.seatStatus = null;
     this.queueStartAt = 0;
     this.emit();
+  }
+
+  private applyEnd(msg: Record<string, any>): void {
+    this.phase = 'end';
+    if (msg.status === 'aborted') {
+      this.endInfo = {
+        status: 'aborted',
+        reason: msg.reason ?? 'ABORTED',
+        winnerSeats: msg.winnerSeats ?? [],
+        loserSeats: msg.loserSeats ?? [],
+        winnerIds: msg.winnerIds ?? [],
+        loserIds: msg.loserIds ?? [],
+      };
+      this.result = '对局已中止（玩家离开）';
+      return;
+    }
+    const winnerSeats: Player[] = msg.winnerSeats ?? (msg.winner ? [msg.winner as Player] : []);
+    const loserSeats: Player[] = msg.loserSeats ?? [];
+    this.endInfo = {
+      status: String(msg.status ?? 'won'),
+      reason: String(msg.reason ?? 'NORMAL_WIN'),
+      winnerSeats,
+      loserSeats,
+      winnerIds: Array.isArray(msg.winnerIds) ? (msg.winnerIds as string[]) : [],
+      loserIds: Array.isArray(msg.loserIds) ? (msg.loserIds as string[]) : [],
+    };
+    // 兜底文案（具体结算文案由对局页按 reason/座位组合）
+    const mySeat = this.game?.mySeat;
+    const iLost = mySeat ? loserSeats.includes(mySeat) : false;
+    const iWon = mySeat ? winnerSeats.includes(mySeat) : false;
+    const isLeaveEnd = msg.reason === 'PLAYER_FORFEIT' || msg.reason === 'PLAYER_DISCONNECT';
+    if (isLeaveEnd) {
+      this.result = iLost ? 'You left the match. Result: Loss' : 'Opponent left. You win!';
+    } else if (msg.status === 'draw') {
+      this.result = '和棋';
+    } else if (iWon) {
+      this.result = '你赢了';
+    } else if (iLost) {
+      this.result = winnerSeats.length > 0 ? `玩家 ${winnerSeats[0]} 获胜` : 'AI 获胜';
+    } else {
+      this.result = msg.winner ? `玩家 ${msg.winner} 获胜` : '和棋';
+    }
   }
 
   private handle(msg: Record<string, any>): void {
@@ -141,16 +204,19 @@ class GameLink {
         };
         this.result = '';
         this.error = '';
+        this.endInfo = null;
         break;
       }
       case 'game.state':
         if (this.game) this.game = { ...this.game, state: msg.state as GameState };
         break;
-      case 'game.end': {
-        this.phase = 'end';
-        this.result = msg.status === 'aborted' ? '对局已中止（玩家离开）' : msg.winner ? `玩家 ${msg.winner} 获胜` : '和棋';
+      case 'game.end':
+      case 'MATCH_ENDED':
+        this.applyEnd(msg);
         break;
-      }
+      case 'player.status':
+        this.seatStatus = { seat: msg.seat as Player, status: msg.status as 'disconnected' | 'reconnected', graceMs: msg.graceMs, ts: Date.now() };
+        break;
       default:
         return;
     }
@@ -172,6 +238,11 @@ class GameLink {
 
   leaveQueue(): void {
     getSocket().send({ type: 'queue.leave' });
+  }
+
+  /** 主动离开 Online Match：服务器立即判负并终局（PLAYER_RESIGN） */
+  resign(): void {
+    getSocket().send({ type: 'PLAYER_RESIGN' });
   }
 
   move(row: number, col: number): void {

@@ -32,7 +32,17 @@ export interface Db {
   ranking(limit: number): RankingRow[];
   recordMatchResult(userId: string, delta: number): void;
   saveGame(input: { id: string; boardSize: number; mode: string; winner: string | null; movesJson: string; createdAt: number }): void;
-  saveMatch(input: { id: string; gameId: string; players: Array<string | null>; result: string | null; isRanked: boolean; createdAt: number }): void;
+  saveMatch(input: {
+    id: string;
+    gameId: string;
+    players: Array<string | null>;
+    result: string | null;
+    isRanked: boolean;
+    createdAt: number;
+    endReason?: string;
+    winnerIds?: string[];
+    loserIds?: string[];
+  }): void;
   createInvitation(senderId: string, receiverId: string): { id: string; status: string; createdAt: number };
   listInvitationsFor(userId: string): Array<{ id: string; sender: string; senderName: string; receiver: string; status: string; createdAt: number }>;
   findInvitation(id: string): { id: string; sender: string; receiver: string; status: string } | null;
@@ -82,6 +92,9 @@ export function openDb(path: string): Db {
       game_id TEXT NOT NULL REFERENCES games(id),
       player_a TEXT, player_b TEXT, player_c TEXT,
       result TEXT,
+      end_reason TEXT NOT NULL DEFAULT 'NORMAL_WIN',
+      winner_ids TEXT NOT NULL DEFAULT '[]',
+      loser_ids TEXT NOT NULL DEFAULT '[]',
       is_ranked INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     );
@@ -104,6 +117,15 @@ export function openDb(path: string): Db {
       updated_at INTEGER NOT NULL
     );
   `);
+
+  // 轻量迁移：老库 matches 表补 Player Leave System 列（幂等）
+  const ensureColumn = (table: string, col: string, ddl: string): void => {
+    const cols = raw.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === col)) raw.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  };
+  ensureColumn('matches', 'end_reason', "end_reason TEXT NOT NULL DEFAULT 'NORMAL_WIN'");
+  ensureColumn('matches', 'winner_ids', "winner_ids TEXT NOT NULL DEFAULT '[]'");
+  ensureColumn('matches', 'loser_ids', "loser_ids TEXT NOT NULL DEFAULT '[]'");
 
   const mapUser = (r: Record<string, unknown> | undefined): User | null => {
     if (!r) return null;
@@ -196,8 +218,22 @@ export function openDb(path: string): Db {
     },
     saveMatch(input) {
       raw
-        .prepare('INSERT OR REPLACE INTO matches (id,game_id,player_a,player_b,player_c,result,is_ranked,created_at) VALUES (?,?,?,?,?,?,?,?)')
-        .run(input.id, input.gameId, input.players[0], input.players[1], input.players[2], input.result, input.isRanked ? 1 : 0, input.createdAt);
+        .prepare(
+          'INSERT OR REPLACE INTO matches (id,game_id,player_a,player_b,player_c,result,end_reason,winner_ids,loser_ids,is_ranked,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        )
+        .run(
+          input.id,
+          input.gameId,
+          input.players[0],
+          input.players[1],
+          input.players[2],
+          input.result,
+          input.endReason ?? 'NORMAL_WIN',
+          JSON.stringify(input.winnerIds ?? []),
+          JSON.stringify(input.loserIds ?? []),
+          input.isRanked ? 1 : 0,
+          input.createdAt,
+        );
     },
     createInvitation(senderId, receiverId) {
       const id = randomUUID();

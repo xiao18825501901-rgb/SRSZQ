@@ -33,23 +33,38 @@ user 对象：`{id, username, avatar, onlineStatus, rating, tutorialCompleted, e
 客户端 → 服务端：
 | type | 载荷 | 说明 |
 |---|---|---|
-| queue.join | — | 进入在线匹配（教学未完成 → error） |
+| queue.join | — | 进入在线匹配（教学未完成 → error）。若已在未结束对局中（掉线宽限期）→ **自动续局**（等价 resume） |
 | queue.leave | — | 离开队列 |
 | move | {row, col} | 提交落子意图（服务端校验后广播） |
-| resume | {gameId} | 断线续局（收到完整当前状态） |
+| resume | {gameId} | 断线续局（收到完整当前状态；清除判负宽限定时器） |
+| PLAYER_RESIGN | — | **主动离开 Online Match → 立即判负终局**（好友局 → error resign not allowed in this mode） |
 
 服务端 → 客户端：
 | type | 载荷 | 说明 |
 |---|---|---|
 | hello | {user} | 连接就绪 |
 | queue.joined | {waiting} | 入队 |
-| game.start | {gameId, mode, seats, yourSeat, state} | 开局；AI 座仅含 stars(★1-5) |
+| game.start | {gameId, mode, seats, yourSeat, state} | 开局/续局；AI 座仅含 stars(★1-5) |
 | game.state | {state, seats} | 权威状态广播（每步） |
-| game.end | {status, winner} | 终局（status=won/draw/aborted） |
-| error | {error} | 错误（含 tutorial required / not your turn …） |
+| game.end | {status, winner, reason, winnerIds/loserIds/winnerSeats/loserSeats, matchId, timestamp} | 终局（status=won/draw/forfeit/aborted） |
+| MATCH_ENDED | {matchId, mode, reason, winnerIds, loserIds, winnerSeats, loserSeats, timestamp} | **Player Leave System 结算广播**（reason=NORMAL_WIN/PLAYER_FORFEIT/PLAYER_DISCONNECT/TIMEOUT；胜负数组由服务器推导） |
+| player.status | {seat, status, graceMs?} | 座位连接状态：disconnected（进入判负宽限）/ reconnected |
+| error | {error} | 错误（含 tutorial required / not your turn / no such game …） |
 
 seats 结构：`{ A/B/C: {kind:'human', username?} | {kind:'ai', stars} }`
 —— **客户端永远看不到真实 AI 档位**（内部档位仅在服务端，权重 random100/tactical200/selfish300/3ply400/maxn500）。
 
 防作弊：服务端为唯一状态源；非法动作（非本人回合/禁手/占位/越界）一律拒绝，
-客户端不能决定结果；终局由服务端引擎判定并落盘。
+客户端不能决定结果；终局与胜负（含离场判负）由服务端引擎推导并落盘。
+
+## Player Leave System（v3）行为
+
+- **主动 Leave**：前端 Leave Match 按钮 → 确认弹窗 → 发送 `PLAYER_RESIGN` → 服务器立即判负
+  （`end_reason=PLAYER_FORFEIT`），该对局**立即终局**（AI 不继续）。
+- **掉线（关标签/刷新/断网）**：服务器置座位 `disconnected`（DISCONNECTED_TEMPORARY），
+  广播 `player.status`；宽限期（`SRSZQ_FORFEIT_GRACE_MS`，默认 **10s**）内 resume / 重新入队
+  自动恢复本局（不判负、不清除进度）；超时 → 判负（`end_reason=PLAYER_DISCONNECT`）。
+- **结算**：离场者入 loserIds（败 −10，games+1）；其余在场人类入 winnerIds（胜 +30，games+1/wins+1）；
+  1H+2AI 人类离场 → winnerIds 为空（仅记离场者败）；好友/人机/教学/本地局不涉及排行，
+  好友局拒绝 PLAYER_RESIGN。
+- 结束后房间/会话绑定全部释放 → 玩家可立即再次 Online Match。

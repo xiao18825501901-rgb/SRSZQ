@@ -33,8 +33,16 @@ winner TEXT|null · created_at · moves_json TEXT（完整 MoveRecord 序列）
 
 ## matches — 比赛关系（三人座位）
 
-id PK · game_id FK · player_a/b/c（可为 null，AI 座空）· result TEXT|null ·
-is_ranked 0/1 · created_at
+id PK · game_id FK · player_a/b/c（可为 null，AI 座空）· result TEXT|null（胜者座位）·
+**end_reason TEXT（NORMAL_WIN / PLAYER_FORFEIT / PLAYER_DISCONNECT / TIMEOUT）** ·
+**winner_ids TEXT(JSON userId[]) · loser_ids TEXT(JSON userId[])** · is_ranked 0/1 · created_at
+
+> Player Leave System（v3）：
+> - 主动 Leave（PLAYER_RESIGN）→ `end_reason=PLAYER_FORFEIT`，离开者入 loser_ids；
+> - 掉线超过宽限期（SRSZQ_FORFEIT_GRACE_MS，默认 10s）→ `end_reason=PLAYER_DISCONNECT`；
+> - 其余在场人类入 winner_ids（1H+2AI 人类离场时 winner_ids 为空，仅记离场者败）；
+> - winner_ids/loser_ids 只含真人 userId（AI 不入表），JSON 数组存储。
+> - 旧库升级：openDb 启动时对已有 matches 表自动 `ALTER TABLE ADD COLUMN`（幂等迁移）。
 
 ## friends — 好友（双向两行）
 
