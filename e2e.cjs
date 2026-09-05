@@ -115,6 +115,24 @@ async function main() {
   txt = await bodyText();
   check('未完成教学访问在线被重定向', txt.includes('新手教学'), txt.slice(0, 120));
 
+  // 3b) 教学首局可玩：人类落子 → 隐藏 AI 自动应手（仅 ★）
+  await cdp.eval(`(() => { const el=document.querySelector('.cell.legal'); if(el) el.click(); return true; })()`);
+  const tt0 = Date.now();
+  let tLines = 0;
+  while (Date.now() - tt0 < 12000) {
+    tLines = await cdp.eval(`document.querySelectorAll('.history-line').length`);
+    if (tLines >= 2) break;
+    await sleep(150);
+  }
+  check('教学首局 AI 自动应手（★ 隐藏档位）', tLines >= 2, `lines=${tLines}`);
+  const tutCards = await cdp.eval(`[...document.querySelectorAll('.players-row .player-card')].map(c=>c.innerText.replace(/\\s+/g,' '))`);
+  const aiCard = tutCards.find((c) => c.includes('🤖 AI'));
+  check('教学 AI 座位为 ★ 显示', !!aiCard && /AI · ★+/.test(aiCard ?? '') && !/Random|Tactical|Selfish/.test(aiCard ?? ''), (aiCard ?? '').slice(0, 60));
+  await click('button', '返回大厅');
+  await sleep(500);
+  txt = await bodyText();
+  check('教学中返回仍被门禁拦截', txt.includes('新手教学'), txt.slice(0, 120));
+
   // 4) 直接调用后端完成教学 → 重载同步会话 → 大厅解锁
   await cdp.eval(`(async () => {
     const t = localStorage.getItem('srszq_token');
@@ -127,7 +145,28 @@ async function main() {
   txt = await bodyText();
   check('大厅显示三入口 + 好友', txt.includes('Online Match') && txt.includes('Human vs AI') && txt.includes('Local Match') && txt.includes('好友邀请'), txt.slice(0, 160));
 
-  // 5) 排行榜含本用户
+  // 5) Human vs AI：选 AI 座位与 ★ 难度 → 开局 → AI 自动应手（只显示星级）
+  await goto('/vsai');
+  await sleep(500);
+  await click('button', '开始对局');
+  await sleep(800);
+  let cellsVs = await cdp.eval(`document.querySelectorAll('.board .cell').length`);
+  check('Human vs AI 开局（13×13）', cellsVs === 169, `cells=${cellsVs}`);
+  let cardB = await cdp.eval(`document.querySelectorAll('.players-row .player-card')[1]?.innerText || ''`);
+  check('AI 座位只显示 ★ 星级', /🤖 AI · ★+/.test(cardB) && !/Random|Tactical|Selfish|3-Ply|MaxN/.test(cardB), cardB.replace(/\s+/g, ' ').slice(0, 60));
+  await cdp.eval(`(() => { const el=document.querySelector('.cell.legal'); if(el) el.click(); return true; })()`);
+  const t0 = Date.now();
+  let lines = 0;
+  while (Date.now() - t0 < 12000) {
+    lines = await cdp.eval(`document.querySelectorAll('.history-line').length`);
+    if (lines >= 2) break;
+    await sleep(150);
+  }
+  check('AI 自动应手（日志 ≥2 条）', lines >= 2, `lines=${lines}`);
+  await click('button', '返回大厅');
+  await sleep(500);
+
+  // 5b) 排行榜含本用户
   await goto('/ranking');
   await sleep(500);
   txt = await bodyText();

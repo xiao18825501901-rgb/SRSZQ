@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    environment:
+      PORT: "8080"
+      SRSZQ_WS_PORT: "8081"
+      SRSZQ_QUEUE_TIMEOUT_MS: "60000"
+    volumes:
+      - srszq-data:/app/backend/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8080
+        VITE_WS_URL: ws://localhost:8081/ws
+    ports:
+      - "8088:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # PostgreSQL 可选（默认用 SQLite 零依赖；启用后需替换 backend db 实现并开放 5432）
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: srszq
+  #     POSTGRES_PASSWORD: srszq
+  #     POSTGRES_DB: srszq
+  #   volumes:
+  #     - pg-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+volumes:
+  srszq-data:
+  # pg-data:

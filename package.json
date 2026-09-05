@@ -20,6 +20,7 @@
     "test:backend": "tsx backend/tests/api.integration.ts",
     "test:ws": "tsx backend/tests/ws.integration.ts",
     "e2e": "node e2e.cjs",
+    "e2e:local": "node e2e-local.cjs",
     "ai:selfplay": "tsx scripts/ai-selfplay.ts",
     "ai:benchmark": "tsx scripts/ai-benchmark.ts"
   },

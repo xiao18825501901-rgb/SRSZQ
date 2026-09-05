@@ -151,7 +151,7 @@ export function Platform() {
   }
   if (path === '/local' || path === '/vsai' || path === '/tutgame') {
     // 本地对局 / 人机模式复用本地引擎视图（在线模式走 OnlinePage）
-    return <LocalHost mode={path as 'local' | 'vsai'} user={user} onExit={() => route.navigate(user ? '/lobby' : '/')} />;
+    return <LocalHost mode={path === '/local' ? 'local' : 'vsai'} user={user} onExit={() => route.navigate(user ? '/lobby' : '/')} />;
   }
   // 默认：Landing
   return (

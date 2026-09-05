@@ -1,146 +1,64 @@
-# 三人四子棋 · Three-Player Connect Four
+# SRSZQ.com — 三人四子棋在线策略游戏平台
 
-本地网页版（Local-First SPA）—— 三名玩家轮流在网格上落子，只有「拥有胜权」的玩家可以凭落子形成 ≥4 连获胜。
+三名玩家在 13×13 / 17×17 棋盘轮流落子：Round 1–5 无人可胜，Round 6 起胜权按 **C → B → A** 循环，
+只有持胜权的玩家凭本手连成 ≥4 才获胜。支持 **在线真人匹配（AI 补位）、人机陪练（仅 ★ 显示档位）、
+本地对局、账号/教学门禁、好友邀请、排行榜**。
 
-技术栈：React 19 + TypeScript + Vite 8 + Vitest。
+Monorepo：`shared/`（规则引擎 + 五档 AI，唯一来源）· `frontend/`（React 平台 SPA）·
+`backend/`（Node + WebSocket + SQLite）· `docs/` · `docker/` · `scripts/`（AI 评测）。
 
----
-
-## 如何启动
-
-双击 `start.bat`（或手动执行）：
-
-```bash
-npm install     # 首次运行
-npm run dev     # 启动开发服务器
-```
-
-然后浏览器打开： **http://localhost:5173**
-
-`start.bat` 会自动打开浏览器。
-
-## 如何停止
-
-- 关闭运行中的 `start.bat` 黑色窗口（Ctrl+C 或关窗口）即可停止服务器。
-
-## 构建
+## 快速开始（本地完整运行，Node ≥ 22.5）
 
 ```bash
-build.bat       # = npm run build，产物输出到 dist/
-npm test        # 运行全部规则测试（Vitest）
+npm install
+
+# 终端 1：后端（API :8080 · WS :8081 · SQLite）
+npm run dev:backend
+
+# 终端 2：前端 http://127.0.0.1:5173
+npm run dev
 ```
 
----
+打开 http://127.0.0.1:5173 → 注册 → 完成 3 局教学（AI 难度隐藏为 ★）→ 大厅 →
+Online Match / Human vs AI / Local Match / 好友邀请 / 排行榜。
 
-## 项目目录
+## 验证
 
-```
-three-player-connect-four/
-├── src/
-│   ├── game/                  # 纯规则引擎（与 UI 完全分离，可独立测试/复用）
-│   │   ├── types.ts           # 类型：玩家/棋盘/资格顺序/状态
-│   │   ├── eligibility.ts     # 正式资格 v2：R1-5 NONE，R6 起 C→B→A 循环
-│   │   ├── winDetection.ts    # ≥4 连检测（横/竖/主对角/副对角，穿过落子格）
-│   │   ├── legalMoves.ts      # 合法落子 / 禁手 / 胜点 / 棋盘满
-│   │   ├── rules.ts           # 状态机：落子 / 自动Pass / 撤销 / 重放 / 导入校验
-│   │   └── __tests__/         # Vitest 规则测试（66 项）
-│   ├── ai/                    # ★ SRSZQ AI（人机对弈，Web Worker + 离线脚本共用）
-│   │   ├── types.ts / seats.ts / rng.ts
-│   │   ├── threatAnalysis.ts / evaluation.ts / moveOrdering.ts
-│   │   ├── search.ts / searchAgents.ts           # MaxN / 3-Ply
-│   │   ├── randomAgent.ts / tacticalAgent.ts / selfishAgent.ts
-│   │   ├── chooseAIMove.ts                       # 统一决策入口（引擎合法集为唯一规则来源）
-│   │   ├── config/defaultWeights.ts              # 一套权重 + 在线/离线预算
-│   │   ├── worker/ai.worker.ts + aiWorkerClient.ts
-│   │   └── tests/                                # AI 单元/扫掠测试（14 项）
-│   ├── components/            # Board / Cell / PlayerCard / SeatSetup / History / Modal 等
-│   ├── hooks/useGame.ts       # React 状态桥接
-│   ├── hooks/useAIController.ts # ★ AI 行动控制器（串行思考/锁盘/竞态保护/自动 Pass）
-│   ├── styles/global.css      # 样式（深色竞技风格，响应式）
-│   ├── App.tsx
-│   └── main.tsx
-├── scripts/
-│   ├── ai-selfplay.ts         # 三 AI 自对弈评测（npm run ai:selfplay）
-│   └── ai-benchmark.ts        # 分档性能基准（npm run ai:benchmark）
-├── SRSZQ_AI_REPORT.md / AI_TUNING_REPORT.md / AI_BENCHMARK_REPORT.md
-├── start.bat / build.bat
-└── README.md
+```bash
+npm test              # vitest：引擎规则 v2 + AI + backend 纯函数
+npm run test:backend  # API 集成（真实 HTTP）
+npm run test:ws       # WebSocket 集成（3H/2H+1AI/1H+2AI、断线、邀请）
+npm run e2e           # 平台浏览器 E2E（注册/门禁/大厅/人机/排行/好友/排队）
+npm run e2e:local     # 本地对局规则回归（棋盘/禁手/资格/悔棋/导入导出）
+npm run ai:benchmark  # AI 分档基准（真实运行 → results/）
+npm run ai:selfplay   # AI 自对弈评测
+npm run build         # 生产构建（frontend/dist）
 ```
 
----
+## 部署 / 文档
 
-## 当前规则（正式版 v2 —— SRSZQ.com 规则）
+- Docker：`cp .env.example .env && docker compose up --build`（前端 :8088，后端 :8080/8081）
+- `docs/DEPLOYMENT.md`（云调研与上线清单）、`docs/API_DOC.md`、`docs/DATABASE_SCHEMA.md`、
+  `docs/TEST_REPORT.md`、`docker/README.md`
+- 设计：`PROJECT_AUDIT.md`（升级审计）、`ARCHITECTURE.md`（monorepo 与规则 v2）
+- AI 调参与基准历史报告：`SRSZQ_AI_REPORT.md`、`AI_TUNING_REPORT.md`、`AI_BENCHMARK_REPORT.md`
+  （规则 v1 时期存档，当前代码以正式规则 v2 为准）
 
-- 玩家：A（红）、B（绿）、C（白），固定行动顺序 **A → B → C**。
-- 棋盘：**13×13（默认）或 17×17**，正方形等格。
-- 一个 Round = A、B、C 各行动一次。
-- **Round 1–5：无人拥有胜权**，任何玩家都不得形成自己的 ≥4 连（禁手）。
-- **Round ≥ 6：按 C → B → A 循环**授予胜权（R6=C、R7=B、R8=A…）；
-  只有「当前玩家 == 胜权玩家」时，落子形成 ≥4 才获胜。
-- 非资格玩家的「形成 ≥4 落子」为禁手，无法点击。
-- ≥4 即算（4/5/6…连均可），方向含横、竖、两斜。
-- 胜利只能由「当前新落的一颗棋」触发的连线判定（不做全局扫描，杜绝“储存四连”）。
-- 无合法步 → 自动 Pass（回合照常消耗）；若撤销到无合法步状态，界面会提供「跳过」按钮。
-- 棋盘填满无人获胜 → 和棋。
+## 正式规则 v2
 
-## 资格时间轴（正式版 v2）
+| Round | 1–5 | 6 | 7 | 8 | 9 | 10 | 11 | … |
+|---|---|---|---|---|---|---|---|---|
+| 胜权 | 无 | C | B | A | C | B | A | C→B→A 循环 |
 
-| Round | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 胜权 | — | — | — | — | — | **C** | **B** | **A** | **C** | **B** | **A** | **C** | **B** | **A** |
+- 非资格玩家形成 ≥4 = 禁手；胜利只由「持胜权玩家本手连成 ≥4」触发（无储存四连）；
+- 无合法步自动 Pass；棋盘仅 13×13 / 17×17。
 
-页面顶部状态栏与「资格时间轴」会实时显示：当前轮胜权、上一轮、未来轮次。
+## 在线对局防作弊
 
-> 说明：本仓库 SRSZQ_AI_REPORT.md / AI_TUNING_REPORT.md / AI_BENCHMARK_REPORT.md 为规则 v1
-> （R1-3 NONE / R4 起可选 CBA/CBACC/BAC / 11×11）时期的历史评测存档；git 历史可回溯 v1 基线，
-> 当前代码与正式规则以 v2 为准。
+服务器为唯一权威状态：客户端只提交落子意图，服务端用共享引擎逐手校验（回合/禁手/占位），
+广播权威状态并落盘；匹配 60 秒超时按权重补 AI（random100/tactical200/selfish300/3ply400/maxn500），
+AI 对用户仅显示 ★1–5。
 
-## 界面功能
+## License
 
-- 状态栏：Round / 当前玩家 / 当前胜权（🏆）/ 资格顺序 / 下轮胜权。
-- 玩家卡：棋子数、是否持胜权、禁手点、胜点；AI 座位显示 🤖 AI·★星级（不显示真实档位名），思考中显示 THINKING。
-- **AI 座位**：开局设置中每个座位可选 人类 / AI ★~★★★★★（内部映射 Random…MaxN）；
-  每局 0–2 个 AI、至少 1 名人类（禁止三 AI）。AI 与人类共享同一规则引擎，
-  思考期间棋盘锁定，AI 走子自动串行，日志带 🤖AI 标记（?debug=1 显示深度/节点/耗时）。
-- 显示合法落子（小圆点）与禁手（淡红 ✕ + 悬停解释）。
-- 显示胜点（红/绿/白外框，表示各玩家下一手可成 ≥4 的位置）。
-- 棋局日志（Move History）：`Turn 17 — B → (7, 5)`，含自动 Pass 与胜局记录。
-- 悔棋（撤销一步，含撤销 Pass）、新游戏（确认后开始）、规则说明。
-- 折叠 Debug 面板（`?debug=1` 自动展开）：turnIndex/round/eligible/各玩家 legal/winning/forbidden 统计。
-- 导出 / 导入棋局 JSON（见下）。
-
-## 导入 / 导出棋局
-
-- **导出**：点击 `⤓ Export JSON`，得到形如：
-
-```json
-{
-  "boardSize": 13,
-  "rulesVersion": 2,
-  "players": { "A": { "kind": "human" }, "B": { "kind": "ai", "level": "3ply" }, "C": { "kind": "human" } },
-  "moves": [
-    { "turn": 0, "round": 1, "player": "A", "row": 6, "col": 6 },
-    { "turn": 1, "round": 1, "player": "B", "row": 7, "col": 7,
-      "ai": { "depth": 3, "nodes": 586, "thinkTimeMs": 142, "ttHits": 0, "candidates": 7, "reason": "MaxN depth 3 best utility" } }
-  ]
-}
-```
-
-坐标均为 1-based（与棋盘坐标一致）；自动 Pass 记录为 `{ "turn": n, "round": r, "player": "X", "pass": true }`。
-`players` 为座位配置（可缺省 = 全人类）；每步 `ai` 为该步 AI 决策统计（可缺省）。
-
-- **导入**：点击 `⤒ Import JSON` 选择文件。系统会逐手校验（玩家顺序、占位、禁手规则、Pass 合法性、终局状态），任一非法会明确报错：`Invalid move at turn 17 (B → (3, 4)): 禁手...`，不会静默接受。
-  带 `players` 的文件会恢复座位（缺省 → 默认全人类）；旧 v1 文件的 `schedule` 字段被忽略（正式规则只有一套）。
-
-## 测试 / 调试
-
-- `npm test`：正式规则 v2 测试（引擎资格/禁手/胜局/Pass/和棋 + AI 合法性扫掠/禁手专项/战术行为）。
-- `npm run ai:selfplay`：三 AI 自对弈评测（真实胜率/统计，见 AI_TUNING_REPORT.md）。
-- `npm run ai:benchmark`：分档性能基准（耗时/深度/节点/100% 合法性，见 AI_BENCHMARK_REPORT.md）。
-- `?debug=1`：展开 Debug 面板，并暴露 `window.__tcf`（getState/place/undo/pass/newGame/seats/setSeats/aiStats/thinking）供自动化与研究使用。
-- 坐标约定：页面行列均为 1–N 数字（行自上而下，列自左而右）；内部实现为 0-based。
-
-## 快捷键/提示
-
-- 单击空格落子；悬停显示当前玩家半透明预览。
-- 修改棋盘尺寸或 AI 座位会询问是否开新局（不会静默改动进行中的棋局）。
+MIT（LICENSE 见仓库根目录）。
