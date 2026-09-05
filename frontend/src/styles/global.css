@@ -1,4 +1,4 @@
-﻿/* ============ 涓変汉鍥涘瓙妫?路 鍏ㄥ眬鏍峰紡 ============ */
+/* ============ 涓変汉鍥涘瓙妫?路 鍏ㄥ眬鏍峰紡 ============ */
 :root {
   --bg: #0d1117;
   --bg-soft: #11161f;
@@ -1001,3 +1001,61 @@ body {
   white-space: nowrap;
 }
 
+
+/* ============ SRSZQ.com 平台页 ============ */
+.pf-page { max-width: 1180px; margin: 0 auto; padding: 12px 16px 60px; }
+.pf-full { max-width: 1400px; }
+.pf-center { text-align: center; }
+.pf-nav { display: flex; align-items: center; gap: 14px; padding: 10px 2px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 18px; flex-wrap: wrap; }
+.pf-brand { font-weight: 800; letter-spacing: 1px; font-size: 18px; color: #fff; }
+.pf-nav-links { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+.pf-user { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd6e0; }
+.pf-avatar { width: 26px; height: 26px; border-radius: 50%; }
+.pf-avatar.big { width: 56px; height: 56px; }
+.pf-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px; }
+.pf-dot.online { background: #3ddc84; } .pf-dot.offline { background: #666; }
+.pf-dot.playing { background: #ffb224; } .pf-dot.matching { background: #7c5cff; }
+
+.hero { text-align: center; padding: 60px 10px 30px; }
+.hero h1 { font-size: 64px; margin: 0; letter-spacing: 6px; background: linear-gradient(120deg,#E5484D,#30A46C,#F7F7F7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero-sub { color: #9aa4b2; letter-spacing: 2px; }
+.hero-desc { max-width: 760px; margin: 18px auto; color: #c6cdd7; line-height: 1.8; }
+.hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+.btn.big { padding: 12px 26px; font-size: 16px; }
+.rules-teaser { max-width: 760px; margin: 30px auto; padding: 18px 24px; border: 1px solid #333; border-radius: 14px; background: rgba(255,255,255,0.03); }
+.rules-teaser li { margin: 8px 0; }
+
+.auth-card { max-width: 420px; margin: 40px auto; padding: 26px; border: 1px solid #3a3f46; border-radius: 16px; background: rgba(255,255,255,0.03); }
+.auth-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.auth-form { display: flex; flex-direction: column; gap: 12px; }
+.auth-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #9aa4b2; }
+.auth-form input { background: #171c23; border: 1px solid #3a414b; color: #e6e9ee; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+
+.lobby { padding: 10px 0; }
+.lobby-user { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.lobby-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.mode-card { text-align: left; padding: 20px; border: 1px solid #3a3f46; border-radius: 14px; background: rgba(255,255,255,0.04); cursor: pointer; display: flex; flex-direction: column; gap: 8px; transition: border-color .15s, transform .15s; }
+.mode-card:hover { border-color: #7c5cff; transform: translateY(-2px); }
+.mode-card strong { font-size: 17px; }
+.mode-card span { color: #9aa4b2; font-size: 13px; line-height: 1.6; }
+.mode-card.accent { border-color: #7c5cff; }
+
+.pf-panel-wrap { max-width: 900px; margin: 0 auto; }
+.pf-panel { padding: 18px; }
+.pf-table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+.pf-table th, .pf-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #2a2f37; font-size: 14px; }
+.pf-table th { color: #8b94a3; font-weight: 600; }
+.friend-invite { display: flex; gap: 8px; margin: 12px 0; }
+.friend-invite input { flex: 1; background: #171c23; border: 1px solid #3a414b; color: #e6e9ee; border-radius: 8px; padding: 9px 12px; }
+.friend-row { display: flex; align-items: center; gap: 12px; padding: 8px 2px; }
+.friend-row select { background: #1c2128; color: #e6e9ee; border: 1px solid #4a515b; border-radius: 8px; padding: 6px 8px; }
+
+.platform-bar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.platform-title { font-size: 14px; color: #c6cdd7; }
+
+.online-game { max-width: 1200px; margin: 0 auto; padding: 12px; }
+.status-item.mine .status-label { color: #ffd479; }
+.status-value.small { font-size: 12px; }
+
+.spinner { width: 34px; height: 34px; margin: 22px auto; border: 3px solid #333; border-top-color: #7c5cff; border-radius: 50%; animation: srszq-spin 0.8s linear infinite; }
+@keyframes srszq-spin { to { transform: rotate(360deg); } }

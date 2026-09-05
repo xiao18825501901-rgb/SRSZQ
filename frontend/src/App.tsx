@@ -25,11 +25,25 @@ type NoticeKind = 'info' | 'pass' | 'error';
 /** AI 星级展示（平台规范：用户只能看到 ★，看不到真实档位名） */
 const stars = (lvl: AILevel): string => AI_LEVEL_STARS[lvl];
 
-export default function App() {
+export interface PlatformHostProps {
+  /** 平台外壳标题（本地对局/教学/人机模式使用） */
+  hostTitle?: string;
+  /** 预置座位（如来自大厅选择/教学）；提供时跳过设置弹窗 */
+  presetSeats?: SeatConfigs;
+  /** 显示“返回”并回调（平台导航用） */
+  onExit?: () => void;
+  /** 每局终局回调（教学/战绩收集用） */
+  onGameEnd?: (winner: Player | null) => void;
+  /** 隐藏规则说明等桌面入口（平台内嵌模式） */
+  embedded?: boolean;
+}
+
+export default function App(props: PlatformHostProps = {}) {
+  const { hostTitle, presetSeats, onExit, onGameEnd, embedded } = props;
   const game = useGame(13);
   const { state } = game;
 
-  const [setupOpen, setSetupOpen] = useState(true);
+  const [setupOpen, setSetupOpen] = useState(!presetSeats);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [pendingSetupChange, setPendingSetupChange] = useState<null | { size?: BoardSize; players?: SeatConfigs }>(null);
   const [confirmNewGame, setConfirmNewGame] = useState(false);
@@ -38,12 +52,25 @@ export default function App() {
   const [notice, setNotice] = useState<{ kind: NoticeKind; text: string } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [dismissedEnd, setDismissedEnd] = useState(false);
-  const [seats, setSeats] = useState<SeatConfigs>(() => allHumanSeats());
+  const [seats, setSeats] = useState<SeatConfigs>(() => presetSeats ?? allHumanSeats());
   const [aiStats, setAiStats] = useState<ReadonlyMap<number, AIDecision>>(new Map());
   const fileRef = useRef<HTMLInputElement>(null);
   const prevMovesLen = useRef(0);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debugMode = new URLSearchParams(window.location.search).has('debug');
+
+  // 终局上报（平台教学/对局记录）
+  const endedRef = useRef(false);
+  useEffect(() => {
+    if (state.status !== 'playing') {
+      if (!endedRef.current) {
+        endedRef.current = true;
+        onGameEnd?.(state.status === 'won' ? state.winner : null);
+      }
+    } else {
+      endedRef.current = false;
+    }
+  }, [state.status, state.winner, onGameEnd]);
 
   const current = game.current;
   const eligible = game.eligible;
@@ -325,6 +352,14 @@ export default function App() {
 
   return (
     <div className="app">
+      {onExit && (
+        <div className="platform-bar">
+          <button className="btn ghost" onClick={onExit}>
+            ← 返回大厅
+          </button>
+          {hostTitle && <span className="platform-title">{hostTitle}</span>}
+        </div>
+      )}
       <header className="topbar">
         <div className="brand">
           <span className="logo-dot logo-a" />
@@ -337,9 +372,11 @@ export default function App() {
           <span className="cfg-chip">
             {state.boardSize}×{state.boardSize} · SRSZQ 正式规则
           </span>
-          <button className="btn ghost" onClick={() => setRulesOpen(true)}>
-            规则说明
-          </button>
+          {!embedded && (
+            <button className="btn ghost" onClick={() => setRulesOpen(true)}>
+              规则说明
+            </button>
+          )}
         </div>
       </header>
 
