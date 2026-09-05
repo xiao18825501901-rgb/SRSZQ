@@ -15,6 +15,7 @@ const gameServer = new GameServer(db, {
   queueTimeoutMs: Number(process.env.SRSZQ_QUEUE_TIMEOUT_MS ?? 60_000),
   aiMoveDelayMs: Number(process.env.SRSZQ_AI_DELAY_MS ?? 350),
   disconnectSkipMs: Number(process.env.SRSZQ_DISCONNECT_SKIP_MS ?? 30_000),
+  inviteGatherMs: Number(process.env.SRSZQ_INVITE_GATHER_MS ?? 30_000),
 });
 const wsPort = Number(process.env.SRSZQ_WS_PORT ?? 8081);
 const wsHttp = createServer();

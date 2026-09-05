@@ -216,6 +216,27 @@ async function main(): Promise<void> {
     await new Promise((r) => setTimeout(r, 200));
   });
 
+  // 3b) Test3：2 真人等待超时 → H+H+AI（第三人 AI 补位）
+  await check('两真人 60s 超时 → H+H+AI（AI 补第三座）', async () => {
+    const c1 = await connect(a.token);
+    const c2 = await connect(b.token);
+    try {
+      send(c1, { type: 'queue.join' });
+      send(c2, { type: 'queue.join' });
+      const [s1, s2] = await Promise.all([waitFor(c1, 'game.start', 5000), waitFor(c2, 'game.start', 5000)]);
+      assert.equal(s1.gameId, s2.gameId);
+      const seats = Object.values(s1.seats) as Array<{ kind: string; stars?: number }>;
+      assert.equal(seats.filter((s) => s.kind === 'human').length, 2);
+      const ais = seats.filter((s) => s.kind === 'ai');
+      assert.equal(ais.length, 1);
+      assert.ok(ais[0]?.stars && ais[0].stars! >= 1 && ais[0].stars! <= 5);
+    } finally {
+      close(c1);
+      close(c2);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  });
+
   // 4) 中止后可重新入队（证明状态清理）
   await check('房间中止后用户可再次匹配', async () => {
     const c1 = await connect(a.token);

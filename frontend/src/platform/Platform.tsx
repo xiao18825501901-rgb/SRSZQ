@@ -1,5 +1,6 @@
 /** SRSZQ.com 平台外壳：Landing / Auth / Lobby / 排行 / 好友 / 教学 / 各对局模式入口 */
 import { useCallback, useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import type { Player } from '../../../shared/src/game/types';
 import type { AILevel, SeatConfigs } from '../../../shared/src/ai/types';
 import { PLAYERS } from '../../../shared/src/game/types';
@@ -7,6 +8,7 @@ import App from '../App';
 import { authApi, clearAuth, getCachedUser, getToken, setAuth, type PublicUser } from '../api';
 import { gameLink, resetSocket } from '../ws';
 import { useRoute } from '../router';
+import { Btn, Card, PageMotion } from '../ui';
 import { OnlinePage } from './OnlinePage';
 
 /** 星级 → 内部档位（用户只与 ★ 交互） */
@@ -81,27 +83,30 @@ export function Platform() {
     route.navigate('/');
   };
 
-  // 页头导航（登录态）
+  // 页头导航（登录态）—— glass nav
   const nav = (
-    <div className="pf-nav">
-      <span className="pf-brand">SRSZQ</span>
+    <div className="glass-nav">
+      <span className="pf-brand" style={{ cursor: 'pointer' }} onClick={() => route.navigate('/')}>
+        SRSZQ
+      </span>
       <div className="pf-nav-links">
         {user ? (
           <>
-            <button className="btn ghost" onClick={() => route.navigate('/lobby')}>大厅</button>
-            <button className="btn ghost" onClick={() => route.navigate('/ranking')}>排行榜</button>
-            <button className="btn ghost" onClick={() => route.navigate('/friends')}>好友</button>
+            <button className="ds-btn ghost small" onClick={() => route.navigate('/lobby')}>大厅</button>
+            <button className="ds-btn ghost small" onClick={() => route.navigate('/ranking')}>排行榜</button>
+            <button className="ds-btn ghost small" onClick={() => route.navigate('/friends')}>好友</button>
             <span className="pf-user" title={user.username}>
               <img className="pf-avatar" src={user.avatar} alt="" />
-              {user.username} · {user.rating}
+              {user.username}
+              <b style={{ color: '#b79cff' }}>{user.rating}</b>
               <span className={`pf-dot ${user.onlineStatus}`} />
             </span>
-            <button className="btn" onClick={logout}>退出</button>
+            <button className="ds-btn small" onClick={logout}>退出</button>
           </>
         ) : (
           <>
-            <button className="btn ghost" onClick={() => route.navigate('/ranking')}>排行榜</button>
-            <button className="btn primary" onClick={() => route.navigate('/auth')}>登录 / 注册</button>
+            <button className="ds-btn ghost small" onClick={() => route.navigate('/ranking')}>排行榜</button>
+            <button className="ds-btn primary small" onClick={() => route.navigate('/auth')}>登录 / 注册</button>
           </>
         )}
       </div>
@@ -188,44 +193,113 @@ function RedirectTo({ to }: { to: string }) {
 }
 
 /* ---------------- Landing ---------------- */
+const MINI_A = [[2, 4], [5, 7], [9, 3], [7, 8], [4, 9], [8, 2], [6, 5], [3, 10], [10, 4]];
+const MINI_B = [[1, 6], [4, 3], [8, 7], [5, 10], [9, 6], [3, 4], [7, 2], [2, 9], [10, 7]];
+const MINI_C = [[6, 8], [2, 3], [9, 9], [4, 6], [7, 4], [3, 7], [8, 5], [1, 2], [5, 5]];
+
+function MiniBoardPreview() {
+  const n = 13;
+  const cells: string[] = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const key = `${r}-${c}`;
+      const cls = MINI_A.some(([rr, cc]) => `${rr}-${cc}` === key) ? 'a' : MINI_B.some(([rr, cc]) => `${rr}-${cc}` === key) ? 'b' : MINI_C.some(([rr, cc]) => `${rr}-${cc}` === key) ? 'c' : '';
+      cells.push(`<i class="${cls}"></i>`);
+    }
+  }
+  return (
+    <div
+      className="mini-board fade-in"
+      style={{ animationDelay: '.25s' }}
+      dangerouslySetInnerHTML={{ __html: cells.join('') }}
+    />
+  );
+}
+
 function Landing({ user }: { user: PublicUser | null }) {
   const route = useRoute();
   const go = (to: string) => route.navigate(to);
   return (
-    <div className="landing">
-      <section className="hero">
-        <h1>SRSZQ</h1>
-        <p className="hero-sub">Three Player Strategy Game · 三人四子棋在线平台</p>
-        <p className="hero-desc">
-          三名玩家在 13×13 / 17×17 棋盘轮流落子；Round 1–5 无人可胜，Round 6 起按 C → B → A 循环授予胜权 ——
-          只有持胜权的玩家凭本手连成四子才算获胜。在线匹配、AI 陪练、好友邀请、排行榜，全球同台。
-        </p>
-        <div className="hero-actions">
-          {user ? (
-            <>
-              <button className="btn primary big" onClick={() => go('/online')}>Play Online</button>
-              <button className="btn big" onClick={() => go('/vsai')}>Play With AI</button>
-              <button className="btn big" onClick={() => go('/local')}>Local Match</button>
-            </>
-          ) : (
-            <>
-              <button className="btn primary big" onClick={() => go('/auth')}>注册并开始</button>
-              <button className="btn big" onClick={() => go('/local')}>先试试本地对局</button>
-              <button className="btn big" onClick={() => go('/ranking')}>排行榜</button>
-            </>
-          )}
+    <PageMotion>
+      <section className="hero2">
+        <span className="orb o1" />
+        <span className="orb o2" />
+        <span className="orb o3" />
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <span className="eyebrow">正式规则 v2 · 13×13 / 17×17 · BAC C→B→A</span>
+          <h1>
+            Three Player <span className="grad">Strategy Battle</span>
+          </h1>
+          <p className="tagline">Think. Predict. Dominate.</p>
+          <div className="cta-row">
+            {user ? (
+              <>
+                <Btn variant="primary" size="big" onClick={() => go('/online')}>Play Online</Btn>
+                <Btn size="big" onClick={() => go('/vsai')}>Play With AI</Btn>
+                <Btn size="big" onClick={() => go('/local')}>Local Match</Btn>
+              </>
+            ) : (
+              <>
+                <Btn variant="primary" size="big" onClick={() => go('/auth')}>注册并开始</Btn>
+                <Btn size="big" onClick={() => go('/local')}>先试试本地对局</Btn>
+                <Btn size="big" onClick={() => go('/ranking')}>排行榜</Btn>
+              </>
+            )}
+          </div>
+        </motion.div>
+        <MiniBoardPreview />
+      </section>
+
+      <section className="features">
+        <Card hoverable className="feature">
+          <span className="f-icon">🌐</span>
+          <h3>Online Match · 在线竞技</h3>
+          <p>匹配 3 名真人同台竞技；60 秒不足三人自动 AI 补位。对局结果计入全球排行榜（Elo 式评分）。</p>
+        </Card>
+        <Card hoverable className="feature stars">
+          <span className="f-icon">🤖</span>
+          <h3>AI 陪练 · 五档难度</h3>
+          <p>从新手到高手：AI 难度只以星级呈现——</p>
+          <ul>
+            {['★ 稳健入门', '★★ 战术应对', '★★★ 资格博弈', '★★★★ 回合级推演', '★★★★★ 深度最优求解'].map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </Card>
+        <Card hoverable className="feature">
+          <span className="f-icon">👥</span>
+          <h3>好友邀请 · 即邀即战</h3>
+          <p>邀请 1 位好友：真人 + 真人 + AI 立即开局；邀请 2 位好友：全部接受后组成纯真人三人局。</p>
+        </Card>
+        <Card hoverable className="feature">
+          <span className="f-icon">🏆</span>
+          <h3>排行榜 · 在线计分</h3>
+          <p>只有 Online Match 影响 Rating；人机与教学对局不计分，保证公平竞技。</p>
+        </Card>
+      </section>
+
+      <section className="rules-strip ds-card">
+        <div className="rs-item">
+          <b>Round 1–5</b>
+          <span>无人拥有胜权：任何形成 ≥4 连的落子都是禁手。</span>
+        </div>
+        <div className="rs-item">
+          <b>Round 6 起</b>
+          <span>胜权按 C → B → A 循环授予（R6=C · R7=B · R8=A）。</span>
+        </div>
+        <div className="rs-item">
+          <b>胜利条件</b>
+          <span>持胜权的玩家凭本手连成 ≥4 即胜——不存在“储存四连”。</span>
+        </div>
+        <div className="rs-item">
+          <b>无合法步</b>
+          <span>自动 Pass；棋盘 13×13 / 17×17，一局约 15–40 分钟。</span>
         </div>
       </section>
-      <section className="rules-teaser">
-        <h2>规则速览</h2>
-        <ol>
-          <li>玩家 A（红）→ B（绿）→ C（白）轮流落子，一个 Round = 三人各下一手。</li>
-          <li>Round 1–5：无人拥有胜权，任何形成自己 ≥4 连的落子都是禁手。</li>
-          <li>Round ≥ 6：胜权按 C → B → A 循环；持胜权的玩家本手连成 ≥4 才获胜。</li>
-          <li>棋盘 13×13 / 17×17；胜利只由当前落子触发，不存在“储存四连”。</li>
-        </ol>
-      </section>
-    </div>
+      <div style={{ textAlign: 'center', padding: '18px 0 40px' }}>
+        <Btn variant="ghost" onClick={() => go('/ranking')}>查看排行榜 →</Btn>
+      </div>
+    </PageMotion>
   );
 }
 
@@ -237,82 +311,131 @@ function AuthCard(props: { busy: boolean; err: string; onAuth: (mode: 'login' | 
   const [password, setPassword] = useState('');
   const route = useRoute();
   return (
-    <div className="auth-card">
-      <h2>{mode === 'register' ? '注册 SRSZQ' : '登录 SRSZQ'}</h2>
-      <div className="auth-tabs">
-        <button className={`btn ${mode === 'register' ? 'primary' : ''}`} onClick={() => setMode('register')}>注册</button>
-        <button className={`btn ${mode === 'login' ? 'primary' : ''}`} onClick={() => setMode('login')}>登录</button>
-      </div>
-      <form
-        className="auth-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          props.onAuth(mode, email, username, password);
-        }}
-      >
-        {mode === 'register' && (
-          <label>
-            邮箱
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+    <div className="auth-shell">
+      <Card className="auth-card2 fade-in">
+        <h2>{mode === 'register' ? '注册 SRSZQ' : '登录 SRSZQ'}</h2>
+        <p className="sub">{mode === 'register' ? '注册后完成 3 局教学即可进入在线对战。' : '登录继续你的 SRSZQ 征程。'}</p>
+        <div className="auth-tabs">
+          <Btn variant={mode === 'register' ? 'primary' : 'ghost'} onClick={() => setMode('register')}>注册</Btn>
+          <Btn variant={mode === 'login' ? 'primary' : 'ghost'} onClick={() => setMode('login')}>登录</Btn>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            props.onAuth(mode, email, username, password);
+          }}
+        >
+          {mode === 'register' && (
+            <label className="field">
+              <span>邮箱</span>
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            </label>
+          )}
+          <label className="field">
+            <span>{mode === 'register' ? '用户名' : '账号（用户名或邮箱）'}</span>
+            <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="2-16 位字母/数字/下划线/中文" />
           </label>
-        )}
-        <label>
-          {mode === 'register' ? '用户名' : '账号（用户名或邮箱）'}
-          <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="2-16 位字母/数字/下划线/中文" />
-        </label>
-        <label>
-          密码
-          <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="至少 6 位" />
-        </label>
-        {props.err && <p className="error-text">{props.err}</p>}
-        <button className="btn primary big" disabled={props.busy} type="submit">
-          {props.busy ? '处理中…' : mode === 'register' ? '注册并开始' : '登录'}
-        </button>
-      </form>
-      <button className="btn ghost" onClick={() => route.navigate('/')}>← 返回首页</button>
+          <label className="field">
+            <span>密码</span>
+            <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="至少 6 位" />
+          </label>
+          {props.err && <p className="error-text">{props.err}</p>}
+          <Btn variant="primary" size="big" disabled={props.busy} className="ds-block" style={{ width: '100%' }} type="submit">
+            {props.busy ? '处理中…' : mode === 'register' ? '注册并开始' : '登录'}
+          </Btn>
+        </form>
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <Btn variant="ghost" size="small" onClick={() => route.navigate('/')}>← 返回首页</Btn>
+        </div>
+      </Card>
     </div>
   );
 }
 
-/* ---------------- Lobby ---------------- */
+/* ---------------- Lobby（大型 Feature Cards） ---------------- */
+const LOBBIES = [
+  {
+    key: 'online',
+    icon: '🌐',
+    title: 'Online Match',
+    desc: '匹配 3 名真人同台竞技；等待超过 60 秒自动 AI 补位（1 人 → 2 AI，2 人 → 1 AI），绝不让你空等。结果计入全球排行榜。',
+    meta: '真人在线 · 计分',
+    accent: true,
+    cta: '开始匹配',
+  },
+  {
+    key: 'vsai',
+    icon: '🤖',
+    title: 'Human vs AI',
+    desc: '选择 1–2 个 AI 座位，难度从 ★ 到 ★★★★★ 自由调整。适合练手、研究 BAC 资格博弈与新战术。',
+    meta: '本地引擎 · ★难度 · 不计分',
+    accent: false,
+    cta: '选择对手',
+  },
+  {
+    key: 'local',
+    icon: '🎲',
+    title: 'Local Match',
+    desc: '同一设备三名玩家轮流对弈：完整规则引擎、悔棋、自动 Pass、导入导出，随开随玩。',
+    meta: '离线 · 无需账号',
+    accent: false,
+    cta: '开始对局',
+  },
+  {
+    key: 'friends',
+    icon: '👥',
+    title: '好友邀请',
+    desc: '邀请 1 位好友立即成局（真人+真人+AI）；邀请 2 位好友并全部接受，组成纯真人三人局。',
+    meta: '实时状态 · 在线好友',
+    accent: false,
+    cta: '邀请好友',
+  },
+];
+
 function Lobby({ user }: { user: PublicUser }) {
   const route = useRoute();
-  const [status, setStatus] = useState('online');
-  const { refresh } = useSession();
-  useEffect(() => {
-    setStatus(user.onlineStatus);
-    void refresh();
-  }, [user, refresh]);
   return (
-    <div className="lobby">
+    <PageMotion>
       <div className="lobby-user">
         <img className="pf-avatar big" src={user.avatar} alt="" />
         <div>
-          <h2>{user.username}</h2>
-          <p>
-            Rating {user.rating} · 状态 <span className={`pf-dot ${status}`} /> {status}
-          </p>
+          <h2 style={{ margin: 0 }}>{user.username}</h2>
+          <div className="pf-user" style={{ marginTop: 4 }}>
+            <span className="ds-badge">Rating {user.rating}</span>
+            <StatusBadgeView status={user.onlineStatus as any} />
+          </div>
         </div>
       </div>
-      <div className="lobby-cards">
-        <button className="mode-card accent" onClick={() => route.navigate('/online')}>
-          <strong>Online Match</strong>
-          <span>匹配 3 名真人；不足时 AI 补位（60 秒）。只有在线对局计入排行。</span>
-        </button>
-        <button className="mode-card" onClick={() => route.navigate('/vsai')}>
-          <strong>Human vs AI</strong>
-          <span>选择 1–2 个 AI 座位与 ★ 难度陪练（不计排行）。</span>
-        </button>
-        <button className="mode-card" onClick={() => route.navigate('/local')}>
-          <strong>Local Match</strong>
-          <span>同一设备三名玩家轮流对弈（无需联网）。</span>
-        </button>
-        <button className="mode-card" onClick={() => route.navigate('/friends')}>
-          <strong>好友邀请</strong>
-          <span>邀请好友接受后立即开局（2 人 + AI 补位）。</span>
-        </button>
+      <div className="lobby2">
+        {LOBBIES.map((m, i) => (
+          <motion.button
+            key={m.key}
+            className={`ds-card hoverable fcard ${m.accent ? 'accent' : ''}`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 * i, duration: 0.3, ease: 'easeOut' }}
+            whileHover={{ y: -5 }}
+            onClick={() => route.navigate(`/${m.key === 'friends' ? 'friends' : m.key}`)}
+          >
+            <span className="fc-icon">{m.icon}</span>
+            <h3>{m.title}</h3>
+            <p className="fc-desc">{m.desc}</p>
+            <span className="fc-meta">{m.meta}</span>
+            <span className={`ds-btn ${m.accent ? 'primary' : ''} fc-btn`}>{m.cta}</span>
+          </motion.button>
+        ))}
       </div>
-    </div>
+    </PageMotion>
+  );
+}
+
+function StatusBadgeView({ status }: { status: 'online' | 'offline' | 'playing' | 'matching' }) {
+  const map = { online: '在线', offline: '离线', playing: '对局中', matching: '匹配中' } as const;
+  return (
+    <span className={`ds-badge ${status}`}>
+      <span className="pf-dot" />
+      {map[status] ?? status}
+    </span>
   );
 }
 
@@ -327,8 +450,11 @@ function RankingPage({ onBack }: { onBack: () => void }) {
       .catch((e) => setErr(e instanceof Error ? e.message : String(e)));
   }, []);
   return (
-    <div className="panel pf-panel">
-      <div className="panel-title">排行榜（仅 Online Match 计分）</div>
+    <div className="ds-card ds-panel fade-in">
+      <div className="head">
+        <span className="ds-title">排行榜 · 仅 Online Match 计分</span>
+        <Btn variant="ghost" size="small" onClick={onBack}>← 返回</Btn>
+      </div>
       {err && <p className="error-text">{err}</p>}
       <table className="pf-table">
         <thead>
@@ -344,23 +470,22 @@ function RankingPage({ onBack }: { onBack: () => void }) {
         <tbody>
           {rows.map((r, i) => (
             <tr key={r.id}>
-              <td>{i + 1}</td>
+              <td><span className="rank-no">{i + 1}</span></td>
               <td>
                 <img className="pf-avatar" src={r.avatar} alt="" /> {r.username}
               </td>
-              <td>{r.rating}</td>
+              <td><b style={{ color: '#b79cff' }}>{r.rating}</b></td>
               <td>
                 {r.wins}/{r.games}
               </td>
               <td>{r.games > 0 ? `${Math.round(r.winRate * 100)}%` : '—'}</td>
               <td>
-                <span className={`pf-dot ${r.onlineStatus}`} /> {r.onlineStatus}
+                <StatusBadgeView status={r.onlineStatus} />
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <button className="btn ghost" onClick={onBack}>← 返回</button>
     </div>
   );
 }
@@ -398,11 +523,13 @@ function FriendsPage() {
   };
   return (
     <div className="pf-panel-wrap">
-      <div className="panel pf-panel">
-        <div className="panel-title">好友与邀请</div>
+      <div className="ds-card ds-panel fade-in">
+        <div className="head">
+          <span className="ds-title">好友与邀请 · Friends & Invites</span>
+        </div>
         <div className="friend-invite">
           <input value={toUser} onChange={(e) => setToUser(e.target.value)} placeholder="输入对方用户名邀请对战" />
-          <button className="btn primary" onClick={invite}>Invite</button>
+          <Btn variant="primary" onClick={invite}>Invite</Btn>
         </div>
         {msg && <p className="muted">{msg}</p>}
         <h4>待处理邀请</h4>
@@ -410,8 +537,8 @@ function FriendsPage() {
         {invs.map((iv) => (
           <div key={iv.id} className="friend-row">
             <span>{iv.senderName} 邀请你对战</span>
-            <button className="btn primary" onClick={() => act(iv.id, true)}>接受</button>
-            <button className="btn" onClick={() => act(iv.id, false)}>拒绝</button>
+            <Btn variant="primary" size="small" onClick={() => act(iv.id, true)}>接受</Btn>
+            <Btn size="small" onClick={() => act(iv.id, false)}>拒绝</Btn>
           </div>
         ))}
         <h4>好友（{friends.length}）</h4>
@@ -419,7 +546,7 @@ function FriendsPage() {
           <div key={f.id} className="friend-row">
             <img className="pf-avatar" src={f.avatar} alt="" />
             <span>{f.username}</span>
-            <span className={`pf-dot ${f.onlineStatus}`} />
+            <StatusBadgeView status={f.onlineStatus} />
             <span className="muted">{f.onlineStatus}</span>
           </div>
         ))}

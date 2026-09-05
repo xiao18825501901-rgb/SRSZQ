@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@srszq/shared": "0.2.0",
+    "framer-motion": "^13.2.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
