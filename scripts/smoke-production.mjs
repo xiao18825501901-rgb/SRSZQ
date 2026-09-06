@@ -31,6 +31,27 @@ async function ready() {
     }
   }
 }
+
+async function authenticatedWebSocket(token, expectedUserId) {
+  const authenticatedUrl = new URL(wsUrl);
+  authenticatedUrl.searchParams.set('token', token);
+  await new Promise((resolve, reject) => {
+    const ws = new WebSocket(authenticatedUrl, {
+      handshakeTimeout: 5000,
+      ...(wsHost ? { headers: { Host: wsHost } } : {}),
+    });
+    const timer = setTimeout(() => { ws.terminate(); reject(Error('authenticated WS timeout')); }, 7000);
+    ws.on('error', error => { clearTimeout(timer); reject(error); });
+    ws.on('message', raw => {
+      try {
+        const message = JSON.parse(String(raw));
+        assert.equal(message.type, 'hello');
+        assert.equal(message.user.id, expectedUserId);
+        clearTimeout(timer); ws.close(); resolve();
+      } catch (error) { clearTimeout(timer); ws.terminate(); reject(error); }
+    });
+  });
+}
 await ready();
 console.log('API PASS: loopback API returned the expected JSON response');
 await new Promise((resolve, reject) => {
@@ -89,5 +110,6 @@ if (process.argv.includes('--persistence')) {
   assert.equal(loggedIn.body.user.id, userId);
   // The original session must also persist across the process restart.
   assert.equal((await request('/api/me', undefined, registered.body.token)).body.user.id, userId);
-  console.log('PASS registration, login and original session after PM2 restart; synthetic QA account retained');
+  await authenticatedWebSocket(loggedIn.body.token, userId);
+  console.log('PASS registration, login, session persistence and authenticated WebSocket after PM2 restart');
 }
