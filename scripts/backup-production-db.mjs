@@ -26,11 +26,16 @@ export async function backupDatabase(databasePath, backupRoot) {
     // Only files created by this script expire. Legacy/migration backups stay untouched.
     const cutoff = Date.now() - 7 * 86400000;
     const managed = /^srszq-daily-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-[a-f0-9-]{36}\.sqlite$/;
+    const dailyBackups = [];
     for (const entry of await readdir(backupRoot, { withFileTypes: true })) {
       if (!entry.isFile() || !managed.test(entry.name)) continue;
       const file = join(backupRoot, entry.name);
       const info = await lstat(file);
-      if (info.isFile() && info.mtimeMs < cutoff) await unlink(file);
+      if (info.isFile()) dailyBackups.push({ file, name: entry.name, mtimeMs: info.mtimeMs });
+    }
+    dailyBackups.sort((left, right) => right.mtimeMs - left.mtimeMs || right.name.localeCompare(left.name));
+    for (const item of dailyBackups.slice(7)) {
+      if (item.mtimeMs < cutoff) await unlink(item.file);
     }
     return destination;
   } finally {

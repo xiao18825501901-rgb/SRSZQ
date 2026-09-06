@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: API integration tests
+        run: npm run test:backend
+
+      - name: WebSocket integration tests
+        run: npm run test:ws
+
+      - name: Backup tests
+        run: node --test scripts/backup-production-db.test.mjs
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high

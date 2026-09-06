@@ -74,7 +74,8 @@ test -z "$(ss -H -ltn 'sport = :8080 or sport = :8081')"
 git merge --ff-only "$target"
 mv "$repo/node_modules" "$rollback/node_modules"
 mv "$stage/node_modules" "$repo/node_modules"
-pm2 start ecosystem.config.cjs --update-env
+pm2 reload srszq-backend --update-env
+pm2 status srszq-backend
 node scripts/smoke-production.mjs
 pm2 save
 trap - EXIT

@@ -1,0 +1,11 @@
+/root/.pm2/logs/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    create 0640 root root
+    su root root
+}

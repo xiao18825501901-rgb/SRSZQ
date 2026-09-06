@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 
 const base = 'http://127.0.0.1:8080';
+const databasePath = process.env.SRSZQ_DB_PATH ?? '/var/www/SRSZQ/data/srszq.sqlite';
 async function request(path, body, token) {
   const res = await fetch(base + path, {
     method: body ? 'POST' : 'GET',
@@ -27,9 +29,9 @@ async function ready() {
   }
 }
 await ready();
-console.log('PASS API readiness (expected JSON 404)');
+console.log('API PASS: loopback API returned the expected JSON response');
 await new Promise((resolve, reject) => {
-  const ws = new WebSocket('ws://127.0.0.1/ws', { handshakeTimeout: 5000 });
+  const ws = new WebSocket('ws://127.0.0.1:8081/ws', { handshakeTimeout: 5000 });
   const timer = setTimeout(() => { ws.terminate(); reject(Error('WS timeout')); }, 7000);
   ws.on('error', error => { clearTimeout(timer); reject(error); });
   ws.on('message', raw => {
@@ -40,7 +42,27 @@ await new Promise((resolve, reject) => {
     } catch (error) { clearTimeout(timer); ws.terminate(); reject(error); }
   });
 });
-console.log('PASS Nginx WS upgrade and unauthenticated rejection');
+console.log('WS PASS: loopback WebSocket upgraded and rejected an unauthenticated client');
+
+const processes = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
+const backend = processes.find(process => process.name === 'srszq-backend');
+assert.equal(backend?.pm2_env?.status, 'online');
+console.log('PM2 PASS: srszq-backend is online');
+
+const database = new DatabaseSync(databasePath, { readOnly: true, timeout: 5000 });
+try {
+  assert.equal(database.prepare('PRAGMA quick_check').get().quick_check, 'ok');
+  assert.ok(database.prepare("SELECT count(*) AS count FROM sqlite_master WHERE type = 'table'").get().count > 0);
+} finally {
+  database.close();
+}
+console.log(`DB PASS: ${databasePath} is readable and passes quick_check`);
+
+execFileSync('nginx', ['-t'], { stdio: 'ignore' });
+const nginxResponse = await fetch('http://127.0.0.1/', { signal: AbortSignal.timeout(5000) });
+assert.equal(nginxResponse.status, 404);
+assert.equal((await nginxResponse.json()).error, 'not found: GET /');
+console.log('NGINX PASS: configuration is valid and the HTTP reverse proxy reaches the API');
 
 if (process.argv.includes('--persistence')) {
   const suffix = randomBytes(6).toString('hex');
