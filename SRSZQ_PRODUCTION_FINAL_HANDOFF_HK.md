@@ -2,202 +2,261 @@
 
 Generated: 2026-09-07 (Asia/Shanghai)
 
-## 1 Executive Status
+## 1. Executive status
 
-`STATUS = PARTIALLY_READY / BLOCKED`
+`STATUS = READY`
 
-The application, database, backup, process manager, loopback Nginx proxy, Netlify fallback, CI, security boundary, and reboot recovery are ready. Final DNS, public API TLS/WSS, and Netlify custom-domain cutover were intentionally not performed because the current ECS expiry could not be confirmed.
+SRSZQ is publicly functional on its final domains. DNS, Netlify custom domains, HTTPS, Caddy routing, authenticated WSS, CORS, browser E2E, game lifecycle, persistence, backup, CI, and the public port boundary all pass.
 
-`BLOCKED_BY_SERVER_EXPIRY`
+The Hong Kong ECS expiry is recorded as an accepted operational risk and is not a launch blocker.
 
-The last known expiry supplied for this ECS is `2026-09-13 23:59:59`. The server exposes no expiry value through instance metadata and has no attached RAM role or local Alibaba Cloud credential that can query billing data.
+## 2. Final production URLs
 
-## 2 Final URLs
-
-| URL | State |
+| URL | Result |
 | --- | --- |
-| `https://srszq.netlify.app` | PASS; rollback frontend remains live |
-| `https://srszq.com` | BLOCKED pending expiry gate and DNS |
-| `https://www.srszq.com` | BLOCKED pending expiry gate, Netlify domain setup, and redirect |
-| `https://api.srszq.com` | BLOCKED pending expiry gate, DNS, and Caddy certificate |
-| `wss://api.srszq.com/ws` | BLOCKED publicly; equivalent pre-cutover proxy and authenticated application tests pass |
+| `https://srszq.com` | PASS — canonical frontend, HTTP 200 |
+| `https://www.srszq.com` | PASS — HTTP 301 to `https://srszq.com/` |
+| `https://api.srszq.com` | PASS — public API edge |
+| `wss://api.srszq.com/ws` | PASS — authenticated application WebSocket |
+| `https://srszq.netlify.app` | PASS — retained frontend rollback URL |
 
-## 3 Git
+## 3. Production architecture
+
+```text
+Internet
+  -> Netlify: srszq.com / www.srszq.com
+  -> Caddy 80/443: api.srszq.com
+  -> Nginx 127.0.0.1:9080
+  -> API 127.0.0.1:8080
+  -> WebSocket 127.0.0.1:8081/ws
+```
+
+Caddy remains the shared public TLS edge. Nginx remains loopback-only and does not compete for ports 80 or 443.
+
+## 4. Git, CI, and deployment identity
 
 - Repository: `xiao18825501901-rgb/SRSZQ`
 - Branch: `main`
-- Deployed commit: `51e53f7e8360ad484cf1a42b43e47900fd723320`
-- Local, origin, and Hong Kong checkout matched and were clean before this report.
-- GitHub Actions CI: PASS, run `34050035989`.
+- Tested executable commit: `1163297e5fe1017e4e4ac2a7442fad62690c227b`
+- Local, origin, and Hong Kong checkout matched this commit and were clean before this handoff report was written.
+- GitHub Actions CI: PASS
+- CI run: `34052885765`
+- CI conclusion: `success`
+- Netlify production deploy: `6a9db57cb662e40008dea4ca`
+- Netlify deploy state: `ready`
+- Netlify deployed commit: `1163297e5fe1017e4e4ac2a7442fad62690c227b`
+- The final handoff commit after the tested commit changes documentation only.
 
-## 4 Hong Kong ECS
+## 5. DNS
+
+Authoritative nameservers remain `ns1.julydns.com` and `ns2.julydns.com`.
+
+Cloudflare (`1.1.1.1`), Google (`8.8.8.8`), and AliDNS (`223.5.5.5`) all returned:
+
+- `srszq.com A 75.2.60.5`
+- `www.srszq.com CNAME srszq.netlify.app`
+- `api.srszq.com A 8.210.58.22`
+
+## 6. HTTPS and redirects
+
+### Frontend certificate
+
+- Subject: `CN=srszq.com`
+- SAN: `srszq.com`, `www.srszq.com`
+- Issuer: Let's Encrypt `YE2`
+- Valid from: `2026-09-06T17:24:24Z`
+- Valid until: `2026-12-05T17:24:23Z`
+- HSTS: enabled by Netlify
+
+### API certificate
+
+- Subject/SAN: `api.srszq.com`
+- Issuer: Let's Encrypt `YE1`
+- Valid from: `2026-09-06T17:20:25Z`
+- Valid until: `2026-12-05T17:20:24Z`
+- Renewal: managed automatically by Caddy
+
+Redirect checks:
+
+- `https://www.srszq.com/` -> HTTP 301 -> `https://srszq.com/`
+- `http://api.srszq.com/` -> HTTP 308 -> `https://api.srszq.com/`
+
+## 7. Public application and WebSocket E2E
+
+The platform browser test ran against the public frontend, API, and WSS endpoints. It passed:
+
+- landing page and authentication
+- registration and session refresh
+- tutorial gate and tutorial AI response
+- lobby, ranking, and friend invitation
+- two-browser friend acceptance and automatic game entry
+- 13x13 local and online boards
+- Human vs AI and AI fill
+- BAC timeline synchronization through Round 6
+- online matchmaking UI
+- public client console with zero JavaScript errors
+
+The production rules browser test passed:
+
+- 13x13 and 17x17 boards
+- BAC R1 victory lock
+- BAC R6 C victory right
+- forbidden four-in-a-row for a non-eligible player
+- eligible C victory
+- 0–2 AI seat enforcement and hidden AI levels
+- AI thinking lock and automatic move
+- undo to the previous human turn
+- v2 and legacy import plus export
+- zero JavaScript errors
+
+The public game lifecycle test used three fresh QA users over `wss://api.srszq.com/ws` and passed:
+
+- authenticated `hello` identity
+- three-human online game start
+- disconnect notification
+- reconnect and `resume` within the production grace period
+- no false disconnect loss after the original grace deadline
+- `PLAYER_RESIGN` -> `PLAYER_FORFEIT` for all clients
+- disconnect timeout -> `PLAYER_DISCONNECT`
+- both results persisted to the public ranking
+
+## 8. Hong Kong ECS and shared services
 
 - Public IP: `8.210.58.22`
-- Private IP: `172.19.63.160`
 - Region: `cn-hongkong`
 - OS: Ubuntu 24.04 LTS, x86_64
-- Resources: 2 vCPU, approximately 1.6 GiB visible RAM, 2 GiB swap, 40 GiB disk
-- Disk after deployment: approximately 31 GiB free
-- Reboot test: completed; captured uptime was under one minute after recovery
-- Expiry: unconfirmed; last known value `2026-09-13 23:59:59`
-
-## 5 SSH / sudo
-
-- `admin` public-key SSH: PASS
+- SSH as `admin`: PASS
 - Passwordless sudo: PASS
-- Separate read-only GitHub ED25519 deploy key: PASS
-- Deploy-key fingerprint: `SHA256:auMppqEiDJRfY2aPSvFtOX4sbAAnD9Y/K5OGaj3INdg`
-- No private key or credential was copied into Git or this report.
-- Effective SSH settings currently permit public keys, password authentication, and root login. Access-policy hardening should be coordinated with every administrator of this shared server.
+- `srszq-backend`: online under PM2 user `admin`
+- PM2 startup service: enabled and active
+- Application working directory: `/var/www/SRSZQ`
+- Production database: `/var/www/SRSZQ/data/srszq.sqlite`
+- Nginx config validation: PASS
+- Caddy config validation and reload: PASS
+- `coursemate-rag.service`: active and enabled; public `/docs` returned 200
+- `coursemate-agent.service`: active and enabled; public route returned its expected application 404
+- Previously completed full reboot recovery test: PASS; it was not repeated because the final cutover used a validated Caddy reload and did not change boot dependencies.
 
-## 6 PM2
+## 9. Database and persistence
 
-- PM2 7.0.4, application user `admin`
-- `srszq-backend`: online
-- Working directory: `/var/www/SRSZQ`
-- Real Node process opens `/var/www/SRSZQ/data/srszq.sqlite`
-- `pm2-admin.service`: enabled and active
-- Saved process list resurrected successfully after a real server reboot
-
-## 7 Nginx
-
-- Version: Nginx 1.24.0
-- Service: enabled and active
-- Config: `/etc/nginx/sites-available/api.srszq.com`
-- Listener: `127.0.0.1:9080` only
-- `/` proxies to `127.0.0.1:8080`
-- `/ws` proxies to `127.0.0.1:8081` with WebSocket upgrade headers and one-hour read/send timeouts
-- `nginx -t`: PASS
-- Host-header API and WebSocket tests for `api.srszq.com`: PASS
-
-Caddy already serves unrelated CourseMate domains on public ports 80/443. It remains the public edge to prevent an outage. The prepared SRSZQ Caddy block will proxy to Nginx after the expiry and DNS gates pass. Certbot is installed but will not contend for Caddy's public ports.
-
-## 8 DNS
-
-- Authoritative nameservers: `ns1.julydns.com`, `ns2.julydns.com`
-- `srszq.com`: no public A answer at verification time
-- `www.srszq.com`: no public A answer at verification time
-- `api.srszq.com`: no public A answer at verification time
-- Required backend record after expiry approval: `api A 8.210.58.22`
-- Resolver checks used Cloudflare, Google, and AliDNS.
-
-## 9 HTTPS
-
-- Netlify fallback HTTPS: PASS
-- `api.srszq.com` certificate: not issued because DNS cutover is blocked
-- Planned issuer: Let's Encrypt through the existing Caddy edge
-- HTTP-to-HTTPS redirect and certificate renewal: pending public DNS
-
-## 10 WSS
-
-- Direct loopback application handshake: PASS
-- Nginx Host-header upgrade on `127.0.0.1:9080/ws`: PASS
-- Unauthenticated rejection reached the WebSocket application: PASS
-- Synthetic account authenticated connection received the expected `hello` identity: PASS
-- Public `wss://api.srszq.com/ws`: pending DNS and TLS
-
-## 11 Database
-
-- Path: `/var/www/SRSZQ/data/srszq.sqlite`
-- Owner/mode: `admin:admin`, `0600`; data directory `0700`
+- SQLite integrity check: `ok`
 - Journal mode: WAL
-- Migration source SHA-256: `8e3ebe835535b19b041d9f1fa673e579a1d36dcffb4ec5110450165e06a4bbce`
-- Initial Hong Kong integrity check: `ok`
-- Initial table counts exactly matched Hangzhou: users 2, ranking 2, sessions 4; all other business tables 0
-- Current counts after two retained synthetic production checks: users 4, ranking 4, sessions 10; friends, games, invitations, matches, and tutorial progress remain 0
-- Registration, login, existing session after PM2 restart, and authenticated WSS persistence: PASS
+- Data directory: mode `0700`, owner `admin:admin`
+- Database: mode `0600`, owner `admin:admin`
+- PM2 restart persistence test: PASS
+- Existing authenticated session after PM2 restart: PASS
+- Authenticated WSS after PM2 restart: PASS
 
-## 12 Backup
+Final table counts after retained synthetic production tests:
 
-- Daily path: `/var/backups/srszq/daily`
+| Table | Rows |
+| --- | ---: |
+| users | 13 |
+| ranking | 13 |
+| sessions | 24 |
+| friends | 4 |
+| games | 2 |
+| invitations | 2 |
+| matches | 2 |
+| tutorial_progress | 0 |
+
+These counts include QA users and the two deliberately persisted public lifecycle matches.
+
+## 10. Backups
+
+- Timer: `srszq-backup.timer`, active and enabled
 - Online SQLite backup includes committed WAL pages
-- Integrity check, atomic publish, mode `0600`, and retention of at least seven daily backups are enforced
-- `srszq-backup.timer`: enabled and active
-- Manual service run: PASS
+- Integrity check, atomic publication, retention, and mode `0600` are enforced
 - Isolated restore/write/rollback test: PASS
-- Latest verified post-reboot backup: `/var/backups/srszq/daily/srszq-daily-2026-09-06T17-54-38-730Z-bdd30f11-41c2-422f-9940-e182b5af295a.sqlite`
+- Fresh post-E2E backup: `/var/backups/srszq/daily/srszq-daily-2026-09-06T18-52-05-075Z-e151e80d-1ef9-4011-8f87-b4936bc7f5f2.sqlite`
+- Backup owner/mode: `root:root`, `0600`
 
-## 13 Netlify
+## 11. CORS and security boundary
 
-- Site: `srszq`, ID `8ba9ce96-b7ec-409a-965c-10d6e2335bf2`
-- Fallback: `https://srszq.netlify.app`, HTTP 200
-- Production deploy: `6a9da8c84d5aaa00098dad75`, ready
-- Deployed commit: `51e53f7e8360ad484cf1a42b43e47900fd723320`
-- Production bundle contains `api.srszq.com` and contains no active `api.srszq.net`
-- Build endpoints: `https://api.srszq.com` and `wss://api.srszq.com/ws`
-- Custom domains: not added while the expiry gate is blocked
-
-## 14 CORS
-
-Allowed production origins:
+Allowed frontend origins:
 
 - `https://srszq.com`
 - `https://www.srszq.com`
-- `https://srszq.netlify.app` during rollback
+- `https://srszq.netlify.app` for rollback
 
-Allowed origins are reflected with `Vary: Origin`. Untrusted normal requests receive no allow-origin header, and untrusted preflight requests receive HTTP 403. Integration and live checks pass.
+The canonical origin preflight returned HTTP 204 and the exact `Access-Control-Allow-Origin`. An untrusted preflight returned HTTP 403 without an allow-origin header.
 
-## 15 Security
+External TCP probes:
 
-- UFW: active; public inbound rules only for 22, 80, and 443
-- External probe: 22/80/443 reachable; 8080/8081/9080 unreachable
-- API, WS, and Nginx application proxy bind only to loopback
-- Database, WAL, SHM, migration backup, and scheduled backups use mode `0600`
-- Git tracked-file and history credential-pattern scans: PASS
+| Port | Expected | Result |
+| --- | --- | --- |
+| 22 | public | PASS — reachable |
+| 80 | public | PASS — reachable |
+| 443 | public | PASS — reachable |
+| 8080 | private | PASS — unreachable publicly |
+| 8081 | private | PASS — unreachable publicly |
+| 9080 | private | PASS — unreachable publicly |
+
+Additional controls:
+
+- UFW active
+- API, WebSocket, and Nginx application proxy bind only to loopback
+- Git tracked-file and history credential-pattern scan: PASS
 - GitHub deploy key is read-only
-- PM2 and application run as `admin`, not root
-- CORS wildcard removed
-- PM2 and SRSZQ Nginx logs rotate daily, retain seven rotations, and compress old logs
-- Public TLS is pending the expiry and DNS gates
+- Application and PM2 run as `admin`, not root
+- Database and completed backups use mode `0600`
+- CORS wildcard is absent
+- Security response headers are active
 
-## 16 Tests
+## 12. Verification matrix
 
 | Gate | Result |
 | --- | --- |
-| TypeScript typecheck | PASS locally and on Hong Kong |
-| Unit tests | PASS, 80/80 |
-| API integration | PASS |
+| TypeScript typecheck | PASS |
+| Unit tests | PASS — 80/80 |
+| Backend API integration | PASS |
 | WebSocket integration | PASS |
-| Backup tests | PASS, 3/3 |
-| Frontend build | PASS |
-| `npm audit --audit-level=high` | PASS, 0 vulnerabilities |
-| Nginx/API/WS pre-cutover smoke | PASS |
-| Synthetic register/login/session | PASS |
-| Authenticated WebSocket | PASS |
-| Public Netlify bundle | PASS |
-| Public final-domain E2E | BLOCKED by expiry/DNS/TLS |
+| Frontend production build | PASS |
+| `npm audit --audit-level=high` | PASS — 0 vulnerabilities |
+| GitHub Actions CI | PASS |
+| Netlify production deploy | PASS — ready |
+| Public platform browser E2E | PASS |
+| Public rules browser E2E | PASS |
+| Public disconnect/reconnect/forfeit lifecycle | PASS |
+| Public API/WSS and persistence smoke | PASS |
+| Fresh production backup | PASS |
+| CourseMate regression check | PASS |
 
-## 17 Reboot Test
+## 13. Old Hangzhou server and rollback
 
-`PASS`
+- Hangzhou ECS `47.114.34.175` remains available as a rollback reference.
+- It was not deleted, cancelled, or used to overwrite the Hong Kong database.
+- The Hong Kong database is the production source of truth after public writes began.
+- Keep the old server for the planned 24–72 hour observation window.
 
-After the explicitly approved reboot, SSH, Caddy, both CourseMate services, Nginx, `pm2-admin`, the SRSZQ backend, SQLite, API, WebSocket, and the backup timer recovered automatically. A new verified backup succeeded after reboot.
+Before any later decommission:
 
-## 18 Old Server
+- confirm no DNS points to `47.114.34.175`
+- take and verify an archival backup
+- archive old configuration and evidence
+- stop the old application only after the observation window
+- obtain explicit approval before ECS cancellation
 
-- Hangzhou ECS `47.114.34.175` remains running as rollback reference.
-- Git remains at `6c912272dd7a72cf4b5fd078bb07baa54107d38e`.
-- PM2, Nginx, and the backup timer remained active at the latest check.
-- Retain for 24–72 hours after public cutover.
-- Once Hong Kong receives new public production writes, Hong Kong is the only database source of truth.
+## 14. ICP
 
-### OLD_SERVER_DECOMMISSION_CHECKLIST
+The separate `srszq.net` ICP workflow was not changed or cancelled.
 
-- [ ] Complete 24–72 hour Hong Kong observation window
-- [ ] Confirm no DNS points to `47.114.34.175`
-- [ ] Take and verify a fresh old-server archival backup
-- [ ] Archive old configuration and evidence
-- [ ] Stop old PM2 application
-- [ ] Obtain explicit user approval before ECS cancellation
+`ICP_NOT_REQUIRED_FOR_CURRENT_HK_HOSTING`
 
-## 19 ICP
+## 15. Operational risk
 
-The `srszq.net` ICP workflow may still exist. It is `NOT_REQUIRED_FOR_HK_PRODUCTION`. This migration did not alter, cancel, or fabricate any ICP or public-security filing.
+The Hong Kong ECS last-known expiry was `2026-09-13 23:59:59`.
 
-## 20 Remaining Manual User Actions
+The user explicitly instructed production cutover to proceed regardless of renewal status and accepted the risk that the Hong Kong ECS may expire shortly after launch.
 
-Immediate required action:
+Risk: if the ECS expires, the backend API and WSS service will go offline while the Netlify frontend may remain reachable.
 
-1. Renew the Hong Kong ECS if needed and provide the newly confirmed expiry date. It must safely cover cutover plus the 24–72 hour observation window.
+Mitigation recommendation: renew the ECS before expiration.
 
-After that gate passes, JulyDNS access is still required to enter `api A 8.210.58.22` and the exact current Netlify apex/`www` records. No DNS-provider credential or authenticated browser session is available to this execution environment, so those entries may require the user to enter them when requested.
+`RISK_ACCEPTED_BY_USER`
+
+This risk does not block the READY status.
+
+## 16. Remaining actions
+
+No manual action remains for the production launch. Continue monitoring during the 24–72 hour observation window and renew the Hong Kong ECS as the recorded risk mitigation.
