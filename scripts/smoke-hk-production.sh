@@ -23,8 +23,8 @@ SRSZQ_API_URL="https://$api_host" SRSZQ_WS_URL="wss://$api_host/ws" node scripts
 test "$(sqlite3 "$database" 'PRAGMA integrity_check;')" = ok
 echo 'DATABASE PASS: integrity_check=ok'
 
-latest=$(find "$backup_root" -maxdepth 1 -type f -name 'srszq-daily-*.sqlite' -mmin -1560 -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)
+latest=$(sudo -n find "$backup_root" -maxdepth 1 -type f -name 'srszq-daily-*.sqlite' -mmin -1560 -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)
 test -n "$latest"
-test "$(stat -c %a "$latest")" = 600
-test "$(sqlite3 "$latest" 'PRAGMA integrity_check;')" = ok
+test "$(sudo -n stat -c %a "$latest")" = 600
+test "$(sudo -n sqlite3 "$latest" 'PRAGMA integrity_check;')" = ok
 echo "BACKUP PASS: fresh verified backup $latest"
