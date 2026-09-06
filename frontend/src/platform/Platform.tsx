@@ -5,6 +5,9 @@ import type { Player } from '../../../shared/src/game/types';
 import type { AILevel, SeatConfigs } from '../../../shared/src/ai/types';
 import { PLAYERS } from '../../../shared/src/game/types';
 import App from '../App';
+import type { CoachContext } from '../App';
+import { HowToPlayContent, RulesQuickView } from '../components/HowToPlay';
+import { aiDisplayName, sampleAiPair, tutorialRoleLines, tutorialSeats } from './tutorialModel';
 import { authApi, clearAuth, getCachedUser, getToken, setAuth, type PublicUser } from '../api';
 import { gameLink, resetSocket } from '../ws';
 import { useRoute } from '../router';
@@ -93,18 +96,20 @@ export function Platform() {
         {user ? (
           <>
             <button className="ds-btn ghost small" onClick={() => route.navigate('/lobby')}>大厅</button>
+            <button className="ds-btn ghost small" onClick={() => route.navigate('/rules')}>怎么玩</button>
             <button className="ds-btn ghost small" onClick={() => route.navigate('/ranking')}>排行榜</button>
             <button className="ds-btn ghost small" onClick={() => route.navigate('/friends')}>好友</button>
             <span className="pf-user" title={user.username}>
               <img className="pf-avatar" src={user.avatar} alt="" />
               {user.username}
-              <b style={{ color: '#b79cff' }}>{user.rating}</b>
+              <b style={{ color: '#a8cdf0' }}>{user.rating}</b>
               <span className={`pf-dot ${user.onlineStatus}`} />
             </span>
             <button className="ds-btn small" onClick={logout}>退出</button>
           </>
         ) : (
           <>
+            <button className="ds-btn ghost small" onClick={() => route.navigate('/rules')}>怎么玩</button>
             <button className="ds-btn ghost small" onClick={() => route.navigate('/ranking')}>排行榜</button>
             <button className="ds-btn primary small" onClick={() => route.navigate('/auth')}>登录 / 注册</button>
           </>
@@ -127,6 +132,17 @@ export function Platform() {
       <div className="pf-page">
         {nav}
         <RankingPage onBack={() => (user ? route.navigate('/lobby') : route.navigate('/'))} />
+      </div>
+    );
+  }
+  if (path === '/rules') {
+    return (
+      <div className="pf-page rules-page">
+        {nav}
+        <HowToPlayContent
+          onBack={() => route.navigate(user ? '/lobby' : '/')}
+          onStartTutorial={user && !user.tutorialCompleted ? () => route.navigate('/tutorial') : undefined}
+        />
       </div>
     );
   }
@@ -208,11 +224,18 @@ function MiniBoardPreview() {
     }
   }
   return (
-    <div
-      className="mini-board fade-in"
-      style={{ animationDelay: '.25s' }}
-      dangerouslySetInnerHTML={{ __html: cells.join('') }}
-    />
+    <div className="mini-board" dangerouslySetInnerHTML={{ __html: cells.join('') }} />
+  );
+}
+
+/** 棋盘右下角的行/列身份小图例 */
+function PlayerKey() {
+  return (
+    <div className="land-key">
+      <span><i className="k-a" />A 红</span>
+      <span><i className="k-b" />B 绿</span>
+      <span><i className="k-c" />C 白</span>
+    </div>
   );
 }
 
@@ -221,17 +244,15 @@ function Landing({ user }: { user: PublicUser | null }) {
   const go = (to: string) => route.navigate(to);
   return (
     <PageMotion>
-      <section className="hero2">
-        <span className="orb o1" />
-        <span className="orb o2" />
-        <span className="orb o3" />
-        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <span className="eyebrow">正式规则 v2 · 13×13 / 17×17 · BAC C→B→A</span>
-          <h1>
-            Three Player <span className="grad">Strategy Battle</span>
-          </h1>
-          <p className="tagline">Think. Predict. Dominate.</p>
-          <div className="cta-row">
+      <section className="land-hero">
+        <div className="land-copy">
+          <h1 className="land-h1">三人四子棋</h1>
+          <p className="land-sub">Three-Player Connect Four · 一张棋盘，三人轮流落子</p>
+          <p className="land-desc">
+            连成四子就能赢？这里不是。Round 6 起，胜权按 C → B → A 轮流授予——只有持胜权的人，
+            才能凭自己的本手连成 ≥4 获胜；没有胜权时，连成四子的位置是禁手。
+          </p>
+          <div className="hero-actions">
             {user ? (
               <>
                 <Btn variant="primary" size="big" onClick={() => go('/online')}>Play Online</Btn>
@@ -246,59 +267,59 @@ function Landing({ user }: { user: PublicUser | null }) {
               </>
             )}
           </div>
-        </motion.div>
-        <MiniBoardPreview />
+          <p className="land-more">
+            第一次玩？<button className="linklike" onClick={() => go('/rules')}>先看「三人四子棋怎么玩」</button>
+            ，一分钟讲清胜权规则。
+          </p>
+        </div>
+        <figure className="land-board">
+          <MiniBoardPreview />
+          <PlayerKey />
+          <figcaption>示意图 · 13×13 正式棋盘（完整规则见「怎么玩」）</figcaption>
+        </figure>
       </section>
 
-      <section className="features">
-        <Card hoverable className="feature">
-          <span className="f-icon">🌐</span>
-          <h3>Online Match · 在线竞技</h3>
-          <p>匹配 3 名真人同台竞技；60 秒不足三人自动 AI 补位。对局结果计入全球排行榜（Elo 式评分）。</p>
-        </Card>
-        <Card hoverable className="feature stars">
-          <span className="f-icon">🤖</span>
-          <h3>AI 陪练 · 五档难度</h3>
-          <p>从新手到高手：AI 难度只以星级呈现——</p>
-          <ul>
-            {['★ 稳健入门', '★★ 战术应对', '★★★ 资格博弈', '★★★★ 回合级推演', '★★★★★ 深度最优求解'].map((t) => (
-              <li key={t}>{t}</li>
-            ))}
-          </ul>
-        </Card>
-        <Card hoverable className="feature">
-          <span className="f-icon">👥</span>
-          <h3>好友邀请 · 即邀即战</h3>
-          <p>邀请 1 位好友：真人 + 真人 + AI 立即开局；邀请 2 位好友：全部接受后组成纯真人三人局。</p>
-        </Card>
-        <Card hoverable className="feature">
-          <span className="f-icon">🏆</span>
-          <h3>排行榜 · 在线计分</h3>
-          <p>只有 Online Match 影响 Rating；人机与教学对局不计分，保证公平竞技。</p>
-        </Card>
+      {/* 第一层规则：above the fold 速览（登录后的大厅同样提供该入口） */}
+      <section className="land-rules" aria-labelledby="howto-heading">
+        <div className="land-rules-head">
+          <h2 id="howto-heading">三人四子棋怎么玩 · 规则速览</h2>
+          <Btn variant="ghost" size="small" onClick={() => go('/rules')}>查看完整规则</Btn>
+        </div>
+        <RulesQuickView />
+        {!user && (
+          <div className="land-rules-cta">
+            <Btn variant="primary" onClick={() => go('/auth')}>注册并开始新手教程</Btn>
+            <span className="muted">三局教学：你在 A 座，两名 AI 对手随局搭配。</span>
+          </div>
+        )}
       </section>
 
-      <section className="rules-strip ds-card">
-        <div className="rs-item">
-          <b>Round 1–5</b>
-          <span>无人拥有胜权：任何形成 ≥4 连的落子都是禁手。</span>
+      <section className="land-modes" aria-label="对局模式">
+        <div className="mode-line">
+          <span className="m-icon">在线</span>
+          <div>
+            <h3>Online Match</h3>
+            <p>匹配 3 名真人同台竞技；60 秒不足三人自动 AI 补位，结果计入排行榜。</p>
+          </div>
+          <Btn variant={user ? 'primary' : 'default'} size="small" onClick={() => go(user ? '/online' : '/auth')}>开始</Btn>
         </div>
-        <div className="rs-item">
-          <b>Round 6 起</b>
-          <span>胜权按 C → B → A 循环授予（R6=C · R7=B · R8=A）。</span>
+        <div className="mode-line">
+          <span className="m-icon">AI</span>
+          <div>
+            <h3>Human vs AI</h3>
+            <p>1–2 个 AI 对手，难度 ★–★★★★★，用同一套正式规则练手。</p>
+          </div>
+          <Btn size="small" onClick={() => go('/vsai')}>选择对手</Btn>
         </div>
-        <div className="rs-item">
-          <b>胜利条件</b>
-          <span>持胜权的玩家凭本手连成 ≥4 即胜——不存在“储存四连”。</span>
-        </div>
-        <div className="rs-item">
-          <b>无合法步</b>
-          <span>自动 Pass；棋盘 13×13 / 17×17，一局约 15–40 分钟。</span>
+        <div className="mode-line">
+          <span className="m-icon">本地</span>
+          <div>
+            <h3>Local Match</h3>
+            <p>同一设备三人轮流落子，无需账号，随开随玩。</p>
+          </div>
+          <Btn size="small" onClick={() => go('/local')}>开始对局</Btn>
         </div>
       </section>
-      <div style={{ textAlign: 'center', padding: '18px 0 40px' }}>
-        <Btn variant="ghost" onClick={() => go('/ranking')}>查看排行榜 →</Btn>
-      </div>
     </PageMotion>
   );
 }
@@ -396,6 +417,13 @@ function Lobby({ user }: { user: PublicUser }) {
   const route = useRoute();
   return (
     <PageMotion>
+      <div className="lobby-rules-link">
+        <span>
+          <b>三人四子棋怎么玩？</b>
+          <span className="muted"> · 胜权规则一分钟讲清</span>
+        </span>
+        <Btn variant="ghost" size="small" onClick={() => route.navigate('/rules')}>规则速览与胜权说明</Btn>
+      </div>
       <div className="lobby-user">
         <img className="pf-avatar big" src={user.avatar} alt="" />
         <div>
@@ -474,7 +502,7 @@ function RankingPage({ onBack }: { onBack: () => void }) {
               <td>
                 <img className="pf-avatar" src={r.avatar} alt="" /> {r.username}
               </td>
-              <td><b style={{ color: '#b79cff' }}>{r.rating}</b></td>
+              <td><b style={{ color: '#a8cdf0' }}>{r.rating}</b></td>
               <td>
                 {r.wins}/{r.games}
               </td>
@@ -557,12 +585,36 @@ function FriendsPage() {
 
 /* ---------------- Tutorial ---------------- */
 const TUTORIAL_ROUNDS = 3;
-/** 教学 AI 内部档位（UI 只见 ★）；人类座位每局轮换 */
-const TUTORIAL_AI: Array<[Player, AILevel]> = [
-  ['B', 'random'],
-  ['C', 'tactical'],
-  ['A', 'selfish'],
-];
+
+/** 教程教练：根据对局上下文给一行轻量教学提示（progressive/contextual，不弹窗轰炸） */
+function makeTutorialCoach(pair: [AILevel, AILevel]) {
+  const names: Partial<Record<Player, string>> = {
+    B: aiDisplayName(pair[0]),
+    C: aiDisplayName(pair[1]),
+  };
+  return (ctx: CoachContext): string => {
+    const { state, round, current, eligible, currentIsAI, thinking } = ctx;
+    if (state.status !== 'playing') return '';
+    if (currentIsAI) {
+      return thinking
+        ? `对手 ${current}（AI · ${names[current] ?? ''}）正在思考……`
+        : `对手 ${current}（AI · ${names[current] ?? ''}）行动中。`;
+    }
+    if (round <= 5) {
+      const extra =
+        round === 5
+          ? '下一轮（Round 6）起 C 将获得胜权。'
+          : round <= 2
+            ? '先落子开阔地带，多留自己的棋型空间。'
+            : '留意对手的活三，并提前为自己的胜权轮布局。';
+      return `轮到你了（玩家 ${current}）。Round ${round} 暂无胜权——谁都不能靠这一手获胜，会连成 ≥4 的位置是禁手 ✕。${extra}`;
+    }
+    if (eligible === current) {
+      return `轮到你了（玩家 ${current}）——本回合胜权就是你：这一手若能连成 ≥4（横/竖/斜），立即获胜！`;
+    }
+    return `轮到你了（玩家 ${current}）。本回合胜权：${eligible}——留意 ${eligible} 的连线威胁，也为自己后面的胜权轮布局。`;
+  };
+}
 
 function TutorialPage({
   user,
@@ -575,45 +627,50 @@ function TutorialPage({
   onDone: () => void;
   onExit: () => void;
 }) {
+  const route = useRoute();
   const [round, setRound] = useState(0);
   const [lastResult, setLastResult] = useState('');
   const [finished, setFinished] = useState(false);
+  // 教程 session 初始化时随机选取两名真实 AI；重渲染不改变（重开教程 = 重新初始化 → 新随机对）
+  const [pair] = useState<[AILevel, AILevel]>(() => sampleAiPair());
+  const seats = tutorialSeats(pair);
+  const roles = tutorialRoleLines(pair);
+  const coach = makeTutorialCoach(pair);
 
   if (user.tutorialCompleted) {
     return (
       <div className="pf-page pf-center">
         <h2>教学已完成 ✓</h2>
-        <button className="btn primary" onClick={onDone}>进入大厅</button>
+        <div className="btn-row" style={{ justifyContent: 'center' }}>
+          <button className="btn primary" onClick={onDone}>进入大厅</button>
+          <button className="btn" onClick={() => route.navigate('/rules')}>规则速览与胜权说明</button>
+        </div>
       </div>
     );
   }
-
-  const buildSeats = (r: number): SeatConfigs => {
-    const [aiSeat, level] = TUTORIAL_AI[r % TUTORIAL_ROUNDS];
-    const seats: SeatConfigs = { A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'human' } };
-    seats[aiSeat] = { kind: 'ai', level };
-    return seats;
-  };
 
   if (finished) {
     return (
       <div className="pf-page pf-center">
         <h2>教学完成！🎉</h2>
-        <p className="muted">你已经与 AI 完成了 3 局练习（胜负不影响积分）。</p>
-        <button
-          className="btn primary big"
-          onClick={async () => {
-            try {
-              const { data } = await authApi.completeTutorial();
-              applyAuth(getToken() ?? '', data.user);
-            } catch {
-              /* 后端异常时仍放行到大厅（本地已完成教学） */
-            }
-            onDone();
-          }}
-        >
-          进入大厅
-        </button>
+        <p className="muted">三局 1 真人 + 2 AI 练习已完成（胜负不影响积分）。本局对手：{aiDisplayName(pair[0])} 与 {aiDisplayName(pair[1])}。</p>
+        <div className="btn-row" style={{ justifyContent: 'center' }}>
+          <button
+            className="btn primary big"
+            onClick={async () => {
+              try {
+                const { data } = await authApi.completeTutorial();
+                applyAuth(getToken() ?? '', data.user);
+              } catch {
+                /* 后端异常时仍放行到大厅（本地已完成教学） */
+              }
+              onDone();
+            }}
+          >
+            进入大厅
+          </button>
+          <button className="btn" onClick={() => route.navigate('/rules')}>规则速览</button>
+        </div>
       </div>
     );
   }
@@ -631,19 +688,47 @@ function TutorialPage({
   };
 
   return (
-    <div className="pf-page">
+    <div className="pf-page tutorial-page">
       <div className="pf-nav">
-        <span className="pf-brand">SRSZQ · 新手教学</span>
-        <span className="muted">
-          第 {round + 1} / {TUTORIAL_ROUNDS} 局（AI 难度随进度提升，仅显示 ★）
-        </span>
+        <span className="pf-brand">新手教学 · 三人四子棋</span>
+        <span className="muted">第 {round + 1} / {TUTORIAL_ROUNDS} 局 · 你在 A 座执红先行</span>
+        <button className="btn ghost" onClick={() => route.navigate('/rules')}>规则速览</button>
         <button className="btn ghost" onClick={onExit}>返回</button>
       </div>
+
+      <section className="tut-identity" aria-label="本局身份">
+        <div className="tut-role you">
+          <span className="tut-role-tag">你</span>
+          <b>玩家 A（真人）</b>
+          <span className="muted">执红 · 每次轮到你时由你落子</span>
+        </div>
+        <span className="tut-vs">vs</span>
+        {roles.slice(1).map((r) => (
+          <div className="tut-role ai" key={r.seat}>
+            <span className="tut-role-tag">对手 · 玩家 {r.seat}</span>
+            <b>{r.detail.replace(`玩家 ${r.seat} · AI · `, 'AI · ')}</b>
+            <span className="muted">自动行动，与你使用同一套正式规则</span>
+          </div>
+        ))}
+        <div className="tut-identity-note">两名 AI 对手在本局开始时随机搭配；重开教程会重新随机。</div>
+      </section>
+
+      {round === 0 && (
+        <details className="tut-rules" open>
+          <summary>规则速览 · 一分钟看懂胜权（可收起）</summary>
+          <RulesQuickView />
+          <div style={{ marginTop: 10 }}>
+            <button className="btn ghost tiny" onClick={() => route.navigate('/rules')}>查看完整规则与胜权详解 →</button>
+          </div>
+        </details>
+      )}
+
       {lastResult && <div className="notice info">{lastResult}</div>}
       <App
-        key={`tut-${round}`}
-        presetSeats={buildSeats(round)}
-        hostTitle={`新手教学 ${round + 1}/${TUTORIAL_ROUNDS} · 与 AI 练习`}
+        key={`tut-${round}-${pair[0]}-${pair[1]}`}
+        presetSeats={seats}
+        hostTitle={`新手教学 ${round + 1}/${TUTORIAL_ROUNDS} · 1 真人 + 2 AI`}
+        coach={coach}
         onGameEnd={handleEnd}
         onExit={onExit}
         embedded

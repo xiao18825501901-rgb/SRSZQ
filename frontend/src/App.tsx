@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { BoardSize, Player } from '../../shared/src/game/types';
 import { PLAYER_COLORS, PLAYER_LABELS } from '../../shared/src/game/types';
 import { useGame } from './hooks/useGame';
@@ -37,10 +38,21 @@ export interface PlatformHostProps {
   onGameEnd?: (winner: Player | null) => void;
   /** 隐藏规则说明等桌面入口（平台内嵌模式） */
   embedded?: boolean;
+  /** 教程教练：在状态栏下渲染一行上下文教学提示（仅教程页提供） */
+  coach?: (ctx: CoachContext) => ReactNode;
+}
+
+export interface CoachContext {
+  state: GameState;
+  round: number;
+  current: Player;
+  eligible: Player | null;
+  currentIsAI: boolean;
+  thinking: boolean;
 }
 
 export default function App(props: PlatformHostProps = {}) {
-  const { hostTitle, presetSeats, onExit, onGameEnd, embedded } = props;
+  const { hostTitle, presetSeats, onExit, onGameEnd, embedded, coach } = props;
   const game = useGame(13);
   const { state } = game;
 
@@ -401,6 +413,12 @@ export default function App(props: PlatformHostProps = {}) {
         currentIsAI={state.status === 'playing' && currentIsAI}
       />
 
+      {coach && state.status === 'playing' && (
+        <div className="coach-line" aria-live="polite">
+          {coach({ state, round, current, eligible, currentIsAI, thinking: !!thinking })}
+        </div>
+      )}
+
       {state.status === 'playing' && !game.hasLegalMove && (
         <div className="notice pass passbar">
           {currentIsAI ? (
@@ -664,6 +682,12 @@ function StatusBar(props: {
             🏆 玩家 {eligible}
           </span>
         )}
+        <span className="etip">
+          <button type="button" className="etip-q" aria-label="什么是胜权">?</button>
+          <span className="etip-pop" role="tooltip">
+            只有持「胜权」的玩家能凭自己的本手连成 ≥4 获胜。Round 1–5 无人持权；Round 6 起按 C → B → A 循环（R6=C · R7=B · R8=A）。无胜权时连成 ≥4 的位置是禁手。
+          </span>
+        </span>
       </div>
       <div className="status-item">
         <span className="status-label">资格规则</span>

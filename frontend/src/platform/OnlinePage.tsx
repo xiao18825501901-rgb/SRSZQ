@@ -8,6 +8,8 @@
  *  胜负文案由服务器 MATCH_ENDED 的 reason + loser/winner 座位推导（服务器权威）。 */
 import { useEffect, useRef, useState } from 'react';
 import type { Player } from '../../../shared/src/game/types';
+import { PLAYER_COLORS } from '../../../shared/src/game/types';
+import { getEligiblePlayer } from '../../../shared/src/game/eligibility';
 import { Board } from '../components/Board';
 import { BacTimelinePanel } from '../components/BacTimelinePanel';
 import { gameLink } from '../ws';
@@ -195,6 +197,29 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
         <div className="status-item">
           <span className="status-label">当前回合</span>
           <span className="status-value">{`${currentPlayerOf(g.state)}${myTurn ? '（轮到你）' : ''}`}</span>
+        </div>
+        <div className="status-item">
+          <span className="status-label">本回合胜权</span>
+          {(() => {
+            const q = g.qualification;
+            const eligible: Player | null =
+              q && q.currentRound === Math.floor(g.state.turnIndex / 3) + 1
+                ? q.currentEligible
+                : getEligiblePlayer(Math.floor(g.state.turnIndex / 3) + 1);
+            return eligible ? (
+              <span className="status-value big eligible-badge" style={{ borderColor: PLAYER_COLORS[eligible], color: PLAYER_COLORS[eligible] }}>
+                玩家 {eligible}
+              </span>
+            ) : (
+              <span className="status-value none-badge">暂无（R1–5）</span>
+            );
+          })()}
+          <span className="etip">
+            <button type="button" className="etip-q" aria-label="什么是胜权">?</button>
+            <span className="etip-pop" role="tooltip">
+              只有持「胜权」的玩家能凭自己的本手连成 ≥4 获胜。Round 1–5 无人持权；Round 6 起按 C → B → A 循环（R6=C · R7=B · R8=A）。
+            </span>
+          </span>
         </div>
         {(['A', 'B', 'C'] as Player[]).map((p) => (
           <div key={p} className={`status-item ${p === g.mySeat ? 'mine' : ''}`}>

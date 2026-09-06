@@ -93,6 +93,17 @@ async function main() {
   let txt = await bodyText();
   check('Landing 渲染（Hero SRSZQ）', /SRSZQ/.test(txt) && /Play Online|注册并开始/.test(txt), txt.slice(0, 120));
   check('Landing 无真实 AI 档位名', !/Random|Tactical|Selfish|3-Ply|MaxN/.test(txt), '');
+  check('Landing 规则速览 above the fold（含胜权摘要）', txt.includes('怎么玩') && txt.includes('胜权') && txt.includes('C → B → A'), txt.slice(0, 150));
+
+  // 1b) 规则页（TEST1/TEST2/TEST3：入口明显、胜权完整解释、时间线与引擎一致）
+  await goto('/rules');
+  await sleep(600);
+  txt = await bodyText();
+  check('规则页：标题 三人四子棋怎么玩 + 速览', txt.includes('三人四子棋怎么玩') && txt.includes('规则速览'), txt.slice(0, 150));
+  check('规则页：胜权完整解释（七问）', txt.includes('什么是「胜权」') && txt.includes('只有当前拥有「胜权」的玩家') && txt.includes('禁手'), txt.slice(0, 200));
+  check('规则页：胜权时间线 R6=C/R7=B/R8=A 与引擎一致', txt.includes('R6') && txt.includes('C → B → A') && txt.includes('Round 1–5'), txt.slice(0, 220));
+  await goto('/');
+  await sleep(400);
 
   // 2) 注册
   await goto('/auth');
@@ -103,10 +114,13 @@ async function main() {
   await setVal('input[placeholder^="2-16"]', username);
   await setVal('input[type=password]', 'secret1');
   await click('button[type=submit]', '注册并开始');
-  await sleep(1200);
+  await sleep(1400);
   txt = await bodyText();
   check('新用户注册后进入教学（门禁）', txt.includes('新手教学') || txt.includes('与 AI 练习'), txt.slice(0, 150));
-  check('教学页不显示真实 AI 档位名', !/Random|Tactical|Selfish|3-Ply|MaxN/.test(txt), '');
+  // 新教程 = 1 真人(A) + 2 AI(B/C)，AI 来自真实 registry 且互不相同（身份栏显示真实档位名）
+  const tutAi = (txt.match(/(Random|Tactical|Selfish|3-Ply|MaxN)/g) || []);
+  check('教程身份：1 真人(A) + 2 随机 AI（真实 registry、互不相同）', txt.includes('玩家 A（真人）') && txt.includes('对手 · 玩家 B') && txt.includes('对手 · 玩家 C') && new Set(tutAi).size === 2, `${txt.slice(0, 160)} | ai=${[...new Set(tutAi)].join(',')}`);
+  check('教程页规则速览可展开（胜权一句话）', txt.includes('规则速览') && txt.includes('胜权'), '');
 
   // 3) 未完成教学不能进大厅/在线
   await goto('/lobby');
@@ -131,7 +145,7 @@ async function main() {
   const tutCards = await cdp.eval(`[...document.querySelectorAll('.players-row .player-card')].map(c=>c.innerText.replace(/\\s+/g,' '))`);
   const aiCard = tutCards.find((c) => c.includes('🤖 AI'));
   check('教学 AI 座位为 ★ 显示', !!aiCard && /AI · ★+/.test(aiCard ?? '') && !/Random|Tactical|Selfish/.test(aiCard ?? ''), (aiCard ?? '').slice(0, 60));
-  await click('button', '返回大厅');
+  await click('button', '返回');
   await sleep(500);
   txt = await bodyText();
   check('教学中返回仍被门禁拦截', txt.includes('新手教学'), txt.slice(0, 120));
