@@ -5,8 +5,8 @@
 
 [build.environment]
   NODE_VERSION = "24"
-  VITE_API_URL = "https://api.srszq.net"
-  VITE_WS_URL = "wss://api.srszq.net/ws"
+  VITE_API_URL = "https://api.srszq.com"
+  VITE_WS_URL = "wss://api.srszq.com/ws"
 
 [[redirects]]
   from = "/*"

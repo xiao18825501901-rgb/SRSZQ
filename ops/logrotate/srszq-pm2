@@ -1,4 +1,4 @@
-/root/.pm2/logs/*.log {
+/home/admin/.pm2/logs/*.log {
     daily
     rotate 7
     compress
@@ -6,6 +6,6 @@
     missingok
     notifempty
     copytruncate
-    create 0640 root root
-    su root root
+    create 0640 admin admin
+    su admin admin
 }

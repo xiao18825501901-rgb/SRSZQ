@@ -27,9 +27,9 @@ The versioned IP fallback Nginx configuration and active server file have the sa
 
 - SSH permits root login by public key. Create and test a separate sudo administrator account before changing `PermitRootLogin`; keep a second verified session open during the change to prevent lockout.
 - Fail2ban is not active. Configure it only after confirming the administrator access plan and allowlisting any required management source.
-- API responses currently use `Access-Control-Allow-Origin: *`. Restrict CORS to the final frontend origins after `srszq.net` is registered and production access is verified. This is an application behavior change and should pass the full integration suite before deployment.
+- API CORS uses an explicit production allowlist for `srszq.com`, `www.srszq.com`, and the temporary Netlify fallback. Changes must pass the full integration suite before deployment.
 - Alibaba Cloud security-group rules were not changed in this work. Confirm in the Alibaba console that 8080 and 8081 have no inbound rules and that 22/80/443 are limited according to the operating policy.
-- TLS/HSTS cannot be enabled until domain registration, ICP approval and DNS cutover are complete.
+- TLS/HSTS can be enabled after the ECS expiry gate and public DNS validation pass. Hong Kong production does not require the mainland ICP workflow.
 - Backups need an encrypted off-server copy before the database has irreplaceable user data.
 
 ## Verification commands

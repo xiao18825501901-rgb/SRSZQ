@@ -1,0 +1,13 @@
+/var/log/srszq/nginx-access.log /var/log/srszq/nginx-error.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        if [ -f /run/nginx.pid ]; then kill -USR1 $(cat /run/nginx.pid); fi
+    endscript
+}

@@ -10,6 +10,18 @@ export interface ApiContext {
   authUser(req: IncomingMessage): User | null;
 }
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://srszq.com',
+  'https://www.srszq.com',
+  'https://srszq.netlify.app',
+];
+
+function configuredAllowedOrigins(): Set<string> {
+  const configured = process.env.SRSZQ_ALLOWED_ORIGINS;
+  const origins = configured === undefined ? DEFAULT_ALLOWED_ORIGINS : configured.split(',');
+  return new Set(origins.map((origin) => origin.trim()).filter(Boolean));
+}
+
 export function toPublic(user: User): PublicUser {
   return {
     id: user.id,
@@ -43,9 +55,6 @@ function send(res: ServerResponse, status: number, data: Record<string, unknown>
   const payload = JSON.stringify({ ok: status < 400, ...data });
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   });
   res.end(payload);
 }
@@ -73,6 +82,7 @@ export interface ApiHooks {
 }
 
 export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: ApiContext } {
+  const allowedOrigins = configuredAllowedOrigins();
   const ctx: ApiContext = {
     db,
     authUser(req) {
@@ -86,12 +96,16 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
   };
 
   const server = createServer(async (req, res) => {
+    const origin = req.headers.origin;
+    const originAllowed = typeof origin === 'string' && allowedOrigins.has(origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    if (originAllowed) res.setHeader('Access-Control-Allow-Origin', origin);
+
     if (req.method === 'OPTIONS') {
-      res.writeHead(204, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      });
+      if (!originAllowed) return send(res, 403, { error: 'origin not allowed' });
+      res.writeHead(204);
       res.end();
       return;
     }

@@ -4,7 +4,8 @@ import { randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { WebSocket } from 'ws';
 
-const base = 'http://127.0.0.1:8080';
+const base = process.env.SRSZQ_API_URL ?? 'http://127.0.0.1:8080';
+const nginxUrl = process.env.SRSZQ_NGINX_URL ?? 'http://127.0.0.1:9080';
 const databasePath = process.env.SRSZQ_DB_PATH ?? '/var/www/SRSZQ/data/srszq.sqlite';
 async function request(path, body, token) {
   const res = await fetch(base + path, {
@@ -59,7 +60,10 @@ try {
 console.log(`DB PASS: ${databasePath} is readable and passes quick_check`);
 
 execFileSync('nginx', ['-t'], { stdio: 'ignore' });
-const nginxResponse = await fetch('http://127.0.0.1/', { signal: AbortSignal.timeout(5000) });
+const nginxResponse = await fetch(nginxUrl + '/', {
+  headers: { Host: 'api.srszq.com' },
+  signal: AbortSignal.timeout(5000),
+});
 assert.equal(nginxResponse.status, 404);
 assert.equal((await nginxResponse.json()).error, 'not found: GET /');
 console.log('NGINX PASS: configuration is valid and the HTTP reverse proxy reaches the API');

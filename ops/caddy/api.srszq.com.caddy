@@ -1,0 +1,5 @@
+# Add this block to the existing /etc/caddy/Caddyfile only after the ECS expiry
+# gate passes and api.srszq.com resolves to 8.210.58.22.
+api.srszq.com {
+    reverse_proxy 127.0.0.1:9080
+}

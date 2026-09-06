@@ -19,6 +19,7 @@ module.exports = {
       SRSZQ_DISCONNECT_SKIP_MS: '30000',
       SRSZQ_FORFEIT_GRACE_MS: '10000',
       SRSZQ_INVITE_GATHER_MS: '30000',
+      SRSZQ_ALLOWED_ORIGINS: 'https://srszq.com,https://www.srszq.com,https://srszq.netlify.app',
     },
   }],
 };

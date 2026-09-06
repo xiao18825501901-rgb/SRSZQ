@@ -25,16 +25,17 @@ async function check(name: string, fn: () => Promise<void> | void): Promise<void
   }
 }
 
-async function request(method: string, path: string, body?: unknown, token?: string): Promise<{ status: number; json: any }> {
+async function request(method: string, path: string, body?: unknown, token?: string, origin?: string): Promise<{ status: number; json: any; headers: Headers }> {
   const res = await fetch(base + path, {
     method,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(origin ? { Origin: origin } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return { status: res.status, json: await res.json() };
+  return { status: res.status, json: await res.json(), headers: res.headers };
 }
 
 const post = (p: string, b?: unknown, t?: string) => request('POST', p, b, t);
@@ -47,6 +48,25 @@ async function main(): Promise<void> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const addr = server.address() as AddressInfo;
   base = `http://127.0.0.1:${addr.port}`;
+
+  await check('CORS 仅回显生产与回退白名单来源', async () => {
+    const production = await request('GET', '/api/ranking', undefined, undefined, 'https://srszq.com');
+    assert.equal(production.headers.get('access-control-allow-origin'), 'https://srszq.com');
+    assert.equal(production.headers.get('vary'), 'Origin');
+    const fallback = await request('GET', '/api/ranking', undefined, undefined, 'https://srszq.netlify.app');
+    assert.equal(fallback.headers.get('access-control-allow-origin'), 'https://srszq.netlify.app');
+    const untrusted = await request('GET', '/api/ranking', undefined, undefined, 'https://attacker.example');
+    assert.equal(untrusted.headers.get('access-control-allow-origin'), null);
+  });
+
+  await check('CORS preflight 拒绝非白名单来源', async () => {
+    const allowed = await fetch(base + '/api/login', { method: 'OPTIONS', headers: { Origin: 'https://www.srszq.com' } });
+    assert.equal(allowed.status, 204);
+    assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://www.srszq.com');
+    const denied = await fetch(base + '/api/login', { method: 'OPTIONS', headers: { Origin: 'https://attacker.example' } });
+    assert.equal(denied.status, 403);
+    assert.equal(denied.headers.get('access-control-allow-origin'), null);
+  });
 
   // 1) 注册 → me → 登出
   let token = '';
