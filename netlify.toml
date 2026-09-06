@@ -1,0 +1,20 @@
+[build]
+  base = "."
+  command = "npm run build"
+  publish = "frontend/dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+  VITE_API_URL = "https://api.srszq.com"
+  VITE_WS_URL = "wss://api.srszq.com/ws"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
