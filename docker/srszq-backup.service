@@ -1,0 +1,11 @@
+[Unit]
+Description=SRSZQ verified online SQLite backup
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/var/www/SRSZQ
+UMask=0077
+ExecStart=/bin/bash /var/www/SRSZQ/scripts/backup-production-db.sh
+TimeoutStartSec=10min
