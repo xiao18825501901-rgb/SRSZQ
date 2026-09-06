@@ -12,6 +12,7 @@ import { createInitialState, applyMove, forcePass, skipCurrentPlayer } from '../
 import type { GameState } from '../../../shared/src/game/types.js';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves.js';
 import { qualificationFromState } from '../../../shared/src/game/qualification.js';
+import { onlineAiFillLevel, shuffled } from '../../../shared/src/ai/assignment.js';
 import { chooseAIMove } from '../../../shared/src/ai/chooseAIMove.js';
 import type { AILevel } from '../../../shared/src/ai/types.js';
 import { OFFLINE_LEVEL_CONFIG } from '../../../shared/src/ai/config/defaultWeights.js';
@@ -269,7 +270,10 @@ export class GameServer {
     }
   }
 
-  /** 启动对局：真人按入队顺序占座，其余座位由 AI 补齐（权重 100..500） */
+  /** 启动对局：
+   *  - online（排位队列）：参与者座位由服务器随机分配（1H/2H/3H 统一），
+   *    系统 AI 补位难度仅 4★(3ply)/5★(maxn)、逐个独立随机（不全部固定 5★）；
+   *  - invite（好友邀请）：保持邀请顺序（发送者/接受者），AI 补位沿用原有 1–5★ 权重。 */
   private startRoom(humanIds: string[], mode: 'online' | 'invite' = 'online'): void {
     const live = humanIds.filter((id) => this.clients.has(id));
     const humans: SeatInfo[] = live.map((id) => {
@@ -277,29 +281,32 @@ export class GameServer {
       return { kind: 'human', userId: id, username: u?.username ?? '?', conn: 'connected' };
     });
     if (humans.length === 0) return;
-    const seatInfos: SeatInfo[] = [...humans];
-    while (seatInfos.length < 3) {
-      const lvl = pickAiLevel();
-      seatInfos.push({ kind: 'ai', stars: AI_STARS[lvl], aiLevel: lvl });
+    const participants: SeatInfo[] = [...humans];
+    while (participants.length < 3) {
+      const lvl = mode === 'online' ? onlineAiFillLevel() : pickAiLevel();
+      participants.push({ kind: 'ai', stars: AI_STARS[lvl], aiLevel: lvl });
+    }
+    // 随机分配“参与者 → A/B/C 座位”；不改变 A→B→C 的行动顺序（只换谁坐在哪）
+    const assigned = mode === 'online' ? shuffled(participants) : participants;
+    const members: Record<string, Seat> = {};
+    for (const s of SEATS) {
+      const si = assigned[SEATS.indexOf(s)];
+      if (si.kind === 'human' && si.userId) members[si.userId] = s;
     }
     const room: Room = {
       id: randomUUID(),
       mode,
       state: createInitialState(13),
-      seats: { A: seatInfos[0], B: seatInfos[1], C: seatInfos[2] },
+      seats: { A: assigned[0], B: assigned[1], C: assigned[2] },
       humanIds: new Set(humans.map((h) => h.userId!)),
-      members: {},
+      members,
       ended: false,
       running: false,
       phase: 'PLAYING',
       disconnectTimers: new Map(),
     };
-    for (let i = 0; i < humans.length; i++) {
-      room.members[humans[i].userId!] = SEATS[i];
-    }
     this.rooms.set(room.id, room);
-    for (let i = 0; i < humans.length; i++) {
-      const h = humans[i];
+    for (const h of humans) {
       this.userGame.set(h.userId!, room.id);
       this.db.touchOnline(h.userId!, 'playing');
       const client = this.clients.get(h.userId!);
@@ -310,7 +317,7 @@ export class GameServer {
           gameId: room.id,
           mode: room.mode,
           seats: this.publicSeats(room),
-          yourSeat: SEATS[i],
+          yourSeat: members[h.userId!],
           state: room.state,
           qualification: qualificationFromState(room.state),
         });

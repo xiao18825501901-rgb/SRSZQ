@@ -2,12 +2,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Player } from '../../../shared/src/game/types';
-import type { AILevel, SeatConfigs } from '../../../shared/src/ai/types';
-import { PLAYERS } from '../../../shared/src/game/types';
+import { PLAYERS, PLAYER_COLORS } from '../../../shared/src/game/types';
+import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
 import App from '../App';
 import type { CoachContext } from '../App';
 import { HowToPlayContent, RulesQuickView } from '../components/HowToPlay';
-import { aiDisplayName, sampleAiPair, tutorialRoleLines, tutorialSeats } from './tutorialModel';
+import { aiDisplayName, createTutorialAssignment, humanSeatOf, tutorialRoleLines, type TutorialAssignment } from './tutorialModel';
+import { localHumanCount, resolveLocalSeats, type LocalDraft } from './localGameModel';
 import { authApi, clearAuth, getCachedUser, getToken, setAuth, type PublicUser } from '../api';
 import { gameLink, resetSocket } from '../ws';
 import { useRoute } from '../router';
@@ -585,13 +586,15 @@ function FriendsPage() {
 
 /* ---------------- Tutorial ---------------- */
 const TUTORIAL_ROUNDS = 3;
+const SEAT_COLOR_NAME: Record<Player, string> = { A: '红', B: '绿', C: '白' };
 
 /** 教程教练：根据对局上下文给一行轻量教学提示（progressive/contextual，不弹窗轰炸） */
-function makeTutorialCoach(pair: [AILevel, AILevel]) {
-  const names: Partial<Record<Player, string>> = {
-    B: aiDisplayName(pair[0]),
-    C: aiDisplayName(pair[1]),
-  };
+function makeTutorialCoach(seats: TutorialAssignment) {
+  const names: Partial<Record<Player, string>> = {};
+  for (const p of PLAYERS) {
+    const s = seats[p];
+    if (s.kind === 'ai') names[p] = aiDisplayName(s.level ?? 'random');
+  }
   return (ctx: CoachContext): string => {
     const { state, round, current, eligible, currentIsAI, thinking } = ctx;
     if (state.status !== 'playing') return '';
@@ -631,11 +634,12 @@ function TutorialPage({
   const [round, setRound] = useState(0);
   const [lastResult, setLastResult] = useState('');
   const [finished, setFinished] = useState(false);
-  // 教程 session 初始化时随机选取两名真实 AI；重渲染不改变（重开教程 = 重新初始化 → 新随机对）
-  const [pair] = useState<[AILevel, AILevel]>(() => sampleAiPair());
-  const seats = tutorialSeats(pair);
-  const roles = tutorialRoleLines(pair);
-  const coach = makeTutorialCoach(pair);
+  // 教程 session 初始化：一次确定真人座位 + 两名 AI 难度（immutable；重渲染不改变）
+  const [assignment] = useState<TutorialAssignment>(() => createTutorialAssignment());
+  const roles = tutorialRoleLines(assignment);
+  const humanSeat = humanSeatOf(assignment);
+  const coach = makeTutorialCoach(assignment);
+  const assignmentKey = `${assignment.A.kind}:${assignment.B.kind === 'ai' ? assignment.B.level : 'h'}:${assignment.C.kind === 'ai' ? assignment.C.level : 'h'}`;
 
   if (user.tutorialCompleted) {
     return (
@@ -650,10 +654,11 @@ function TutorialPage({
   }
 
   if (finished) {
+    const opponents = roles.filter((r) => r.role === '对手').map((r) => r.detail).join('、');
     return (
       <div className="pf-page pf-center">
         <h2>教学完成！🎉</h2>
-        <p className="muted">三局 1 真人 + 2 AI 练习已完成（胜负不影响积分）。本局对手：{aiDisplayName(pair[0])} 与 {aiDisplayName(pair[1])}。</p>
+        <p className="muted">三局 1 真人 + 2 AI 练习已完成（胜负不影响积分）。本局你在 {humanSeat} 座，对手：{opponents}。</p>
         <div className="btn-row" style={{ justifyContent: 'center' }}>
           <button
             className="btn primary big"
@@ -691,26 +696,24 @@ function TutorialPage({
     <div className="pf-page tutorial-page">
       <div className="pf-nav">
         <span className="pf-brand">新手教学 · 三人四子棋</span>
-        <span className="muted">第 {round + 1} / {TUTORIAL_ROUNDS} 局 · 你在 A 座执红先行</span>
+        <span className="muted">
+          第 {round + 1} / {TUTORIAL_ROUNDS} 局 · 你在 {humanSeat} 座（执{SEAT_COLOR_NAME[humanSeat]}）
+        </span>
         <button className="btn ghost" onClick={() => route.navigate('/rules')}>规则速览</button>
         <button className="btn ghost" onClick={onExit}>返回</button>
       </div>
 
       <section className="tut-identity" aria-label="本局身份">
-        <div className="tut-role you">
-          <span className="tut-role-tag">你</span>
-          <b>玩家 A（真人）</b>
-          <span className="muted">执红 · 每次轮到你时由你落子</span>
-        </div>
-        <span className="tut-vs">vs</span>
-        {roles.slice(1).map((r) => (
-          <div className="tut-role ai" key={r.seat}>
-            <span className="tut-role-tag">对手 · 玩家 {r.seat}</span>
-            <b>{r.detail.replace(`玩家 ${r.seat} · AI · `, 'AI · ')}</b>
-            <span className="muted">自动行动，与你使用同一套正式规则</span>
+        {roles.map((r) => (
+          <div key={r.seat} className={`tut-role ${r.role === '你' ? 'you' : 'ai'}`}>
+            <span className="tut-role-tag">
+              {r.role === '你' ? '你' : `对手`} · 玩家 {r.seat}
+            </span>
+            <b>{r.detail}</b>
+            <span className="muted">{r.role === '你' ? `执${SEAT_COLOR_NAME[r.seat]} · 每次轮到你时由你落子` : '自动行动，与你使用同一套正式规则'}</span>
           </div>
         ))}
-        <div className="tut-identity-note">两名 AI 对手在本局开始时随机搭配；重开教程会重新随机。</div>
+        <div className="tut-identity-note">真人座位与两名 AI 难度都在本局开始时随机确定；重开教程会重新随机。</div>
       </section>
 
       {round === 0 && (
@@ -725,8 +728,8 @@ function TutorialPage({
 
       {lastResult && <div className="notice info">{lastResult}</div>}
       <App
-        key={`tut-${round}-${pair[0]}-${pair[1]}`}
-        presetSeats={seats}
+        key={`tut-${round}-${assignmentKey}`}
+        presetSeats={assignment}
         hostTitle={`新手教学 ${round + 1}/${TUTORIAL_ROUNDS} · 1 真人 + 2 AI`}
         coach={coach}
         onGameEnd={handleEnd}
@@ -755,16 +758,80 @@ function LocalHost({ mode, user, onExit }: { mode: 'local' | 'vsai'; user: Publi
     return <VsAiPicker onStart={setCfg} onBack={onExit} />;
   }
 
+  if (mode === 'local' && !cfg) {
+    return <LocalSetup onStart={setCfg} onBack={onExit} />;
+  }
+
   const seats: SeatConfigs =
     cfg ?? { A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'human' } };
   const title = mode === 'local' ? '本地对局 Local Match' : 'Human vs AI · 人机对局';
   return (
     <App
-      key={mode === 'local' ? 'local' : `vsai-${JSON.stringify(cfg)}`}
+      key={mode === 'local' ? `local-${JSON.stringify(cfg)}` : `vsai-${JSON.stringify(cfg)}`}
       presetSeats={seats}
       hostTitle={title}
       onExit={onExit}
     />
+  );
+}
+
+/* ---------------- 本地对局设置（Guest 可用：A/B/C 每座选 真人/AI + AI 难度） ---------------- */
+function LocalSetup({ onStart, onBack }: { onStart: (s: SeatConfigs) => void; onBack: () => void }) {
+  const [draft, setDraft] = useState<LocalDraft>({
+    A: { kind: 'human' },
+    B: { kind: 'human' },
+    C: { kind: 'human' },
+  });
+  const humanCount = localHumanCount(draft);
+
+  const setKind = (p: Player, kind: 'human' | 'ai') => {
+    setDraft((d) => ({ ...d, [p]: kind === 'ai' ? { kind: 'ai', level: 'auto' } : { kind: 'human' } }));
+  };
+  const setLevel = (p: Player, level: AILevel | 'auto') => {
+    setDraft((d) => ({ ...d, [p]: { kind: 'ai', level } }));
+  };
+
+  const start = () => {
+    // 随机难度在 game initialization 时解析一次（此后稳定）
+    onStart(resolveLocalSeats(draft));
+  };
+
+  return (
+    <div className="pf-panel-wrap">
+      <div className="panel pf-panel local-setup">
+        <div className="panel-title">本地对局 · 座位与 AI 设置</div>
+        <p className="muted">无需账号即可开玩。为 A/B/C 三个座位选择真人或 AI；AI 难度可选随机或 1★–5★（随机在开局时确定）。</p>
+        {PLAYERS.map((p) => {
+          const d = draft[p];
+          const isAI = d.kind === 'ai';
+          return (
+            <div key={p} className={`seat-row ${isAI ? 'is-ai' : ''}`}>
+              <span className="seat-badge" style={{ backgroundColor: p === 'C' ? '#F1F3F6' : PLAYER_COLORS[p], color: p === 'C' ? '#333' : '#fff' }}>
+                {p}
+              </span>
+              <span className="seat-name">玩家 {p}</span>
+              <select className="seat-select" value={d.kind} onChange={(e) => setKind(p, e.target.value as 'human' | 'ai')}>
+                <option value="human">真人</option>
+                <option value="ai">AI</option>
+              </select>
+              {isAI && (
+                <select className="seat-select" value={d.level} onChange={(e) => setLevel(p, e.target.value as AILevel | 'auto')}>
+                  <option value="auto">随机</option>
+                  {AI_LEVELS.map((l) => (
+                    <option key={l} value={l}>AI {AI_LEVEL_STARS[l]}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          );
+        })}
+        <p className="muted">{humanCount === 0 ? '⚠️ 至少保留一名真人玩家。' : `${humanCount} 名真人 + ${3 - humanCount} 个 AI。`}</p>
+        <div className="btn-row">
+          <button className="btn ghost" onClick={onBack}>返回</button>
+          <button className="btn primary" disabled={humanCount === 0} onClick={start}>开始对局</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

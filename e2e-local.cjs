@@ -112,10 +112,13 @@ async function main() {
   let ready = false;
   for (let i = 0; i < 60 && !ready; i++) {
     await sleep(500);
-    try { ready = (await cdp.eval(`!!document.querySelector('.board .cell')`)) === true; } catch { /* noop */ }
+    try { ready = (await cdp.eval(`!!document.querySelector('.board .cell, .seat-row')`)) === true; } catch { /* noop */ }
   }
-  check('页面渲染出棋盘', ready);
+  check('页面渲染出棋盘/座位设置', ready);
   if (!ready) { proc.kill(); process.exit(1); }
+  // 本地对局先出现“座位与 AI 设置”屏：点击开始对局（默认三真人）进入棋盘
+  await cdp.eval(`(() => { const b=[...document.querySelectorAll('.btn')].find(x=>/开始对局/.test(x.textContent||'')); if(b) b.click(); return !!b; })()`);
+  await sleep(400);
 
   const getState = () => cdp.eval(`window.__tcf.getState()`);
   const statusText = () => cdp.eval(`document.querySelector('.statusbar').innerText`).then((t) => t.replace(/\s+/g, ' '));

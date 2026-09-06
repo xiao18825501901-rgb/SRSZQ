@@ -1,92 +1,119 @@
 import { describe, expect, it } from 'vitest';
-import { AI_LEVELS, type AILevel } from '../../../../shared/src/ai/types';
+import { mulberry32 } from '../../../../shared/src/ai/rng';
+import { AI_LEVELS } from '../../../../shared/src/ai/types';
+import { PLAYERS } from '../../../../shared/src/game/types';
 import {
-  HUMAN_SEAT,
-  aiDisplayName,
+  createTutorialAssignment,
+  humanSeatOf,
   isValidTutorialSeats,
-  sampleAiPair,
   tutorialRoleLines,
-  tutorialSeats,
 } from '../tutorialModel';
 
-/** 确定性 LCG（测试用 RNG，避免 flaky） */
-function lcg(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 0xffffffff;
-  };
-}
+const seeded = (seed: number) => {
+  const r = mulberry32(seed);
+  return () => r.next();
+};
 
-const allLevels = new Set<AILevel>(AI_LEVELS);
-
-describe('Tutorial session：exactly 3 players = 1 human(A) + 2 AI(B/C)', () => {
-  it('TEST4/5/6：座位恰好 3 名玩家：A 人类、B/C 为 AI', () => {
-    for (const seed of [1, 7, 42, 2024]) {
-      const seats = tutorialSeats(sampleAiPair(lcg(seed)));
+describe('Tutorial assignment：exactly 3 seats = 1 human + 2 AI（T1/T2/T3）', () => {
+  it('每次初始化都恰好 3 座、1 真人、2 AI', () => {
+    for (let s = 0; s < 40; s++) {
+      const seats = createTutorialAssignment(seeded(s));
       expect(Object.keys(seats)).toHaveLength(3);
-      expect(seats.A.kind).toBe('human');
-      expect(seats.B.kind).toBe('ai');
-      expect(seats.C.kind).toBe('ai');
+      const humans = PLAYERS.filter((p) => seats[p].kind === 'human');
+      const ais = PLAYERS.filter((p) => seats[p].kind === 'ai');
+      expect(humans).toHaveLength(1);
+      expect(ais).toHaveLength(2);
       expect(isValidTutorialSeats(seats)).toBe(true);
     }
   });
+});
 
-  it('TEST7：两个 AI 均来自真实 AI registry 且互不相同', () => {
-    for (let seed = 0; seed < 60; seed++) {
-      const [b, c] = sampleAiPair(lcg(seed));
-      expect(allLevels.has(b)).toBe(true);
-      expect(allLevels.has(c)).toBe(true);
-      expect(b).not.toBe(c);
-    }
-  });
-
-  it('TEST8：同一 session 随机结果在“重渲染”间稳定（无状态纯函数 + 一次性初始化语义）', () => {
-    const rand = lcg(99);
-    const first = sampleAiPair(rand);
-    // 重渲染 = 再次用同一 rand 序列会得到同一结果？不 —— 关键是 TutorialPage 只初始化一次。
-    // 这里验证：同一对 seats 重复构造/校验结果一致（幂等），身份行稳定。
-    const seats1 = tutorialSeats(first);
-    const seats2 = tutorialSeats(first);
-    expect(seats1).toEqual(seats2);
-    expect(tutorialRoleLines(first)).toEqual(tutorialRoleLines(first));
-  });
-
-  it('TEST9：重开教程（新初始化）产生新的随机选择路径；确定性 RNG 下分布均匀', () => {
+describe('Human seat 随机 A/B/C（T4/T5/T6）', () => {
+  it('确定性 RNG 强制覆盖 A、B、C 三条路径', () => {
     const seen = new Set<string>();
-    // 使用大间隔、去相关的 seed（避免小整数 seed 的 LCG 结构），证实覆盖全部 10 种无序对
-    for (let i = 0; i < 200; i++) {
-      const seed = (Math.imul(i + 1, 2654435761) >>> 0);
-      const [b, c] = sampleAiPair(lcg(seed));
-      seen.add([b, c].sort().join('|')); // 无序组合
-    }
-    expect(seen.size).toBe(10);
-    // 同一 seed 完全可复现（非 flaky）；相邻 seed 通常给出不同组合
-    expect(sampleAiPair(lcg(1234))).toEqual(sampleAiPair(lcg(1234)));
-    expect(sampleAiPair(lcg(1234))).not.toEqual(sampleAiPair(lcg(1235)));
-  });
-
-  it('TEST10/11：模型层约束 — 人类座位唯一（AI 不能替人类 / 人类不能控 AI 由引擎+控制器保证）', () => {
-    const seats = tutorialSeats(sampleAiPair(lcg(5)));
-    const humanSeats = (Object.keys(seats) as Array<keyof typeof seats>).filter((s) => seats[s].kind === 'human');
-    const aiSeats = (Object.keys(seats) as Array<keyof typeof seats>).filter((s) => seats[s].kind === 'ai');
-    expect(humanSeats).toEqual([HUMAN_SEAT]);
-    expect(aiSeats).toEqual(['B', 'C']);
+    for (let s = 0; s < 300; s++) seen.add(humanSeatOf(createTutorialAssignment(seeded(s))));
+    expect(seen).toEqual(new Set(['A', 'B', 'C']));
   });
 });
 
-describe('身份与文案', () => {
-  it('你=玩家 A（真人）；对手带真实 AI 名称与星级', () => {
-    const lines = tutorialRoleLines(['selfish', 'maxn']);
-    expect(lines[0]).toMatchObject({ seat: 'A', role: '你', detail: '玩家 A（真人）' });
-    expect(lines[1].detail).toContain('玩家 B · AI · Selfish');
-    expect(lines[2].detail).toContain('玩家 C · AI · MaxN');
-    expect(aiDisplayName('3ply')).toContain('3-Ply');
+describe('AI difficulty 初始化随机（T7/T8/T9/T10）', () => {
+  it('两个 AI 难度来自真实 registry、可不同也可相同', () => {
+    let anyEqual = false;
+    const seen = new Set<string>();
+    for (let s = 0; s < 200; s++) {
+      const seats = createTutorialAssignment(seeded(s));
+      const levels = PLAYERS.filter((p) => seats[p].kind === 'ai').map((p) => seats[p].level!);
+      expect(levels).toHaveLength(2);
+      levels.forEach((l) => expect(AI_LEVELS.includes(l)).toBe(true));
+      seen.add(levels.join('|'));
+      if (levels[0] === levels[1]) anyEqual = true;
+    }
+    expect(seen.size).toBeGreaterThan(1);
+    expect(anyEqual).toBe(true);
+  });
+});
+
+describe('Session immutability（T11/T12）', () => {
+  it('T11：同一 session 重渲染不改变 assignment（初始化一次、结果幂等）', () => {
+    const rng = seeded(123);
+    const a = createTutorialAssignment(rng);
+    // 后续 rerender 不使用新随机源重新调用；同一 assignment 序列化稳定
+    expect(tutorialRoleLines(a)).toEqual(tutorialRoleLines(a));
   });
 
-  it('非法座位组合被拒绝（如 2 人类 / 双 AI 同档）', () => {
-    expect(isValidTutorialSeats({ A: { kind: 'human' }, B: { kind: 'ai', level: 'random' }, C: { kind: 'ai', level: 'random' } })).toBe(false);
+  it('T12：restart（重新初始化）使用下一段 RNG 序列产生新 assignment', () => {
+    const rng = seeded(777);
+    const first = createTutorialAssignment(rng);
+    const second = createTutorialAssignment(rng);
+    // 同一随机序列推进后，两次初始化不会总是完全相同
+    expect(JSON.stringify(first)).not.toBe(JSON.stringify(second));
+  });
+});
+
+describe('Human=B / Human=C turn flow（T13/T14）', () => {
+  it('T13：Human=B 时 A 座为 AI（A 先自动行动）', () => {
+    for (let s = 0; s < 400; s++) {
+      const seats = createTutorialAssignment(seeded(s));
+      if (humanSeatOf(seats) === 'B') {
+        expect(seats.A.kind).toBe('ai');
+        expect(seats.B.kind).toBe('human');
+        expect(seats.C.kind).toBe('ai');
+        return;
+      }
+    }
+    throw new Error('未采样到 Human=B 用例');
+  });
+
+  it('T14：Human=C 时 A、B 均为 AI（A+B 先自动行动，再轮到 C）', () => {
+    for (let s = 0; s < 400; s++) {
+      const seats = createTutorialAssignment(seeded(s));
+      if (humanSeatOf(seats) === 'C') {
+        expect(seats.A.kind).toBe('ai');
+        expect(seats.B.kind).toBe('ai');
+        expect(seats.C.kind).toBe('human');
+        return;
+      }
+    }
+    throw new Error('未采样到 Human=C 用例');
+  });
+});
+
+describe('教程身份行：按 A/B/C 真实顺序、不把用户挪第一行', () => {
+  it('身份行顺序恒为 A→B→C，且只有真人座标记为「你」', () => {
+    for (let s = 0; s < 30; s++) {
+      const seats = createTutorialAssignment(seeded(s));
+      const roles = tutorialRoleLines(seats);
+      expect(roles.map((r) => r.seat)).toEqual(['A', 'B', 'C']);
+      expect(roles.filter((r) => r.role === '你')).toHaveLength(1);
+      const you = roles.find((r) => r.role === '你')!;
+      expect(seats[you.seat].kind).toBe('human');
+      expect(you.detail).toContain('（真人）');
+    }
+  });
+
+  it('非法座位组合被拒绝', () => {
     expect(isValidTutorialSeats({ A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'ai', level: 'random' } })).toBe(false);
-    expect(isValidTutorialSeats({ A: { kind: 'ai', level: 'random' }, B: { kind: 'ai', level: 'tactical' }, C: { kind: 'human' } })).toBe(false);
+    expect(isValidTutorialSeats({ A: { kind: 'human' }, B: { kind: 'ai', level: 'random' }, C: { kind: 'ai', level: 'random' } })).toBe(true);
+    expect(isValidTutorialSeats({ A: { kind: 'ai', level: 'random' }, B: { kind: 'ai', level: 'random' }, C: { kind: 'ai', level: 'random' } })).toBe(false);
   });
 });

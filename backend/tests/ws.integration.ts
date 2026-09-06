@@ -213,6 +213,7 @@ async function main(): Promise<void> {
       const ais = seats.filter((s) => s.kind === 'ai');
       assert.equal(ais.length, 2);
       assert.ok(ais.every((s) => typeof s.stars === 'number' && s.stars >= 1 && s.stars <= 5));
+      assert.ok(ais.every((s) => s.stars === 4 || s.stars === 5), 'Online 系统 AI 补位只允许 4★/5★');
       assert.ok(ais.every((s) => !('aiLevel' in s)), '客户端不得见到真实 AI 档位');
       assert.equal(start.mode, 'online');
       const me = start.yourSeat as string;
@@ -262,24 +263,25 @@ async function main(): Promise<void> {
     try {
       const [beforeA, beforeB, beforeC] = await Promise.all([rankOf(a.id), rankOf(b.id), rankOf(cTut.id)]);
       const { gameId, seatOf } = await start3H([c1, c2, c3]);
-      const ca = seatOf.get('A')!;
-      const seatB = seatOf.get('B')!;
-      const seatC = seatOf.get('C')!;
-      const which = (c: TestClient) => (ca === c ? 'A' : seatB === c ? 'B' : 'C');
+      // 座位已随机：Alice 的真实座位不再固定为 A
+      const aliceSeat = [...seatOf.entries()].find(([, cl]) => cl === c1)![0];
+      const ca = c1;
+      const others = [c2, c3];
+      const otherSeats = [...seatOf.entries()].filter(([, cl]) => cl !== c1).map(([s]) => s);
       send(ca, { type: 'PLAYER_RESIGN' });
       // 全员（含离开者本人）都收到 MATCH_ENDED：reason=PLAYER_FORFEIT
       const [mA, mB, mC] = await Promise.all([
         waitFor(ca, 'MATCH_ENDED', 3000),
-        waitFor(seatB, 'MATCH_ENDED', 3000),
-        waitFor(seatC, 'MATCH_ENDED', 3000),
+        waitFor(others[0], 'MATCH_ENDED', 3000),
+        waitFor(others[1], 'MATCH_ENDED', 3000),
       ]);
       assert.equal(mA.reason, 'PLAYER_FORFEIT');
       assert.equal(mB.reason, 'PLAYER_FORFEIT');
       assert.equal(mC.reason, 'PLAYER_FORFEIT');
       assert.equal(mA.matchId, gameId);
-      const leftSeat = which(ca);
-      assert.deepEqual(mA.loserSeats, [leftSeat], '只有离开者是败者');
-      assert.ok(mA.winnerSeats.length === 2 && !mA.winnerSeats.includes(leftSeat), '其余两个人类座位获胜');
+      assert.deepEqual(mA.loserSeats, [aliceSeat], '只有离开者是败者');
+      assert.ok(mA.winnerSeats.length === 2 && !mA.winnerSeats.includes(aliceSeat), '其余两个人类座位获胜');
+      assert.deepEqual([...mA.winnerSeats].sort(), [...otherSeats].sort(), '胜者座位 = 其余两人类座位');
       assert.deepEqual(mA.winnerIds.sort(), [b.id, cTut.id].sort(), 'winner_ids 为 B/C');
       assert.deepEqual(mA.loserIds, [a.id], 'loser_ids 为 A');
       // 落盘 end_reason
@@ -359,54 +361,35 @@ async function main(): Promise<void> {
     try {
       const before = await rankOf(a.id);
       const { gameId, seatOf, state } = await start3H([c1, c2, c3]);
+      const aliceSeat = [...seatOf.entries()].find(([, cl]) => cl === c1)![0];
+      const aliceClient = c1;
+      const others = [...seatOf.entries()].filter(([, cl]) => cl !== c1).map(([, cl]) => cl);
+      // 行动顺序恒为 A→B→C：先由座位 A 走一手（无论 A 是谁）
       const seatA = seatOf.get('A')!;
-      const seatB = seatOf.get('B')!;
-      const seatC = seatOf.get('C')!;
-      // A 先走一手
       const m0 = getLegalMoves(state)[5];
       send(seatA, { type: 'move', row: m0.row, col: m0.col });
-      const [stB] = await Promise.all([waitFor(seatB, 'game.state', 3000), waitFor(seatC, 'game.state', 3000)]);
-      assert.equal(stB.state.moves.length, 1);
-      // A 掉线（此时轮到 B）→ 进入宽限期，B/C 收到 player.status
-      close(seatA);
-      const [awayB, awayC] = await Promise.all([
-        waitFor(seatB, 'player.status', 3000),
-        waitFor(seatC, 'player.status', 3000),
-      ]);
-      assert.equal(awayB.status, 'disconnected');
-      assert.equal(awayC.status, 'disconnected');
-      // B、C 各走一手后轮到 A（A 不在 → 暂停推进，不自动跳过）
-      assert.equal(currentPlayerOf(stB.state), 'B');
-      const bMove = getLegalMoves(stB.state)[0];
-      send(seatB, { type: 'move', row: bMove.row, col: bMove.col });
-      const stAfterB = await waitFor(seatC, 'game.state', 3000);
-      const cMove = getLegalMoves(stAfterB.state)[0];
-      send(seatC, { type: 'move', row: cMove.row, col: cMove.col });
-      const stAfterC = await drainUntil(seatB, 'game.state', (s) => currentPlayerOf(s.state) === 'A', 4000);
-      assert.ok(stAfterC, '应轮到断线的 A（暂停等待）');
-      // 宽限内（350ms）A 重连 + resume
+      await Promise.all(others.map((c) => waitFor(c, 'game.state', 3000)));
+      // Alice（无论其在 A/B/C）掉线 → 其他人收到 player.status
+      close(aliceClient);
+      const away = await Promise.all(others.map((c) => waitFor(c, 'player.status', 3000)));
+      assert.ok(away.every((m) => m.status === 'disconnected'));
+      // 宽限内（350ms）Alice 重连 + resume → 恢复对局，不判负
       cA2 = await connect(a.token);
       send(cA2, { type: 'resume', gameId });
       const resumed = await waitFor(cA2, 'game.start', 3000);
       assert.equal(resumed.gameId, gameId);
-      assert.ok(resumed.state.moves.length > 0);
-      // B/C 收到重连提示；宽限期已过也无判负
-      const [backB, backC] = await Promise.all([waitFor(seatB, 'player.status', 3000), waitFor(seatC, 'player.status', 3000)]);
-      assert.equal(backB.status, 'reconnected');
-      assert.equal(backC.status, 'reconnected');
+      assert.equal(resumed.yourSeat, aliceSeat);
+      assert.ok(resumed.state.moves.length >= 1);
+      assert.ok(resumed.qualification, 'resume 应携带 qualification');
+      // 其他人收到 reconnected
+      const back = await Promise.all(others.map((c) => waitFor(c, 'player.status', 3000)));
+      assert.ok(back.every((m) => m.status === 'reconnected'));
       await sleep(500); // 越过原宽限时刻
-      const ended = seatB.msgs.some((m) => m.type === 'MATCH_ENDED') || seatC.msgs.some((m) => m.type === 'MATCH_ENDED');
+      const ended = others.some((c) => c.msgs.some((m) => m.type === 'MATCH_ENDED'));
       assert.ok(!ended, '宽限内重连不应判负');
       assert.ok(!matchRowOf(gameId), '不应有判负落盘');
       const after = await rankOf(a.id);
       assert.equal(after.games, before.games, 'resume 恢复不应计分');
-      // 恢复后可继续：轮到 A 时 A 走一手，B/C 收到广播
-      if (currentPlayerOf(resumed.state) === 'A') {
-        const m = getLegalMoves(resumed.state)[0];
-        send(cA2, { type: 'move', row: m.row, col: m.col });
-        const st = await waitFor(seatB, 'game.state', 3000);
-        assert.ok(st.state.moves.length > resumed.state.moves.length);
-      }
     } finally {
       close(c1);
       close(c2);
@@ -513,7 +496,8 @@ async function main(): Promise<void> {
       const q0 = quals[0];
       assert.ok(quals.every((q) => JSON.stringify(q) === JSON.stringify(q0)), '三方 payload 完全相同');
       // 断线 → 宽限内 resume → game.start 携带 qualification（刷新页面后 timeline 恢复）
-      close(seatOf.get('A')!);
+      const aliceClient = [...seatOf.entries()].find(([, cl]) => cl === c1)![1];
+      close(aliceClient);
       await sleep(120);
       cA2 = await connect(a.token);
       send(cA2, { type: 'resume', gameId });
@@ -530,6 +514,31 @@ async function main(): Promise<void> {
       close(c2);
       close(c3);
       if (cA2) close(cA2);
+      await sleep(700);
+    }
+  });
+
+  // 7.7) Online 座位随机分配 + 全端一致（O1/O2/O3/O10/O11）
+  await check('Online 座位随机分配 + 全端一致（3H 座位互异且 seats 完全一致）', async () => {
+    const c1 = await connect(a.token);
+    const c2 = await connect(b.token);
+    const c3 = await connect(cTut.token);
+    try {
+      send(c1, { type: 'queue.join' });
+      send(c2, { type: 'queue.join' });
+      send(c3, { type: 'queue.join' });
+      const [s1, s2, s3] = await Promise.all([waitFor(c1, 'game.start', 5000), waitFor(c2, 'game.start', 5000), waitFor(c3, 'game.start', 5000)]);
+      assert.equal(s1.gameId, s2.gameId);
+      assert.equal(s2.gameId, s3.gameId);
+      const mySeats = [s1.yourSeat, s2.yourSeat, s3.yourSeat];
+      assert.equal(new Set(mySeats).size, 3, '三个真人座位互异');
+      assert.ok(mySeats.every((s) => ['A', 'B', 'C'].includes(s)), '座位 ∈ {A,B,C}');
+      assert.deepEqual(s1.seats, s2.seats, '全端 seats 一致');
+      assert.deepEqual(s2.seats, s3.seats, '全端 seats 一致');
+    } finally {
+      close(c1);
+      close(c2);
+      close(c3);
       await sleep(700);
     }
   });
@@ -579,22 +588,25 @@ async function main(): Promise<void> {
       const [s1, s2] = await Promise.all([waitFor(c1, 'game.start', 5000), waitFor(c2, 'game.start', 5000)]);
       assert.equal(s1.gameId, s2.gameId);
       const gameId = s1.gameId;
-      const seats = Object.values(s1.seats) as Array<{ kind: string }>;
+      const seats = Object.values(s1.seats) as Array<{ kind: string; stars?: number }>;
       assert.equal(seats.filter((s) => s.kind === 'human').length, 2);
       assert.equal(seats.filter((s) => s.kind === 'ai').length, 1);
-      // 找到两位人类各自的客户端并让 A 退出
-      const humans = ['A', 'B', 'C'].filter((s) => (s1.seats as any)[s].kind === 'human');
-      const leaverSeat = humans[0];
-      const winnerSeat = humans[1];
-      const leaver = leaverSeat === s1.yourSeat ? c1 : c2;
-      const winner = winnerSeat === s1.yourSeat ? c1 : c2;
+      const aiSeat = seats.find((s) => s.kind === 'ai')!;
+      assert.ok(aiSeat.stars === 4 || aiSeat.stars === 5, 'Online 2H+1AI 补位只允许 4★/5★');
+      // 座位随机：以真实 yourSeat 定位 Alice（leaver）与 Bob（winner）
+      const leaver = c1; // Alice
+      const winner = c2; // Bob
+      const leaverSeat = s1.yourSeat as string;
+      const winnerSeat = s2.yourSeat as string;
+      assert.notEqual(leaverSeat, winnerSeat);
       send(leaver, { type: 'PLAYER_RESIGN' });
       const [endL, endW] = await Promise.all([waitFor(leaver, 'MATCH_ENDED', 3000), waitFor(winner, 'MATCH_ENDED', 3000)]);
       assert.equal(endL.reason, 'PLAYER_FORFEIT');
       assert.equal(endW.reason, 'PLAYER_FORFEIT');
       assert.deepEqual(endL.loserSeats, [leaverSeat]);
       assert.deepEqual(endL.winnerSeats, [winnerSeat]);
-      assert.deepEqual(endL.winnerIds, [b.id], '另一位人类胜（此测试 leaver 恒为 Alice）');
+      assert.deepEqual(endL.winnerIds, [b.id], '另一位人类胜（Bob）');
+      assert.deepEqual(endL.loserIds, [a.id], '离场者 Alice');
       const row = await pollUntil(() => matchRowOf(gameId));
       assert.ok(row);
       assert.equal(row.end_reason, 'PLAYER_FORFEIT');

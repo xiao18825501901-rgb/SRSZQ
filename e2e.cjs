@@ -105,6 +105,19 @@ async function main() {
   await goto('/');
   await sleep(400);
 
+  // 1c) Guest 本地局：未登录可直接进入本地对局设置（不跳登录、不弹“请先登录”）
+  await goto('/local');
+  await sleep(800);
+  txt = await bodyText();
+  check('Guest 可直接进入本地对局设置（Human/AI 配置 + 开始对局）', txt.includes('本地对局') && txt.includes('座位与 AI 设置') && txt.includes('开始对局') && !txt.includes('请先登录'), txt.slice(0, 170));
+  // 选择 B=AI → 难度下拉出现（随机 + 1★–5★）
+  await cdp.eval(`(() => { const rows=[...document.querySelectorAll('.local-setup .seat-row')]; const sel=rows[1].querySelector('select'); const set=Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype,'value').set; set.call(sel,'ai'); sel.dispatchEvent(new Event('change',{bubbles:true})); return true; })()`);
+  await sleep(400);
+  const diffOpts = await cdp.eval(`[...document.querySelectorAll('.local-setup .seat-row')[1].querySelectorAll('select')[1].options].map(o=>o.textContent).join('|')`);
+  check('Local AI 难度下拉（随机 + 1★–5★）', diffOpts.includes('随机') && diffOpts.includes('AI ★') && diffOpts.includes('AI ★★★★★'), diffOpts);
+  await goto('/');
+  await sleep(400);
+
   // 2) 注册
   await goto('/auth');
   await sleep(300);
@@ -117,9 +130,11 @@ async function main() {
   await sleep(3200);
   txt = await bodyText();
   check('新用户注册后进入教学（门禁）', txt.includes('新手教学') || txt.includes('与 AI 练习'), txt.slice(0, 150));
-  // 新教程 = 1 真人(A) + 2 AI(B/C)，AI 来自真实 registry 且互不相同（身份栏显示真实档位名）
+  // 教程 = 1 真人（随机 A/B/C）+ 2 AI（各自随机难度，来自真实 registry，可相同）
+  const humanSeatMatch = txt.match(/玩家 ([ABC])（真人）/);
+  const aiLines = (txt.match(/玩家 [ABC] · AI · /g) || []);
   const tutAi = (txt.match(/(Random|Tactical|Selfish|3-Ply|MaxN)/g) || []);
-  check('教程身份：1 真人(A) + 2 随机 AI（真实 registry、互不相同）', txt.includes('玩家 A（真人）') && txt.includes('对手 · 玩家 B') && txt.includes('对手 · 玩家 C') && new Set(tutAi).size === 2, `${txt.slice(0, 160)} | ai=${[...new Set(tutAi)].join(',')}`);
+  check('教程身份：随机 1 真人（A/B/C 之一）+ 2 AI', !!humanSeatMatch && aiLines.length === 2 && tutAi.length >= 2, `${txt.slice(0, 170)} | human=${humanSeatMatch?.[1]}`);
   check('教程页规则速览可展开（胜权一句话）', txt.includes('规则速览') && txt.includes('胜权'), '');
 
   // 3) 未完成教学不能进大厅/在线
@@ -132,16 +147,16 @@ async function main() {
   txt = await bodyText();
   check('未完成教学访问在线被重定向', txt.includes('新手教学'), txt.slice(0, 120));
 
-  // 3b) 教学首局可玩：人类落子 → 隐藏 AI 自动应手（仅 ★）
-  await cdp.eval(`(() => { const el=document.querySelector('.cell.legal'); if(el) el.click(); return true; })()`);
+  // 3b) 教学首局可玩：真人（A/B/C 任一）落子 → AI 自动应手（仅 ★）
   const tt0 = Date.now();
   let tLines = 0;
-  while (Date.now() - tt0 < 12000) {
+  while (Date.now() - tt0 < 20000) {
+    await cdp.eval(`(() => { const el=document.querySelector('.cell.legal'); if(el) el.click(); return true; })()`);
     tLines = await cdp.eval(`document.querySelectorAll('.history-line').length`);
     if (tLines >= 2) break;
-    await sleep(150);
+    await sleep(200);
   }
-  check('教学首局 AI 自动应手（★ 隐藏档位）', tLines >= 2, `lines=${tLines}`);
+  check('教学首局 AI 自动应手（真人任意座）', tLines >= 2, `lines=${tLines}`);
   const tutCards = await cdp.eval(`[...document.querySelectorAll('.players-row .player-card')].map(c=>c.innerText.replace(/\\s+/g,' '))`);
   const aiCard = tutCards.find((c) => c.includes('🤖 AI'));
   check('教学 AI 座位为 ★ 显示', !!aiCard && /AI · ★+/.test(aiCard ?? '') && !/Random|Tactical|Selfish/.test(aiCard ?? ''), (aiCard ?? '').slice(0, 60));
@@ -320,11 +335,14 @@ async function main() {
   }
   proc2.kill();
 
-  // 7) 本地对局（#/local）渲染并走一手
+  // 7) 本地对局（#/local）设置屏 → 默认三真人开局并走一手
   await goto('/local');
   await sleep(600);
+  const setupSeen = (await bodyText()).includes('座位与 AI 设置');
+  await click('button', '开始对局');
+  await sleep(700);
   const cells = await cdp.eval(`document.querySelectorAll('.board .cell').length`);
-  check('Local Match 渲染 13×13 棋盘', cells === 169, `cells=${cells}`);
+  check('Local Match 设置屏出现并开局（13×13）', setupSeen === true && cells === 169, `setup=${setupSeen} cells=${cells}`);
   const legalClick = await cdp.eval(`(() => { const el=document.querySelector('.cell.legal'); if(!el) return false; el.click(); return true; })()`);
   await sleep(300);
   const st = await cdp.eval(`(() => {
