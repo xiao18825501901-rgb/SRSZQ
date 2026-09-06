@@ -49,9 +49,11 @@ if (process.argv.includes('--persistence')) {
   assert.equal(registered.status, 201);
   const userId = registered.body.user.id;
   assert.equal((await request('/api/me', undefined, registered.body.token)).body.user.id, userId);
+  const loginBody = { account: account.email, password: account.password };
+  assert.equal((await request('/api/login', loginBody)).status, 200);
   execFileSync('pm2', ['restart', 'srszq-backend'], { stdio: 'ignore' });
   await ready();
-  const loggedIn = await request('/api/login', { email: account.email, password: account.password });
+  const loggedIn = await request('/api/login', loginBody);
   assert.equal(loggedIn.status, 200);
   assert.equal(loggedIn.body.user.id, userId);
   // The original session must also persist across the process restart.
