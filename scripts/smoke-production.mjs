@@ -64,7 +64,7 @@ try {
 }
 console.log(`DB PASS: ${databasePath} is readable and passes quick_check`);
 
-execFileSync('nginx', ['-t'], { stdio: 'ignore' });
+execFileSync('sudo', ['-n', 'nginx', '-t'], { stdio: 'ignore' });
 const nginxResponse = await fetch(nginxUrl + '/', {
   headers: { Host: 'api.srszq.com' },
   signal: AbortSignal.timeout(5000),
