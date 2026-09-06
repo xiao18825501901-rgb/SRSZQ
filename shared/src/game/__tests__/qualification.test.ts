@@ -6,7 +6,7 @@ import {
   qualificationFromState,
   qualificationOf,
 } from '../qualification';
-import type { Player } from '../types';
+
 
 describe('qualificationOf：BAC 资格时间线窗口（单一数据源，规则复用 eligibility）', () => {
   it('Round 1：无人拥有胜权，upcoming 完整覆盖 R2–R9', () => {
