@@ -6,6 +6,8 @@ import { WebSocket } from 'ws';
 
 const base = process.env.SRSZQ_API_URL ?? 'http://127.0.0.1:8080';
 const nginxUrl = process.env.SRSZQ_NGINX_URL ?? 'http://127.0.0.1:9080';
+const wsUrl = process.env.SRSZQ_WS_URL ?? 'ws://127.0.0.1:8081/ws';
+const wsHost = process.env.SRSZQ_WS_HOST;
 const databasePath = process.env.SRSZQ_DB_PATH ?? '/var/www/SRSZQ/data/srszq.sqlite';
 async function request(path, body, token) {
   const res = await fetch(base + path, {
@@ -32,7 +34,10 @@ async function ready() {
 await ready();
 console.log('API PASS: loopback API returned the expected JSON response');
 await new Promise((resolve, reject) => {
-  const ws = new WebSocket('ws://127.0.0.1:8081/ws', { handshakeTimeout: 5000 });
+  const ws = new WebSocket(wsUrl, {
+    handshakeTimeout: 5000,
+    ...(wsHost ? { headers: { Host: wsHost } } : {}),
+  });
   const timer = setTimeout(() => { ws.terminate(); reject(Error('WS timeout')); }, 7000);
   ws.on('error', error => { clearTimeout(timer); reject(error); });
   ws.on('message', raw => {
@@ -43,7 +48,7 @@ await new Promise((resolve, reject) => {
     } catch (error) { clearTimeout(timer); ws.terminate(); reject(error); }
   });
 });
-console.log('WS PASS: loopback WebSocket upgraded and rejected an unauthenticated client');
+console.log(`WS PASS: ${wsUrl} upgraded and rejected an unauthenticated client`);
 
 const processes = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
 const backend = processes.find(process => process.name === 'srszq-backend');

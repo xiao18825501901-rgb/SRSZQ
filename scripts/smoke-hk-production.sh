@@ -18,25 +18,7 @@ echo | openssl s_client -servername "$api_host" -connect "$api_host:443" 2>/dev/
 echo 'CERTIFICATE PASS: valid for more than seven days'
 
 cd "$repo"
-SRSZQ_API_URL="https://$api_host" node scripts/smoke-production.mjs
-
-node --input-type=module <<'NODE'
-import assert from 'node:assert/strict';
-import { WebSocket } from 'ws';
-const host = process.env.SRSZQ_API_HOST ?? 'api.srszq.com';
-await new Promise((resolve, reject) => {
-  const ws = new WebSocket(`wss://${host}/ws`, { handshakeTimeout: 10000 });
-  const timer = setTimeout(() => { ws.terminate(); reject(Error('WSS timeout')); }, 12000);
-  ws.on('error', (error) => { clearTimeout(timer); reject(error); });
-  ws.on('message', (raw) => {
-    try {
-      assert.equal(JSON.parse(String(raw)).error, 'unauthorized');
-      clearTimeout(timer); ws.close(); resolve();
-    } catch (error) { clearTimeout(timer); ws.terminate(); reject(error); }
-  });
-});
-NODE
-echo 'WSS PASS: public TLS upgrade reached the application'
+SRSZQ_API_URL="https://$api_host" SRSZQ_WS_URL="wss://$api_host/ws" node scripts/smoke-production.mjs
 
 test "$(sqlite3 "$database" 'PRAGMA integrity_check;')" = ok
 echo 'DATABASE PASS: integrity_check=ok'
