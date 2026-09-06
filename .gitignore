@@ -1,9 +1,17 @@
-node_modules/
+﻿node_modules/
 dist/
 *.log
 
-# SRSZQ backend local data & secrets
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime databases
+data/
 backend/data/
 *.sqlite
-.env
-.env.local
+*.sqlite-wal
+*.sqlite-shm
