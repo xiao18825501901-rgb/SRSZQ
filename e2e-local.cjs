@@ -1,11 +1,12 @@
 // SRSZQ.com 正式规则 v2 — 浏览器 E2E（headless Edge + CDP 真实点击）
-// 运行：node e2e.cjs （要求 dev server 已在 127.0.0.1:5173 运行）
+// 运行：node e2e-local.cjs（默认使用 127.0.0.1:5173；可用 SRSZQ_LOCAL_E2E_URL 指向已部署环境）
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const URL = 'http://127.0.0.1:5173/?debug=1#/local';
+const TEST_URL = process.env.SRSZQ_LOCAL_E2E_URL ?? 'http://127.0.0.1:5173/?debug=1#/local';
+const TARGET_ORIGIN = new URL(TEST_URL).origin;
 const PORT = 9333;
 const EDGE = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 
@@ -85,7 +86,7 @@ async function main() {
     '--headless=new', '--disable-gpu', '--disable-extensions', '--no-first-run',
     '--no-default-browser-check', '--remote-allow-origins=*',
     `--remote-debugging-port=${PORT}`, `--user-data-dir=${profile}`,
-    '--window-size=1600,1000', URL,
+    '--window-size=1600,1000', TEST_URL,
   ], { stdio: 'ignore' });
 
   let wsUrl = null;
@@ -93,7 +94,7 @@ async function main() {
     await sleep(500);
     try {
       const list = await getJson(`http://127.0.0.1:${PORT}/json/list`);
-      const page = list.find((t) => t.type === 'page' && (t.url.includes('5173') || t.url === 'about:blank'));
+      const page = list.find((t) => t.type === 'page' && (t.url.startsWith(TARGET_ORIGIN) || t.url === 'about:blank'));
       if (page) wsUrl = page.webSocketDebuggerUrl;
     } catch { /* not ready */ }
   }

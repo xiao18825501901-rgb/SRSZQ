@@ -1,11 +1,14 @@
 // SRSZQ.com 平台 E2E（headless Edge + CDP）：Landing / 注册登录 / 教学门禁 / 大厅 /
-// 排行 / 好友 / 本地对局 / 在线排队。要求：frontend 5173 + backend 8080/8081 运行中。
+// 排行 / 好友 / 本地对局 / 在线排队。默认要求本地 frontend 5173 + backend 8080/8081，
+// 也可通过 SRSZQ_FRONTEND_URL / SRSZQ_API_URL 验收已部署环境。
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const FRONT = 'http://127.0.0.1:5173';
+const FRONT = process.env.SRSZQ_FRONTEND_URL ?? 'http://127.0.0.1:5173';
+const API = process.env.SRSZQ_API_URL ?? 'http://127.0.0.1:8080';
+const FRONT_ORIGIN = new URL(FRONT).origin;
 const PORT = 9333;
 const EDGE = process.env.EDGE_PATH || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 let failures = 0;
@@ -62,7 +65,7 @@ async function main() {
     await sleep(400);
     try {
       const list = await getJson(`http://127.0.0.1:${PORT}/json/list`);
-      const page = list.find((t) => t.type === 'page' && t.url.includes('5173'));
+      const page = list.find((t) => t.type === 'page' && t.url.startsWith(FRONT_ORIGIN));
       if (page) wsUrl = page.webSocketDebuggerUrl;
     } catch { /* noop */ }
   }
@@ -136,10 +139,12 @@ async function main() {
   // 4) 直接调用后端完成教学 → 重载同步会话 → 大厅解锁
   await cdp.eval(`(async () => {
     const t = localStorage.getItem('srszq_token');
-    await fetch('http://127.0.0.1:8080/api/tutorial/complete', { method: 'POST', headers: { Authorization: 'Bearer ' + t } });
+    await fetch(${JSON.stringify(API + '/api/tutorial/complete')}, { method: 'POST', headers: { Authorization: 'Bearer ' + t } });
   })()`);
   await cdp.eval(`location.reload()`);
   await sleep(1500);
+  await click('button', '进入大厅');
+  await sleep(500);
   await goto('/lobby');
   await sleep(600);
   txt = await bodyText();
@@ -187,7 +192,7 @@ async function main() {
   const email2 = `e2e2${suffix}@test.com`;
   const name2 = `Bob${suffix}`;
   await cdp.eval(`(async () => {
-    await fetch('http://127.0.0.1:8080/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: '${email2}', username: '${name2}', password: 'secret1' }) });
+    await fetch(${JSON.stringify(API + '/api/register')}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: '${email2}', username: '${name2}', password: 'secret1' }) });
   })()`);
   await goto('/friends');
   await sleep(400);
@@ -199,7 +204,7 @@ async function main() {
 
   // 6b) 双浏览器：Bob 在好友页接受邀请 → 双方自动进入对局（2H+1AI，AI 补位）
   const PORT2 = 9334;
-  const loginBob = await fetch('http://127.0.0.1:8080/api/login', {
+  const loginBob = await fetch(`${API}/api/login`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ account: name2, password: 'secret1' }),
   });
   const bobAuth = await loginBob.json();
@@ -214,7 +219,7 @@ async function main() {
     await sleep(400);
     try {
       const list = await getJson(`http://127.0.0.1:${PORT2}/json/list`);
-      const page = list.find((t) => t.type === 'page' && t.url.includes('5173'));
+      const page = list.find((t) => t.type === 'page' && t.url.startsWith(FRONT_ORIGIN));
       if (page) wsUrl2 = page.webSocketDebuggerUrl;
     } catch { /* noop */ }
   }
@@ -231,7 +236,7 @@ async function main() {
     for (let i = 0; i < 40 && !ready2; i++) {
       await sleep(300);
       try {
-        ready2 = (await cdp2.eval(`location.origin === 'http://127.0.0.1:5173' && document.readyState === 'complete'`)) === true;
+        ready2 = (await cdp2.eval(`location.origin === ${JSON.stringify(FRONT_ORIGIN)} && document.readyState === 'complete'`)) === true;
       } catch { /* noop */ }
     }
     check('Bob 浏览器页面就绪', ready2);
