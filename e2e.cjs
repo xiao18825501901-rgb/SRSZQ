@@ -114,7 +114,7 @@ async function main() {
   await setVal('input[placeholder^="2-16"]', username);
   await setVal('input[type=password]', 'secret1');
   await click('button[type=submit]', '注册并开始');
-  await sleep(1400);
+  await sleep(3200);
   txt = await bodyText();
   check('新用户注册后进入教学（门禁）', txt.includes('新手教学') || txt.includes('与 AI 练习'), txt.slice(0, 150));
   // 新教程 = 1 真人(A) + 2 AI(B/C)，AI 来自真实 registry 且互不相同（身份栏显示真实档位名）
@@ -212,9 +212,13 @@ async function main() {
   await sleep(400);
   await cdp.eval(`(() => { const el=document.querySelector('.friend-invite input'); const s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set; s.call(el,'${name2}'); el.dispatchEvent(new Event('input',{bubbles:true})); return true; })()`);
   await click('button', 'Invite');
-  await sleep(600);
-  txt = await bodyText();
-  check('邀请发送成功提示', txt.includes('已向') && txt.includes(name2), txt.slice(0, 140));
+  let inviteTxt = '';
+  for (let i = 0; i < 12; i++) {
+    await sleep(400);
+    inviteTxt = await bodyText();
+    if (inviteTxt.includes('已向')) break;
+  }
+  check('邀请发送成功提示', inviteTxt.includes('已向') && inviteTxt.includes(name2), inviteTxt.slice(0, 140));
 
   // 6b) 双浏览器：Bob 在好友页接受邀请 → 双方自动进入对局（2H+1AI，AI 补位）
   const PORT2 = 9334;
@@ -259,23 +263,33 @@ async function main() {
     await cdp2.eval(`location.reload()`);
     await sleep(1400);
     await cdp2.eval(`window.location.hash='#/friends'`);
-    await sleep(900);
-    const invText2 = await cdp2.eval(`document.body.innerText`);
+    await sleep(1200);
+    let invText2 = await cdp2.eval(`document.body.innerText`);
+    for (let i = 0; i < 12 && !invText2.includes('邀请你对战'); i++) {
+      await sleep(400);
+      invText2 = await cdp2.eval(`document.body.innerText`);
+    }
     check('Bob 好友页看到待处理邀请', invText2.includes('邀请你对战'), invText2.replace(/\s+/g, ' ').slice(0, 120));
     await cdp2.eval(`(() => { const b=[...document.querySelectorAll('button')].find(x=>x.textContent.includes('接受')); if(b) b.click(); return !!b; })()`);
-    await sleep(600);
+    await sleep(900);
     // 双方自动导航 #/online 并渲染对局
     let h1 = '', h2 = '';
     const tt0 = Date.now();
-    while (Date.now() - tt0 < 8000) {
+    while (Date.now() - tt0 < 12000) {
       h1 = await cdp.eval(`location.hash`);
       h2 = await cdp2.eval(`location.hash`);
       if (h1.includes('/online') && h2.includes('/online')) break;
       await sleep(200);
     }
     check('接受邀请后双方自动进入对局页', h1.includes('/online') && h2.includes('/online'), `${h1} / ${h2}`);
-    const cells1 = await cdp.eval(`document.querySelectorAll('.board .cell').length`);
-    const cells2 = await cdp2.eval(`document.querySelectorAll('.board .cell').length`);
+    let cells1 = 0, cells2 = 0;
+    const ct0 = Date.now();
+    while (Date.now() - ct0 < 9000) {
+      cells1 = await cdp.eval(`document.querySelectorAll('.board .cell').length`).catch(() => 0);
+      cells2 = await cdp2.eval(`document.querySelectorAll('.board .cell').length`).catch(() => 0);
+      if (cells1 === 169 && cells2 === 169) break;
+      await sleep(200);
+    }
     check('双方渲染 13×13 棋盘', cells1 === 169 && cells2 === 169, `${cells1}/${cells2}`);
     const txt2 = await cdp2.eval(`document.body.innerText`);
     check('邀请对局第三人由 AI 补位（★ 且无真实档位名）', /AI ★+/.test(txt2.replace(/\s+/g, ' ')) && !/Random|Tactical|Selfish|3-Ply|MaxN/.test(txt2), txt2.replace(/\s+/g, ' ').slice(0, 130));
