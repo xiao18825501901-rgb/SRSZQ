@@ -8,7 +8,6 @@
  *  胜负文案由服务器 MATCH_ENDED 的 reason + loser/winner 座位推导（服务器权威）。 */
 import { useEffect, useRef, useState } from 'react';
 import type { Player } from '../../../shared/src/game/types';
-import { PLAYER_COLORS } from '../../../shared/src/game/types';
 import { getEligiblePlayer } from '../../../shared/src/game/eligibility';
 import { Board } from '../components/Board';
 import { BacTimelinePanel } from '../components/BacTimelinePanel';
@@ -73,7 +72,7 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
   const banner = seatEvent && gameLink.phase === 'game' ? (
     seatEvent.status === 'disconnected' ? (
       <p className="notice pass">
-        {seatLabel(seatEvent.seat)} 掉线了 — {Math.max(1, Math.round((seatEvent.graceMs ?? 10000) / 1000))} 秒内未返回将判负（本局暂停等待）
+        {seatLabel(seatEvent.seat)} 掉线了，{Math.max(1, Math.round((seatEvent.graceMs ?? 10000) / 1000))} 秒内未返回将判负（本局暂停等待）
       </p>
     ) : (
       <p className="notice info">{seatLabel(seatEvent.seat)} 已重连，对局继续</p>
@@ -84,7 +83,11 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
     const searching = remaining > 40;
     return (
       <div className="panel pf-panel matchmaking-card">
-        <div className="mm-icon">{searching ? '🔍' : '⚔️'}</div>
+        <div className={`mm-seats ${searching ? 'searching' : 'ready'}`} aria-label="A、B、C 三个座位正在匹配">
+          <span className="seat-a">A</span>
+          <span className="seat-b">B</span>
+          <span className="seat-c">C</span>
+        </div>
         <h2>{searching ? 'Searching players…' : '即将匹配完成'}</h2>
         <p>
           {user.username} 正在寻找对手 · 当前等待 {gameLink.waiting || 1} 人
@@ -132,7 +135,7 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
     }
     return (
       <div className="panel pf-panel matchmaking-card">
-        <div className="mm-icon">🏁</div>
+        <div className="match-result-mark">GAME OVER</div>
         <h2>{headline}</h2>
         <p style={{ fontSize: 20, fontWeight: 700 }}>{verdict}</p>
         {detail && <p className="muted">{detail}</p>}
@@ -207,7 +210,7 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
                 ? q.currentEligible
                 : getEligiblePlayer(Math.floor(g.state.turnIndex / 3) + 1);
             return eligible ? (
-              <span className="status-value big eligible-badge" style={{ borderColor: PLAYER_COLORS[eligible], color: PLAYER_COLORS[eligible] }}>
+              <span className={`status-value big eligible-badge ${eligible.toLowerCase()}`}>
                 玩家 {eligible}
               </span>
             ) : (

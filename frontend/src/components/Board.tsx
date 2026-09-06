@@ -100,7 +100,7 @@ export function Board({ state, showLegal, showWinning, onCellClick }: Props) {
         {hoverInfo &&
           (hoverInfo.piece ? (
             <span>
-              坐标 ({hoverInfo.row + 1}, {hoverInfo.col + 1}) — 已有棋子 {hoverInfo.piece}
+              坐标 ({hoverInfo.row + 1}, {hoverInfo.col + 1}) · 已有棋子 {hoverInfo.piece}
             </span>
           ) : hoverInfo.forbidden ? (
             <span className="text-forbidden">
@@ -109,7 +109,7 @@ export function Board({ state, showLegal, showWinning, onCellClick }: Props) {
             </span>
           ) : hoverInfo.legal ? (
             <span>
-              坐标 ({hoverInfo.row + 1}, {hoverInfo.col + 1}) — {current} 可落子
+              坐标 ({hoverInfo.row + 1}, {hoverInfo.col + 1}) · {current} 可落子
               {currentEligible ? '（你拥有胜权：成四即胜）' : '（无胜权，不可成四）'}
             </span>
           ) : null)}

@@ -23,7 +23,7 @@ function describeMove(
 ): { text: string; cls: string; title?: string } {
   const m = state.moves[i];
   const turnNo = m.turn + 1;
-  const aiTag = isAISeat(seats, m.player) ? `🤖AI·${AI_LEVEL_STARS[seatLevel(seats, m.player)]}` : '';
+  const aiTag = isAISeat(seats, m.player) ? `AI·${AI_LEVEL_STARS[seatLevel(seats, m.player)]}` : '';
   const stat = aiStats?.get(i);
   let statTag = '';
   let title: string | undefined;
@@ -39,7 +39,7 @@ function describeMove(
   }
   if (m.pass) {
     return {
-      text: `Turn ${turnNo} — ${m.player} ${aiTag} PASS — No Legal Move${statTag}`,
+      text: `Turn ${turnNo} · ${m.player} ${aiTag} PASS · No Legal Move${statTag}`,
       cls: 'pass',
       title,
     };
@@ -52,7 +52,7 @@ function describeMove(
     };
   }
   return {
-    text: `Turn ${turnNo} — ${m.player} ${aiTag} → (${(m.row ?? 0) + 1}, ${(m.col ?? 0) + 1})${statTag}`,
+    text: `Turn ${turnNo} · ${m.player} ${aiTag} → (${(m.row ?? 0) + 1}, ${(m.col ?? 0) + 1})${statTag}`,
     cls: 'move',
     title,
   };

@@ -54,16 +54,13 @@ export function CellView({ cell, hovered, showLegal, showWinning, currentPlayer,
     >
       {/* 网格线背景已由棋盘绘制 */}
       {piece ? (
-        <span
-          className={`stone stone-${piece} ${inWinLine ? 'stone-win' : ''}`}
-          style={{ backgroundColor: piece === 'C' ? '#F7F7F7' : undefined }}
-        >
+        <span className={`stone stone-${piece} ${inWinLine ? 'stone-win' : ''}`}>
           {piece}
         </span>
       ) : (
         <>
           {/* 合法点提示 */}
-          {showLegal && legal && <span className="legal-dot" style={{ background: currentPlayer === 'C' ? '#e8e8ee' : undefined }} />}
+          {showLegal && legal && <span className={`legal-dot preview-${currentPlayer}`} />}
           {/* 禁手 X 提示 */}
           {showLegal && forbidden && <span className="forbidden-x">✕</span>}
           {/* 胜点外框 */}
@@ -73,10 +70,10 @@ export function CellView({ cell, hovered, showLegal, showWinning, currentPlayer,
             ))}
           {/* hover 半透明预览 */}
           {hovered && legal && !currentHasEligible && (
-            <span className="hover-preview" style={{ background: currentPlayer === 'C' ? '#ffffff' : undefined }} />
+            <span className={`hover-preview preview-${currentPlayer}`} />
           )}
           {hovered && legal && currentHasEligible && (
-            <span className="hover-preview" style={{ background: currentPlayer === 'C' ? '#ffffff' : undefined }} />
+            <span className={`hover-preview preview-${currentPlayer}`} />
           )}
           {hovered && forbidden && (
             <span className="forbidden-bg" title="非法：你当前没有胜权，此位置会形成四连。" />

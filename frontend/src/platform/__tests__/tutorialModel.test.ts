@@ -3,6 +3,7 @@ import { mulberry32 } from '../../../../shared/src/ai/rng';
 import { AI_LEVELS } from '../../../../shared/src/ai/types';
 import { PLAYERS } from '../../../../shared/src/game/types';
 import {
+  aiDisplayName,
   createTutorialAssignment,
   humanSeatOf,
   isValidTutorialSeats,
@@ -50,6 +51,15 @@ describe('AI difficulty 初始化随机（T7/T8/T9/T10）', () => {
     }
     expect(seen.size).toBeGreaterThan(1);
     expect(anyEqual).toBe(true);
+  });
+
+  it('教程只展示 AI 星级，不泄露内部策略档位名', () => {
+    const internalNames = ['Random', 'Tactical', 'Selfish', '3-Ply', 'MaxN'];
+    for (const level of AI_LEVELS) {
+      const label = aiDisplayName(level);
+      expect(label).toMatch(/^★{1,5}☆{0,4}$/);
+      internalNames.forEach((name) => expect(label).not.toContain(name));
+    }
   });
 });
 

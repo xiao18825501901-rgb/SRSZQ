@@ -209,10 +209,20 @@ async function main() {
   // ===== 场景 2：基础轮流落子 =====
   let r = await clickCell(7, 7);
   check('A 落子 (7,7)', r === 'ok', r);
+  let pieceMotion = await cdp.eval(`(() => { const s=document.querySelector('.cell.last-move .stone-A'); return s ? getComputedStyle(s).animationName : ''; })()`);
+  check('A 棋子使用桌面落子动画', pieceMotion.includes('tabletop-piece-drop'), pieceMotion);
   r = await clickCell(8, 8);
   check('B 落子 (8,8)', r === 'ok', r);
+  pieceMotion = await cdp.eval(`(() => { const s=document.querySelector('.cell.last-move .stone-B'); return s ? getComputedStyle(s).animationName : ''; })()`);
+  check('B 棋子使用桌面落子动画', pieceMotion.includes('tabletop-piece-drop'), pieceMotion);
   r = await clickCell(9, 9);
   check('C 落子 (9,9)', r === 'ok', r);
+  pieceMotion = await cdp.eval(`(() => { const s=document.querySelector('.cell.last-move .stone-C'); return s ? getComputedStyle(s).animationName : ''; })()`);
+  check('C 棋子使用桌面落子动画', pieceMotion.includes('tabletop-piece-drop'), pieceMotion);
+  await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  pieceMotion = await cdp.eval(`(() => { const s=document.querySelector('.cell.last-move .stone-C'); return s ? getComputedStyle(s).animationName : ''; })()`);
+  check('Reduced Motion 使用非位移确认动画', pieceMotion.includes('tabletop-piece-confirm'), pieceMotion);
+  await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   st = await statusText();
   check('Round 2 开始 · 轮到 A', st.includes('ROUND 2') && st.includes('玩家 A'), st.slice(0, 70));
   const tl2 = (await cdp.eval(`document.querySelector('.bac-panel')?.innerText || ''`)).replace(/\s+/g, ' ');
@@ -237,7 +247,7 @@ async function main() {
   let gs = await getState();
   check('导入 15 步（turnIndex=15 = R6 A 行动）', gs.moves.length === 15 && gs.turnIndex === 15 && P_OF(15) === 'A', `moves=${gs.moves.length} turn=${gs.turnIndex}`);
   st = await statusText();
-  check('R6 · 资格 🏆 C', st.includes('ROUND 6') && st.includes('🏆 玩家 C'), st.slice(0, 100));
+  check('R6 · 资格 C', st.includes('ROUND 6') && st.includes('玩家 C · 持有胜权'), st.slice(0, 100));
   const tl6 = (await cdp.eval(`document.querySelector('.bac-panel')?.innerText || ''`)).replace(/\s+/g, ' ');
   check('BAC 面板 R6 视角：CURRENT ROUND 6 + C Victory Right + R7/R8', tl6.includes('ROUND 6') && tl6.includes('Player C') && tl6.includes('Victory Right') && tl6.includes('R7') && tl6.includes('R8'), tl6.slice(0, 200));
   await shot('bac-r6-eligible-C.png');
@@ -324,9 +334,9 @@ async function main() {
   after = await waitMoves(2, 15000);
   check('B AI 自动落子完成', after.moves.length === 2 && P_OF(after.turnIndex) === 'C', `moves=${after.moves.length}`);
   const cardB = await cdp.eval(`document.querySelectorAll('.players-row .player-card')[1]?.innerText || ''`);
-  check('玩家卡 B 显示 AI 星级（无档位名）', /🤖 AI · ★+/.test(cardB) && !/3-Ply|Tactical/.test(cardB), cardB.replace(/\s+/g, ' ').slice(0, 60));
+  check('玩家卡 B 显示 AI 星级（无档位名）', /AI · ★+/.test(cardB) && !/3-Ply|Tactical/.test(cardB), cardB.replace(/\s+/g, ' ').slice(0, 60));
   const hist = (await cdp.eval(`document.querySelector('.history-list').innerText`)).replace(/\s+/g, ' ');
-  check('日志 AI 标记为星级', /🤖AI·★+/.test(hist), hist.slice(0, 120));
+  check('日志 AI 标记为星级', /AI·★+/.test(hist), hist.slice(0, 120));
 
   // ===== 场景 8：悔棋到上一人类回合 + 导出/导入 v2 =====
   await clickFirstLegal(); // C 人类 → moves 3

@@ -45,7 +45,7 @@ export function DebugPanel({ state }: Props) {
           <div>emptyCells: <b>{emptyCount(state)}</b></div>
           <div>boardFull: <b>{String(isBoardFull(state.board))}</b></div>
           <div>status: <b>{state.status}</b></div>
-          <div>winner: <b>{state.winner ?? '—'}</b></div>
+          <div>winner: <b>{state.winner ?? '无'}</b></div>
         </div>
         <div>
           <div>legalMoves(A): <b>{legalFor.find((x) => x.p === 'A')!.n}</b></div>

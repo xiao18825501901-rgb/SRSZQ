@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { BoardSize, Player } from '../../shared/src/game/types';
-import { PLAYER_COLORS, PLAYER_LABELS } from '../../shared/src/game/types';
+import { PLAYER_LABELS } from '../../shared/src/game/types';
 import { useGame } from './hooks/useGame';
 import { Board } from './components/Board';
 import { PlayerCard } from './components/PlayerCard';
@@ -423,11 +423,11 @@ export default function App(props: PlatformHostProps = {}) {
         <div className="notice pass passbar">
           {currentIsAI ? (
             <span>
-              AI 玩家 {game.current}（AI {stars(isAISeat(displaySeats, game.current) ? ((displaySeats[game.current].level ?? 'random') as AILevel) : 'random')}）没有任何合法落子 —— 将自动跳过。
+              AI 玩家 {game.current}（AI {stars(isAISeat(displaySeats, game.current) ? ((displaySeats[game.current].level ?? 'random') as AILevel) : 'random')}）没有任何合法落子，将自动跳过。
             </span>
           ) : (
             <span>
-              玩家 {game.current} 没有任何合法落子 —— 将自动 Pass。
+              玩家 {game.current} 没有任何合法落子，将自动 Pass。
               {game.eligible ? `（当前胜权：玩家 ${game.eligible}，无合法步不能获胜）` : '（Round 1–5 无人有胜权）'}
             </span>
           )}
@@ -450,7 +450,7 @@ export default function App(props: PlatformHostProps = {}) {
           <Board state={state} showLegal={showLegal} showWinning={showWinning} onCellClick={onPlace} />
           {thinking && (
             <div className="notice info ai-thinking">
-              🤖 AI 思考中… 座位 {thinking.player}（AI {stars(thinking.level)}）正在计算最佳落子，棋盘已锁定。
+              AI 思考中… 座位 {thinking.player}（AI {stars(thinking.level)}）正在计算最佳落子，棋盘已锁定。
             </div>
           )}
           {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
@@ -512,6 +512,7 @@ export default function App(props: PlatformHostProps = {}) {
       <input
         ref={fileRef}
         type="file"
+        aria-label="导入对局 JSON 文件"
         accept=".json,application/json"
         style={{ display: 'none' }}
         onChange={(e) => {
@@ -592,13 +593,7 @@ export default function App(props: PlatformHostProps = {}) {
         }
       >
         <div className="endgame">
-          <span
-            className="big-stone"
-            style={{
-              background: state.winner ? (state.winner === 'C' ? '#F7F7F7' : PLAYER_COLORS[state.winner]) : '#888',
-              color: state.winner === 'C' ? '#333' : '#fff',
-            }}
-          >
+          <span className={`big-stone ${state.winner ? `stone-${state.winner}` : ''}`}>
             {state.winner}
           </span>
           <p>
@@ -660,12 +655,11 @@ function StatusBar(props: {
         <span className="status-label">当前玩家 Turn</span>
         <span
           className={`status-value big turn-badge ${current.toLowerCase()} ${thinking ? 'thinking' : ''}`}
-          style={status === 'playing' ? { borderColor: PLAYER_COLORS[current] } : undefined}
         >
           {thinking
-            ? `🤖 AI 思考中（${thinking.player}·AI ${stars(thinking.level)}）`
+            ? `AI 思考中（${thinking.player}·AI ${stars(thinking.level)}）`
             : status === 'playing'
-              ? `${currentIsAI ? '🤖 ' : ''}玩家 ${current}${currentIsAI ? '（AI）' : ''}`
+              ? `${currentIsAI ? 'AI · ' : ''}玩家 ${current}${currentIsAI ? '（AI）' : ''}`
               : status === 'won'
                 ? `胜者 ${winner}`
                 : '和棋'}
@@ -674,12 +668,12 @@ function StatusBar(props: {
       <div className="status-item">
         <span className="status-label">当前胜权 Eligible</span>
         {status !== 'playing' ? (
-          <span className="status-value">—</span>
+          <span className="status-value">无</span>
         ) : eligible === null ? (
           <span className="status-value none-badge">NONE · 无人</span>
         ) : (
-          <span className={`status-value big eligible-badge ${eligible.toLowerCase()}`} style={{ borderColor: PLAYER_COLORS[eligible] }}>
-            🏆 玩家 {eligible}
+          <span className={`status-value big eligible-badge ${eligible.toLowerCase()}`}>
+            玩家 {eligible} · 持有胜权
           </span>
         )}
         <span className="etip">
@@ -708,5 +702,5 @@ function StatusBar(props: {
 
 function nextEligible(round: number): string {
   const p = getEligiblePlayer(round);
-  return p ?? '—';
+  return p ?? '无';
 }

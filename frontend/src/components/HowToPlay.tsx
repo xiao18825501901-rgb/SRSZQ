@@ -44,7 +44,7 @@ export function VictoryTimelineTable({ from = 1, to = 14 }: { from?: number; to?
               {r.player}
             </span>
           ) : (
-            <span key={r.round} className="vline-chip none">—</span>
+            <span key={r.round} className="vline-chip none">无</span>
           ),
         )}
       </div>
@@ -79,7 +79,7 @@ const QUICK_ITEMS: Array<{ t: string; d: ReactNode }> = [
     t: '没有胜权时',
     d: (
       <>
-        不能通过落子形成自己的 ≥4 连——那样的位置是禁手，落不下去（会标 ✕）。
+        不能通过落子形成自己的 ≥4 连；那样的位置是禁手，落不下去（会标 ✕）。
       </>
     ),
   },
@@ -116,13 +116,13 @@ export function RulesQuickView() {
 export function VictoryRightSection() {
   return (
     <section className="howto-block" aria-labelledby="vr-heading">
-      <h3 id="vr-heading">什么是「胜权」？—— SRSZQ 最关键的一条规则</h3>
+      <h3 id="vr-heading">什么是「胜权」？SRSZQ 最关键的一条规则</h3>
       <ol className="howto-qa">
         <li>
           <b>① 什么是胜权？</b>
           <p>
             胜权（Victory Right）是“当前允许凭落子获胜的资格”。普通四子棋里谁先连成四谁赢；
-            三人四子棋里不是这样——只有持有胜权的玩家，才能通过自己的本次落子连成 ≥4 并立即获胜。
+            三人四子棋里并非如此：只有持有胜权的玩家，才能通过自己的本次落子连成 ≥4 并立即获胜。
           </p>
         </li>
         <li>
@@ -209,8 +209,8 @@ export function HowToPlayContent({ onStartTutorial, onBack }: { onStartTutorial?
           <li>Round 1–5：无人拥有胜权；任何会形成自己 ≥4 连的落子都非法（禁手）。</li>
           <li>Round 6 起进入胜权循环；只有「本回合行动者 == 胜权玩家」才可能凭本手获胜。</li>
           <li>胜权玩家落子后，若包含新子的线达到 ≥4（横、竖、＼、／ 都算），立即获胜。</li>
-          <li>非胜权玩家不能形成自己的 ≥4 连——这是禁手，点击会被拒绝。</li>
-          <li>不存在“提前储存四连”——胜利只能由当前合法落子即时触发。</li>
+          <li>非胜权玩家不能形成自己的 ≥4 连；这是禁手，点击会被拒绝。</li>
+          <li>不存在“提前储存四连”；胜利只能由当前合法落子即时触发。</li>
           <li>轮到某玩家但没有任何合法落子 → 自动 Pass（回合照常消耗）。</li>
           <li>棋盘填满且无人获胜 → 和棋。</li>
           <li>棋盘可选 13×13 与 17×17；在线对局计分只发生在 Online Match。</li>

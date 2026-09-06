@@ -61,7 +61,7 @@ export function perspectiveLines(
 ): { en: string; zh: string; yours: boolean } | null {
   if (!eligible) return null;
   if (mySeat && eligible === mySeat) {
-    return { en: 'You currently have the legal winning right.', zh: '你现在拥有合法获胜权 —— 你的 Victory Window', yours: true };
+    return { en: 'You currently have the legal winning right.', zh: '你现在拥有合法获胜权：你的 Victory Window', yours: true };
   }
   const holder = seatName(eligible, seats, mySeat);
   return {

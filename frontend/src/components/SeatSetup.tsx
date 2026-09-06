@@ -1,5 +1,5 @@
 import type { Player } from '../../../shared/src/game/types';
-import { PLAYER_COLORS, PLAYER_LABELS } from '../../../shared/src/game/types';
+import { PLAYER_LABELS } from '../../../shared/src/game/types';
 import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
 import { canSetAISeat, countAI, isAISeat, seatLevel } from '../../../shared/src/ai/seats';
 
@@ -35,8 +35,8 @@ export function SeatSetup({ seats, disabled, onChange }: Props) {
           const isAI = isAISeat(seats, p);
           const value: SeatChoice = isAI ? seatLevel(seats, p) : 'human';
           return (
-            <div key={p} className={`seat-row ${isAI ? 'is-ai' : ''}`}>
-              <span className="seat-badge" style={{ backgroundColor: p === 'C' ? '#F7F7F7' : PLAYER_COLORS[p], color: p === 'C' ? '#333' : '#fff' }}>
+            <div key={p} className={`seat-row seat-${p.toLowerCase()} ${isAI ? 'is-ai' : ''}`}>
+              <span className="seat-badge">
                 {p}
               </span>
               <span className="seat-name">
@@ -45,6 +45,7 @@ export function SeatSetup({ seats, disabled, onChange }: Props) {
               </span>
               <select
                 className="seat-select"
+                aria-label={`玩家 ${p} 的座位类型与 AI 难度`}
                 disabled={disabled}
                 value={value}
                 onChange={(e) => onChange(p, e.target.value as SeatChoice)}

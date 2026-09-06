@@ -1049,7 +1049,7 @@ body {
 .pf-dot.playing { background: #ffb224; } .pf-dot.matching { background: #5f9bd8; }
 
 .hero { text-align: center; padding: 60px 10px 30px; }
-.hero h1 { font-size: 64px; margin: 0; letter-spacing: 6px; background: linear-gradient(120deg,#E5484D,#30A46C,#F7F7F7); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero h1 { font-size: 64px; margin: 0; letter-spacing: 6px; color: var(--ds-text); }
 .hero-sub { color: #9aa4b2; letter-spacing: 2px; }
 .hero-desc { max-width: 760px; margin: 18px auto; color: #c6cdd7; line-height: 1.8; }
 .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
@@ -1126,7 +1126,7 @@ body {
 .hero2 .orb.o3 { width: 260px; height: 260px; background: #e5484d; bottom: -120px; left: 38%; opacity: .18; }
 .hero2 .eyebrow { display: inline-block; padding: 6px 14px; border: 1px solid rgba(95,155,216,.5); color: var(--ds-accent-2); border-radius: 999px; font-size: 12px; letter-spacing: 2px; margin-bottom: 18px; background: rgba(95,155,216,.08); }
 .hero2 h1 { font-size: clamp(40px, 7vw, 76px); line-height: 1.02; margin: 0; font-weight: 800; letter-spacing: 2px; }
-.hero2 h1 .grad { background: linear-gradient(100deg,#fff 10%,#a8cdf0 45%,#5f9bd8 70%,#30a46c 95%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero2 h1 .grad { color: var(--ds-text); }
 .hero2 .tagline { font-size: clamp(16px, 2.4vw, 22px); color: var(--ds-text-2); margin: 14px 0 26px; letter-spacing: 6px; font-weight: 300; }
 .hero2 .cta-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
 .hero2 .meta-row { margin-top: 26px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
@@ -1189,7 +1189,7 @@ body {
 .matchmaking-card { text-align: center; padding: 34px; width: min(520px, 92vw); margin: 40px auto; }
 .mm-timer { font-size: 44px; font-weight: 800; color: var(--ds-accent-2); margin: 6px 0; font-variant-numeric: tabular-nums; }
 .mm-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; margin: 8px auto 14px; max-width: 340px; }
-.mm-bar-fill { height: 100%; background: linear-gradient(90deg, var(--ds-accent), var(--ds-accent-2)); transition: width .3s linear; }
+.mm-bar-fill { height: 100%; background: var(--ds-accent-2); }
 
 /* ============================================================
    BAC Qualification Timeline Panel（Design System v2 视觉）
@@ -1471,7 +1471,7 @@ button.linklike:hover { color: var(--ds-text); }
 /* 教程教练行（上下文轻量教学提示） */
 .coach-line {
   margin: 8px 0 0; padding: 9px 14px; font-size: 13px; line-height: 1.7; color: var(--ds-text-2);
-  background: rgba(224,182,77,.06); border: 1px solid rgba(224,182,77,.3); border-left: 3px solid var(--ds-warn);
+  background: rgba(224,182,77,.06); border: 1px solid rgba(224,182,77,.3);
   border-radius: var(--ds-r-sm);
 }
 

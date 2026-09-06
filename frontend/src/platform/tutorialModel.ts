@@ -6,7 +6,7 @@
  *  规则/引擎一律复用 shared（不建第二套）。 */
 import type { Player } from '../../../shared/src/game/types';
 import { PLAYERS } from '../../../shared/src/game/types';
-import { AI_LEVELS, AI_LEVEL_LABELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
+import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
 import { defaultRng, tutorialAiLevel, tutorialHumanSeat, type Rng } from '../../../shared/src/ai/assignment';
 
 export type TutorialAssignment = SeatConfigs; // A/B/C → {human} | {ai, level}
@@ -27,13 +27,13 @@ export function humanSeatOf(seats: TutorialAssignment): Player {
 }
 
 export function aiDisplayName(level: AILevel): string {
-  return `${AI_LEVEL_LABELS[level]} ${AI_LEVEL_STARS[level]}`;
+  return AI_LEVEL_STARS[level];
 }
 
 export interface RoleLine {
   seat: Player;
   role: '你' | '对手';
-  detail: string; // 玩家 A（真人）/ 玩家 B · AI · Tactical ★★☆☆☆
+  detail: string; // 玩家 A（真人）/ 玩家 B · AI · ★★☆☆☆
 }
 
 /** 教程身份行（严格按 A/B/C 真实座位顺序，不把用户挪到第一行） */

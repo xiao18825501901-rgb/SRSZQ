@@ -5,7 +5,7 @@
  *  玩家视角：Your Victory Window / 他人持权防守提示。移动端可折叠，不遮挡棋盘。 */
 import { useEffect, useMemo, useState } from 'react';
 import type { GameState, Player } from '../../../shared/src/game/types';
-import { ELIGIBLE_ORDER, ELIGIBLE_START_ROUND, PLAYER_COLORS } from '../../../shared/src/game/types';
+import { ELIGIBLE_ORDER, ELIGIBLE_START_ROUND } from '../../../shared/src/game/types';
 import type { QualificationView } from '../../../shared/src/game/qualification';
 import { rowsFromView, resolveView, perspectiveLines, seatName, nextWindowHint, type SeatLite } from './bacTimelineModel';
 
@@ -29,14 +29,14 @@ function PlayerOrb({ seat, size = 30 }: { seat: Player | null; size?: number }) 
         style={{ width: size, height: size, lineHeight: `${size}px`, fontSize: size * 0.42 }}
         title="无人拥有胜权"
       >
-        —
+        无
       </span>
     );
   }
   return (
     <span
       className={`bac-orb ${seat.toLowerCase()}`}
-      style={{ width: size, height: size, lineHeight: `${size}px`, fontSize: size * 0.48, borderColor: PLAYER_COLORS[seat], color: seat === 'C' ? '#3a3f45' : '#fff' }}
+      style={{ width: size, height: size, lineHeight: `${size}px`, fontSize: size * 0.48 }}
     >
       {seat}
     </span>
@@ -88,8 +88,8 @@ export function BacTimelinePanel({ qualification, state, mySeat = null, seats = 
                 </>
               ) : (
                 <>
-                  <b style={{ color: PLAYER_COLORS[eligible!] }}>{elName}</b>
-                  <span className="bac-pill win">🏆 Victory Right</span>
+                  <b className={`holder-${eligible!.toLowerCase()}`}>{elName}</b>
+                  <span className="bac-pill win">Victory Right</span>
                 </>
               )}
             </div>
@@ -137,7 +137,7 @@ export function BacTimelinePanel({ qualification, state, mySeat = null, seats = 
                 <span className="bac-flag blank" />
               )}
               <PlayerOrb seat={r.player} size={24} />
-              <span className="bac-pname">{r.player ? seatName(r.player, seats, mySeat) : '— 无人'}</span>
+              <span className="bac-pname">{r.player ? seatName(r.player, seats, mySeat) : '无人'}</span>
               {isYou && <span className="bac-you">YOU</span>}
             </div>
           );

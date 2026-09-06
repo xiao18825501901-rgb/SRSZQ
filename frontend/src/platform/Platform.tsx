@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Player } from '../../../shared/src/game/types';
-import { PLAYERS, PLAYER_COLORS } from '../../../shared/src/game/types';
+import { PLAYERS } from '../../../shared/src/game/types';
 import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
 import App from '../App';
 import type { CoachContext } from '../App';
@@ -101,9 +101,9 @@ export function Platform() {
             <button className="ds-btn ghost small" onClick={() => route.navigate('/ranking')}>排行榜</button>
             <button className="ds-btn ghost small" onClick={() => route.navigate('/friends')}>好友</button>
             <span className="pf-user" title={user.username}>
-              <img className="pf-avatar" src={user.avatar} alt="" />
+              <Avatar src={user.avatar} name={user.username} />
               {user.username}
-              <b style={{ color: '#a8cdf0' }}>{user.rating}</b>
+              <b>{user.rating}</b>
               <span className={`pf-dot ${user.onlineStatus}`} />
             </span>
             <button className="ds-btn small" onClick={logout}>退出</button>
@@ -209,6 +209,17 @@ function RedirectTo({ to }: { to: string }) {
   return <div className="pf-page pf-center">跳转中…</div>;
 }
 
+function Avatar({ src, name, big = false }: { src?: string; name: string; big?: boolean }) {
+  const className = `pf-avatar${big ? ' big' : ''}`;
+  return src ? (
+    <img className={className} src={src} alt="" />
+  ) : (
+    <span className={`${className} avatar-fallback`} aria-hidden="true">
+      {name.trim().slice(0, 1).toUpperCase() || 'S'}
+    </span>
+  );
+}
+
 /* ---------------- Landing ---------------- */
 const MINI_A = [[2, 4], [5, 7], [9, 3], [7, 8], [4, 9], [8, 2], [6, 5], [3, 10], [10, 4]];
 const MINI_B = [[1, 6], [4, 3], [8, 7], [5, 10], [9, 6], [3, 4], [7, 2], [2, 9], [10, 7]];
@@ -233,9 +244,9 @@ function MiniBoardPreview() {
 function PlayerKey() {
   return (
     <div className="land-key">
-      <span><i className="k-a" />A 红</span>
-      <span><i className="k-b" />B 绿</span>
-      <span><i className="k-c" />C 白</span>
+      <span><i className="k-a" />A 珊瑚</span>
+      <span><i className="k-b" />B 薄荷</span>
+      <span><i className="k-c" />C 天空蓝</span>
     </div>
   );
 }
@@ -250,7 +261,7 @@ function Landing({ user }: { user: PublicUser | null }) {
           <h1 className="land-h1">三人四子棋</h1>
           <p className="land-sub">Three-Player Connect Four · 一张棋盘，三人轮流落子</p>
           <p className="land-desc">
-            连成四子就能赢？这里不是。Round 6 起，胜权按 C → B → A 轮流授予——只有持胜权的人，
+            连成四子就能赢？这里不是。Round 6 起，胜权按 C → B → A 轮流授予；只有持胜权的人，
             才能凭自己的本手连成 ≥4 获胜；没有胜权时，连成四子的位置是禁手。
           </p>
           <div className="hero-actions">
@@ -290,7 +301,7 @@ function Landing({ user }: { user: PublicUser | null }) {
         {!user && (
           <div className="land-rules-cta">
             <Btn variant="primary" onClick={() => go('/auth')}>注册并开始新手教程</Btn>
-            <span className="muted">三局教学：你在 A 座，两名 AI 对手随局搭配。</span>
+            <span className="muted">三局教学：你会随机坐入 A/B/C，一起迎战两名随机星级 AI。</span>
           </div>
         )}
       </section>
@@ -378,7 +389,7 @@ function AuthCard(props: { busy: boolean; err: string; onAuth: (mode: 'login' | 
 const LOBBIES = [
   {
     key: 'online',
-    icon: '🌐',
+    icon: '3P',
     title: 'Online Match',
     desc: '匹配 3 名真人同台竞技；等待超过 60 秒自动 AI 补位（1 人 → 2 AI，2 人 → 1 AI），绝不让你空等。结果计入全球排行榜。',
     meta: '真人在线 · 计分',
@@ -387,7 +398,7 @@ const LOBBIES = [
   },
   {
     key: 'vsai',
-    icon: '🤖',
+    icon: 'AI',
     title: 'Human vs AI',
     desc: '选择 1–2 个 AI 座位，难度从 ★ 到 ★★★★★ 自由调整。适合练手、研究 BAC 资格博弈与新战术。',
     meta: '本地引擎 · ★难度 · 不计分',
@@ -396,7 +407,7 @@ const LOBBIES = [
   },
   {
     key: 'local',
-    icon: '🎲',
+    icon: '同桌',
     title: 'Local Match',
     desc: '同一设备三名玩家轮流对弈：完整规则引擎、悔棋、自动 Pass、导入导出，随开随玩。',
     meta: '离线 · 无需账号',
@@ -405,7 +416,7 @@ const LOBBIES = [
   },
   {
     key: 'friends',
-    icon: '👥',
+    icon: '邀请',
     title: '好友邀请',
     desc: '邀请 1 位好友立即成局（真人+真人+AI）；邀请 2 位好友并全部接受，组成纯真人三人局。',
     meta: '实时状态 · 在线好友',
@@ -426,7 +437,7 @@ function Lobby({ user }: { user: PublicUser }) {
         <Btn variant="ghost" size="small" onClick={() => route.navigate('/rules')}>规则速览与胜权说明</Btn>
       </div>
       <div className="lobby-user">
-        <img className="pf-avatar big" src={user.avatar} alt="" />
+        <Avatar src={user.avatar} name={user.username} big />
         <div>
           <h2 style={{ margin: 0 }}>{user.username}</h2>
           <div className="pf-user" style={{ marginTop: 4 }}>
@@ -501,14 +512,14 @@ function RankingPage({ onBack }: { onBack: () => void }) {
             <tr key={r.id}>
               <td><span className="rank-no">{i + 1}</span></td>
               <td>
-                <img className="pf-avatar" src={r.avatar} alt="" /> {r.username}
+                <Avatar src={r.avatar} name={r.username} /> {r.username}
               </td>
-              <td><b style={{ color: '#a8cdf0' }}>{r.rating}</b></td>
-              <td>
+              <td data-label="积分"><b>{r.rating}</b></td>
+              <td data-label="胜/场">
                 {r.wins}/{r.games}
               </td>
-              <td>{r.games > 0 ? `${Math.round(r.winRate * 100)}%` : '—'}</td>
-              <td>
+              <td data-label="胜率">{r.games > 0 ? `${Math.round(r.winRate * 100)}%` : '暂无'}</td>
+              <td data-label="状态">
                 <StatusBadgeView status={r.onlineStatus} />
               </td>
             </tr>
@@ -557,7 +568,7 @@ function FriendsPage() {
           <span className="ds-title">好友与邀请 · Friends & Invites</span>
         </div>
         <div className="friend-invite">
-          <input value={toUser} onChange={(e) => setToUser(e.target.value)} placeholder="输入对方用户名邀请对战" />
+          <input aria-label="受邀好友用户名" value={toUser} onChange={(e) => setToUser(e.target.value)} placeholder="输入对方用户名邀请对战" />
           <Btn variant="primary" onClick={invite}>Invite</Btn>
         </div>
         {msg && <p className="muted">{msg}</p>}
@@ -573,7 +584,7 @@ function FriendsPage() {
         <h4>好友（{friends.length}）</h4>
         {friends.map((f) => (
           <div key={f.id} className="friend-row">
-            <img className="pf-avatar" src={f.avatar} alt="" />
+            <Avatar src={f.avatar} name={f.username} />
             <span>{f.username}</span>
             <StatusBadgeView status={f.onlineStatus} />
             <span className="muted">{f.onlineStatus}</span>
@@ -586,7 +597,7 @@ function FriendsPage() {
 
 /* ---------------- Tutorial ---------------- */
 const TUTORIAL_ROUNDS = 3;
-const SEAT_COLOR_NAME: Record<Player, string> = { A: '红', B: '绿', C: '白' };
+const SEAT_COLOR_NAME: Record<Player, string> = { A: '珊瑚色', B: '薄荷色', C: '天空蓝' };
 
 /** 教程教练：根据对局上下文给一行轻量教学提示（progressive/contextual，不弹窗轰炸） */
 function makeTutorialCoach(seats: TutorialAssignment) {
@@ -610,12 +621,12 @@ function makeTutorialCoach(seats: TutorialAssignment) {
           : round <= 2
             ? '先落子开阔地带，多留自己的棋型空间。'
             : '留意对手的活三，并提前为自己的胜权轮布局。';
-      return `轮到你了（玩家 ${current}）。Round ${round} 暂无胜权——谁都不能靠这一手获胜，会连成 ≥4 的位置是禁手 ✕。${extra}`;
+      return `轮到你了（玩家 ${current}）。Round ${round} 暂无胜权；谁都不能靠这一手获胜，会连成 ≥4 的位置是禁手 ✕。${extra}`;
     }
     if (eligible === current) {
-      return `轮到你了（玩家 ${current}）——本回合胜权就是你：这一手若能连成 ≥4（横/竖/斜），立即获胜！`;
+      return `轮到你了（玩家 ${current}）。本回合胜权就是你：这一手若能连成 ≥4（横/竖/斜），立即获胜！`;
     }
-    return `轮到你了（玩家 ${current}）。本回合胜权：${eligible}——留意 ${eligible} 的连线威胁，也为自己后面的胜权轮布局。`;
+    return `轮到你了（玩家 ${current}）。本回合胜权：${eligible}；留意 ${eligible} 的连线威胁，也为自己后面的胜权轮布局。`;
   };
 }
 
@@ -657,7 +668,7 @@ function TutorialPage({
     const opponents = roles.filter((r) => r.role === '对手').map((r) => r.detail).join('、');
     return (
       <div className="pf-page pf-center">
-        <h2>教学完成！🎉</h2>
+        <h2>教学完成！</h2>
         <p className="muted">三局 1 真人 + 2 AI 练习已完成（胜负不影响积分）。本局你在 {humanSeat} 座，对手：{opponents}。</p>
         <div className="btn-row" style={{ justifyContent: 'center' }}>
           <button
@@ -705,7 +716,7 @@ function TutorialPage({
 
       <section className="tut-identity" aria-label="本局身份">
         {roles.map((r) => (
-          <div key={r.seat} className={`tut-role ${r.role === '你' ? 'you' : 'ai'}`}>
+          <div key={r.seat} className={`tut-role seat-${r.seat.toLowerCase()} ${r.role === '你' ? 'you' : 'ai'}`}>
             <span className="tut-role-tag">
               {r.role === '你' ? '你' : `对手`} · 玩家 {r.seat}
             </span>
@@ -805,17 +816,17 @@ function LocalSetup({ onStart, onBack }: { onStart: (s: SeatConfigs) => void; on
           const d = draft[p];
           const isAI = d.kind === 'ai';
           return (
-            <div key={p} className={`seat-row ${isAI ? 'is-ai' : ''}`}>
-              <span className="seat-badge" style={{ backgroundColor: p === 'C' ? '#F1F3F6' : PLAYER_COLORS[p], color: p === 'C' ? '#333' : '#fff' }}>
+            <div key={p} className={`seat-row seat-${p.toLowerCase()} ${isAI ? 'is-ai' : ''}`}>
+              <span className="seat-badge">
                 {p}
               </span>
               <span className="seat-name">玩家 {p}</span>
-              <select className="seat-select" value={d.kind} onChange={(e) => setKind(p, e.target.value as 'human' | 'ai')}>
+              <select className="seat-select" aria-label={`玩家 ${p} 的座位类型`} value={d.kind} onChange={(e) => setKind(p, e.target.value as 'human' | 'ai')}>
                 <option value="human">真人</option>
                 <option value="ai">AI</option>
               </select>
               {isAI && (
-                <select className="seat-select" value={d.level} onChange={(e) => setLevel(p, e.target.value as AILevel | 'auto')}>
+                <select className="seat-select" aria-label={`玩家 ${p} 的 AI 难度`} value={d.level} onChange={(e) => setLevel(p, e.target.value as AILevel | 'auto')}>
                   <option value="auto">随机</option>
                   {AI_LEVELS.map((l) => (
                     <option key={l} value={l}>AI {AI_LEVEL_STARS[l]}</option>
@@ -825,7 +836,7 @@ function LocalSetup({ onStart, onBack }: { onStart: (s: SeatConfigs) => void; on
             </div>
           );
         })}
-        <p className="muted">{humanCount === 0 ? '⚠️ 至少保留一名真人玩家。' : `${humanCount} 名真人 + ${3 - humanCount} 个 AI。`}</p>
+        <p className="muted">{humanCount === 0 ? '注意：至少保留一名真人玩家。' : `${humanCount} 名真人 + ${3 - humanCount} 个 AI。`}</p>
         <div className="btn-row">
           <button className="btn ghost" onClick={onBack}>返回</button>
           <button className="btn primary" disabled={humanCount === 0} onClick={start}>开始对局</button>
@@ -866,6 +877,7 @@ function VsAiPicker({ onStart, onBack }: { onStart: (s: SeatConfigs) => void; on
               </label>
               {!isHuman && (
                 <select
+                  aria-label={`玩家 ${p} 的 AI 难度`}
                   value={starsMap[p] ?? 3}
                   onChange={(e) => setStarsMap((m) => ({ ...m, [p]: Number(e.target.value) }))}
                 >
