@@ -17,7 +17,7 @@ import { Btn, Card, PageMotion } from '../ui';
 import { OnlinePage } from './OnlinePage';
 
 /** 星级 → 内部档位（用户只与 ★ 交互） */
-export const STAR_LEVELS: AILevel[] = ['random', 'tactical', 'selfish', '3ply', 'maxn'];
+export const STAR_LEVELS: AILevel[] = [...AI_LEVELS];
 const STARS = ['★', '★★', '★★★', '★★★★', '★★★★★'];
 
 export function useSession(): { user: PublicUser | null; applyAuth: (token: string, user: PublicUser) => void; refresh: () => Promise<void> } {
@@ -619,7 +619,7 @@ function makeTutorialCoach(seats: TutorialAssignment) {
   const names: Partial<Record<Player, string>> = {};
   for (const p of PLAYERS) {
     const s = seats[p];
-    if (s.kind === 'ai') names[p] = aiDisplayName(s.level ?? 'random');
+    if (s.kind === 'ai') names[p] = aiDisplayName(s.level ?? 1);
   }
   return (ctx: CoachContext): string => {
     const { state, round, current, eligible, currentIsAI, thinking } = ctx;
@@ -831,7 +831,7 @@ function LocalSetup({ onStart, onBack }: { onStart: (s: SeatConfigs) => void; on
                 <option value="ai">AI</option>
               </select>
               {isAI && (
-                <select className="seat-select" aria-label={`玩家 ${p} 的 AI 难度`} value={d.level} onChange={(e) => setLevel(p, e.target.value as AILevel | 'auto')}>
+                <select className="seat-select" aria-label={`玩家 ${p} 的 AI 难度`} value={d.level} onChange={(e) => setLevel(p, e.target.value === 'auto' ? 'auto' : Number(e.target.value) as AILevel)}>
                   <option value="auto">随机</option>
                   {AI_LEVELS.map((l) => (
                     <option key={l} value={l}>AI {AI_LEVEL_STARS[l]}</option>

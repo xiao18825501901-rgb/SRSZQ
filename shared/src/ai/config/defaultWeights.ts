@@ -39,7 +39,7 @@ export const DEFAULT_WEIGHTS: EvalWeights = {
 };
 
 /** 各档 AI 的运行参数（网页在线配置） */
-export const LEVEL_CONFIG: Record<
+export const TACTIC_CONFIG: Record<
   string,
   { timeBudgetMs: number; maxDepth?: number; candidateK?: number; minDisplayMs: number }
 > = {
@@ -55,7 +55,7 @@ export const LEVEL_CONFIG: Record<
 };
 
 /** 离线 self-play 使用更小的预算以加快评测 */
-export const OFFLINE_LEVEL_CONFIG: Record<
+export const OFFLINE_TACTIC_CONFIG: Record<
   string,
   { timeBudgetMs: number; maxDepth?: number; candidateK?: number }
 > = {

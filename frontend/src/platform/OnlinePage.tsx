@@ -22,6 +22,7 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
   const [now, setNow] = useState(Date.now());
   const [confirmLeave, setConfirmLeave] = useState(false);
   const joinedRef = useRef(false);
+  const lastQueueSyncRef = useRef(0);
 
   // 跟随全局状态
   useEffect(() => gameLink.subscribe(() => force((x) => x + 1)), []);
@@ -33,6 +34,13 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
 
   const phase = gameLink.phase;
   const remaining = Math.max(0, Math.ceil(gameLink.remainingMs() / 1000));
+
+  useEffect(() => {
+    if (phase !== 'queue' || remaining > 0 || gameLink.pastDeadlineMs() < 3000) return;
+    if (now - lastQueueSyncRef.current < 3000) return;
+    lastQueueSyncRef.current = now;
+    gameLink.syncQueue();
+  }, [now, phase, remaining]);
 
   useEffect(() => {
     gameLink.attach();
@@ -89,13 +97,13 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
           <span className="seat-b">B</span>
           <span className="seat-c">C</span>
         </div>
-        <h2>{searching ? 'Searching players…' : '即将匹配完成'}</h2>
+        <h2>{remaining === 0 ? '正在创建对局…' : searching ? 'Searching players…' : '即将匹配完成'}</h2>
         <p>
           {user.username} 正在寻找对手 · 当前等待 {gameLink.waiting || 1} 人
         </p>
         <div className="mm-timer">{remaining}s</div>
         <div className="mm-bar">
-          <div className="mm-bar-fill" style={{ width: `${Math.max(0, Math.min(100, (remaining / 60) * 100))}%` }} />
+          <div className="mm-bar-fill" style={{ width: `${Math.max(0, Math.min(100, (gameLink.remainingMs() / Math.max(1, gameLink.timeoutMs)) * 100))}%` }} />
         </div>
         <p className="muted">60 秒内不足 3 名真人时，将由 AI 补位自动开局（1 人 → 2 AI，2 人 → 1 AI）。</p>
         <p className="muted">对局中离开（含关闭页面/断网超过 10 秒）将判负并计入排行榜。</p>

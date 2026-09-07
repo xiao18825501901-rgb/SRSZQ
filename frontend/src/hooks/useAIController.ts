@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameState, Player } from '../../../shared/src/game/types';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves';
 import { AI_LEVEL_STARS, type AIDecision, type AILevel, type MatchPolicyContext, type SeatConfigs } from '../../../shared/src/ai/types';
-import { LEVEL_CONFIG } from '../../../shared/src/ai/config/defaultWeights';
+import { TACTIC_CONFIG } from '../../../shared/src/ai/config/defaultWeights';
 import { isAISeat, seatLevel, seatsEqual } from '../../../shared/src/ai/seats';
 import { makeSeed } from '../../../shared/src/ai/rng';
 import { requestAIMove, type AIJobHandle } from '../../../shared/src/ai/worker/aiWorkerClient';
@@ -70,7 +70,7 @@ function seedForMove(base: number, turnIndex: number, movesLen: number): number 
  *  - 经引擎 applyMove 落子 —— 引擎仍是唯一规则来源。
  *
  * AI 回合串行：每个 AI 落子（含自动 Pass 链）后状态变化重新触发本控制器。
- * 最短展示时长：快速档（random/tactical）至少显示 THINKING 一小段时间，
+ * 最短展示时长按用户所选星级设置，至少显示 THINKING 一小段时间，
  * 避免“看起来没思考”的闪烁。
  */
 export function useAIController(args: UseAIControllerArgs): UseAIControllerResult {
@@ -184,7 +184,9 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
     }
 
     const level = seatLevel(seats, player);
-    const cfg = LEVEL_CONFIG[level] ?? LEVEL_CONFIG.maxn;
+    // Every difficulty may draw MaxN, so all browser turns receive the same
+    // safe worker budget. Difficulty changes probabilities, not tactic power.
+    const cfg = TACTIC_CONFIG.maxn;
     const gen = ++genRef.current;
     const p: PendingTurn = {
       gen,
@@ -195,7 +197,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
       seatsSnapshot: { A: { ...seats.A }, B: { ...seats.B }, C: { ...seats.C } },
       worker: null as unknown as AIJobHandle,
       timer: null,
-      minDisplayMs: cfg.minDisplayMs ?? 250,
+      minDisplayMs: 220 + (level - 1) * 70,
       startedAt: Date.now(),
       seed: seedForMove(makeSeed(), state.turnIndex, state.moves.length),
     };

@@ -16,7 +16,7 @@ interface Props {
 
 export function PlayerCard({ player, stoneCount, isCurrent, hasEligible, forbiddenCount, winningPointCount, gameOver, seat, thinking }: Props) {
   const isAI = seat?.kind === 'ai';
-  const level = seat?.kind === 'ai' ? seat.level ?? 'random' : null;
+  const level = seat?.kind === 'ai' ? seat.level ?? 1 : null;
   return (
     <div className={`player-card player-${player.toLowerCase()} ${isCurrent ? 'current' : ''} ${hasEligible ? 'eligible' : ''} ${isAI ? 'ai-seat' : ''}`}>
       <div className="player-head">

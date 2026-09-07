@@ -100,7 +100,7 @@ export default function App(props: PlatformHostProps = {}) {
     const out = {} as Record<Player, SeatLite>;
     for (const p of ['A', 'B', 'C'] as Player[]) {
       const s = seats[p];
-      out[p] = s.kind === 'ai' ? { kind: 'ai', stars: (AI_LEVEL_STARS[s.level ?? 'random'].match(/★/g) ?? []).length } : { kind: 'human' };
+      out[p] = s.kind === 'ai' ? { kind: 'ai', stars: (AI_LEVEL_STARS[s.level ?? 1].match(/★/g) ?? []).length } : { kind: 'human' };
     }
     return out;
   }, [seats]);
@@ -226,7 +226,7 @@ export default function App(props: PlatformHostProps = {}) {
         'info',
         n === 0
           ? '已切换为全人类对弈。'
-          : `座位已更新：${['A', 'B', 'C'].filter((p) => next[p as Player].kind === 'ai').map((p) => `玩家 ${p}（AI ${stars((next[p as Player].level ?? 'random') as AILevel)}）`).join('、')} 由 AI 执棋。`,
+          : `座位已更新：${['A', 'B', 'C'].filter((p) => next[p as Player].kind === 'ai').map((p) => `玩家 ${p}（AI ${stars((next[p as Player].level ?? 1) as AILevel)}）`).join('、')} 由 AI 执棋。`,
         5000,
       );
     }
@@ -426,7 +426,7 @@ export default function App(props: PlatformHostProps = {}) {
         <div className="notice pass passbar">
           {currentIsAI ? (
             <span>
-              AI 玩家 {game.current}（AI {stars(isAISeat(displaySeats, game.current) ? ((displaySeats[game.current].level ?? 'random') as AILevel) : 'random')}）没有任何合法落子，将自动跳过。
+              AI 玩家 {game.current}（AI {stars(isAISeat(displaySeats, game.current) ? ((displaySeats[game.current].level ?? 1) as AILevel) : 1)}）没有任何合法落子，将自动跳过。
             </span>
           ) : (
             <span>

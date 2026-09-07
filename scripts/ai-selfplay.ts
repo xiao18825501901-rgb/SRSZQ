@@ -5,7 +5,7 @@
  *   npm run ai:selfplay                # 默认：6 组对阵 × 每棋盘 10 局
  *   npm run ai:selfplay -- --games 3   # 快速冒烟
  *   npm run ai:selfplay -- --size 13   # 只跑 13×13 *
- * 全部决策走与网页相同的 chooseAIMove（引擎合法集唯一来源），
+ * 纯计策决策走与网页相同的计策执行层（引擎合法集唯一来源），
  * 任何 rejected / 内部非法兜底 / 异常都会使进程非零退出 —— 报告数字即真实数字。
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -13,15 +13,16 @@ import { join } from 'node:path';
 import { createInitialState, applyMove, skipCurrentPlayer } from '../shared/src/game/rules';
 import { currentPlayerOf, getLegalMoves } from '../shared/src/game/legalMoves';
 import type { BoardSize, Player } from '../shared/src/game/types';
-import { chooseAIMove } from '../shared/src/ai/chooseAIMove';
-import type { AIDecision, AILevel } from '../shared/src/ai/types';
-import { OFFLINE_LEVEL_CONFIG } from '../shared/src/ai/config/defaultWeights';
+import { chooseTacticMove } from '../shared/src/ai/chooseAIMove';
+import type { AIDecision, TacticId } from '../shared/src/ai/types';
+import { TACTIC_IDS } from '../shared/src/ai/types';
+import { OFFLINE_TACTIC_CONFIG } from '../shared/src/ai/config/defaultWeights';
 import { mulberry32 } from '../shared/src/ai/rng';
 
-type SeatLevels = Record<Player, AILevel>;
+type SeatTactics = Record<Player, TacticId>;
 
-/** 对阵表（座位 A/B/C → 档位），覆盖相邻强度与跳档 */
-const DEFAULT_COMBOS: SeatLevels[] = [
+/** 对阵表（座位 A/B/C → 计策），覆盖相邻强度与跳档。 */
+const DEFAULT_COMBOS: SeatTactics[] = [
   { A: 'random', B: 'tactical', C: 'selfish' },
   { A: 'tactical', B: 'selfish', C: '3ply' },
   { A: 'selfish', B: '3ply', C: 'maxn' },
@@ -32,7 +33,7 @@ const DEFAULT_COMBOS: SeatLevels[] = [
 
 const SIZES: BoardSize[] = [13, 17];
 
-interface LevelStats {
+interface TacticStats {
   decisions: number;
   nodes: number;
   ttHits: number;
@@ -52,14 +53,14 @@ interface ComboResult {
   aborted: number;
   movesTotal: number;
   turnsTotal: number;
-  byLevel: Record<string, LevelStats>;
+  byTactic: Record<string, TacticStats>;
 }
 
-function freshStats(): LevelStats {
+function freshStats(): TacticStats {
   return { decisions: 0, nodes: 0, ttHits: 0, thinkMs: 0, depthSum: 0, wins: 0, passCount: 0, candidatesSum: 0 };
 }
 
-function parseArgs(argv: string[]): { games: number; sizes: BoardSize[]; combos: SeatLevels[] } {
+function parseArgs(argv: string[]): { games: number; sizes: BoardSize[]; combos: SeatTactics[] } {
   let games = 10;
   const sizes: BoardSize[] = [...SIZES];
   let combos = DEFAULT_COMBOS;
@@ -81,17 +82,19 @@ function parseArgs(argv: string[]): { games: number; sizes: BoardSize[]; combos:
           const firstIdx = argv.indexOf('--combo');
           if (i - 1 === firstIdx) combos = [];
         }
-        combos.push({ A: levels[0] as AILevel, B: levels[1] as AILevel, C: levels[2] as AILevel });
+        if (levels.every((level) => TACTIC_IDS.includes(level as TacticId))) {
+          combos.push({ A: levels[0] as TacticId, B: levels[1] as TacticId, C: levels[2] as TacticId });
+        }
       }
     } else if (argv[i] === '--rotate') {
       rotate = true;
     }
   }
   if (rotate) {
-    // 座位轮转：抵消 BAC「B 座 R4 先获权」的座次优势，测真实档位强度
-    const rotated: SeatLevels[] = [];
+    // 座位轮转：抵消行动顺序与 BAC 胜权窗口的座次优势，测真实计策强度。
+    const rotated: SeatTactics[] = [];
     for (const c of combos) {
-      const lv: AILevel[] = [c.A, c.B, c.C];
+      const lv: TacticId[] = [c.A, c.B, c.C];
       rotated.push({ A: lv[0], B: lv[1], C: lv[2] });
       rotated.push({ A: lv[1], B: lv[2], C: lv[0] });
       rotated.push({ A: lv[2], B: lv[0], C: lv[1] });
@@ -133,9 +136,9 @@ function main(): void {
         aborted: 0,
         movesTotal: 0,
         turnsTotal: 0,
-        byLevel: {},
+        byTactic: {},
       };
-      for (const lvl of Object.values(combo)) res.byLevel[lvl] = freshStats();
+      for (const tactic of Object.values(combo)) res.byTactic[tactic] = freshStats();
 
       for (let g = 0; g < games; g++) {
         const gameSeed = rng.int(0x7fffffff);
@@ -146,19 +149,19 @@ function main(): void {
         while (s.status === 'playing' && guard < MAX_TURNS) {
           guard++;
           const cur = currentPlayerOf(s);
-          const level = combo[cur];
+          const tactic = combo[cur];
           const legal = getLegalMoves(s);
           if (legal.length === 0) {
             s = skipCurrentPlayer(s);
             continue;
           }
-          const decision: AIDecision = chooseAIMove(s, cur, level, {
+          const decision: AIDecision = chooseTacticMove(s, cur, tactic, {
             seed: gameSeed + guard,
-            timeBudgetMs: OFFLINE_LEVEL_CONFIG[level].timeBudgetMs,
-            maxDepth: OFFLINE_LEVEL_CONFIG[level].maxDepth,
-            candidateK: OFFLINE_LEVEL_CONFIG[level].candidateK,
+            timeBudgetMs: OFFLINE_TACTIC_CONFIG[tactic].timeBudgetMs,
+            maxDepth: OFFLINE_TACTIC_CONFIG[tactic].maxDepth,
+            candidateK: OFFLINE_TACTIC_CONFIG[tactic].candidateK,
           });
-          const st = res.byLevel[level];
+          const st = res.byTactic[tactic];
           st.decisions++;
           st.nodes += decision.nodes ?? 0;
           st.ttHits += decision.ttHits ?? 0;
@@ -172,7 +175,7 @@ function main(): void {
           }
           const applied = applyMove(s, decision.row, decision.col);
           if (applied.rejected) {
-            origError(`FATAL: illegal move by ${cur}/${level} at (${decision.row},${decision.col}): ${applied.rejected}`);
+            origError(`FATAL: illegal move by ${cur}/${tactic} at (${decision.row},${decision.col}): ${applied.rejected}`);
             process.exit(1);
           }
           s = applied.state;
@@ -181,7 +184,10 @@ function main(): void {
         res.games++;
         res.movesTotal += s.moves.length;
         res.turnsTotal += s.turnIndex;
-        if (s.status === 'won' && s.winner) res.wins[s.winner]++;
+        if (s.status === 'won' && s.winner) {
+          res.wins[s.winner]++;
+          res.byTactic[combo[s.winner]].wins++;
+        }
         else if (s.status === 'draw') res.draws++;
         else res.aborted++;
       }
@@ -192,10 +198,10 @@ function main(): void {
       console.log(
         `[selfplay] ${res.combo.padEnd(20)} ${size}×${size}  games=${res.games}  A=${w.A} B=${w.B} C=${w.C}  draw=${res.draws} abort=${res.aborted}  avgMoves=${(res.movesTotal / Math.max(1, res.games)).toFixed(0)}`,
       );
-      for (const [lvl, st] of Object.entries(res.byLevel)) {
+      for (const [tactic, st] of Object.entries(res.byTactic)) {
         const n = Math.max(1, st.decisions);
         console.log(
-          `           ${lvl.padEnd(9)} decisions=${st.decisions}  wins=${sum > 0 ? ((st.wins / sum) * 100).toFixed(0) : 0}%  avgThink=${(st.thinkMs / n).toFixed(0)}ms  avgNodes=${(st.nodes / n).toFixed(0)}  avgDepth=${(st.depthSum / n).toFixed(2)}  ttHits=${st.ttHits}  pass=${st.passCount}`,
+          `           ${tactic.padEnd(9)} decisions=${st.decisions}  wins=${sum > 0 ? ((st.wins / sum) * 100).toFixed(0) : 0}%  avgThink=${(st.thinkMs / n).toFixed(0)}ms  avgNodes=${(st.nodes / n).toFixed(0)}  avgDepth=${(st.depthSum / n).toFixed(2)}  ttHits=${st.ttHits}  pass=${st.passCount}`,
         );
       }
     }

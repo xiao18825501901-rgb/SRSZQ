@@ -383,7 +383,24 @@ async function main() {
   })()`);
   check('本地落子生效（日志出现记录）', legalClick === true && st.hist > 10, JSON.stringify(st).slice(0, 140));
 
-  // 8) 在线排队（教学已完成用户）
+  // 8) 在线排队：邀请局仍是服务器中的可恢复 active room，因此换用一个
+  // 已完成教学、没有 active room 的隔离账号验证新入队流程。
+  const queueSuffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const queueRegister = await fetch(`${API}/api/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: `queue${queueSuffix}@test.com`, username: `Queue${queueSuffix.slice(-8)}`, password: 'secret1' }),
+  });
+  const queueAuth = await queueRegister.json();
+  const queueDone = await fetch(`${API}/api/tutorial/complete`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${queueAuth.token}`, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const queueCompleted = await queueDone.json();
+  check('在线排队隔离账号准备完成', queueRegister.ok && queueDone.ok, `${queueRegister.status}/${queueDone.status}`);
+  await cdp.eval(`localStorage.setItem('srszq_token', ${JSON.stringify(queueAuth.token)}); localStorage.setItem('srszq_user', ${JSON.stringify(JSON.stringify(queueCompleted.user))}); location.reload();`);
+  await sleep(1000);
   await goto('/online');
   await sleep(1000);
   txt = await bodyText();

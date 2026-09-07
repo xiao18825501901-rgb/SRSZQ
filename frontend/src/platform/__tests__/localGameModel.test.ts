@@ -19,24 +19,24 @@ describe('Guest Local Game 座位配置模型（L4–L8）', () => {
   });
 
   it('L5：两真人 + 一 AI 有效', () => {
-    const draft: LocalDraft = { A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'ai', level: 'tactical' } };
+    const draft: LocalDraft = { A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'ai', level: 2 } };
     const seats = resolveLocalSeats(draft, seeded(2));
     expect(isLocalDraftValid(draft)).toBe(true);
     expect(seats.A.kind).toBe('human');
     expect(seats.B.kind).toBe('human');
     expect(seats.C.kind).toBe('ai');
-    expect(seats.C.level).toBe('tactical');
+    expect(seats.C.level).toBe(2);
   });
 
   it('L6：一真人 + 两 AI 有效', () => {
-    const draft: LocalDraft = { A: { kind: 'human' }, B: { kind: 'ai', level: 'random' }, C: { kind: 'ai', level: 'maxn' } };
+    const draft: LocalDraft = { A: { kind: 'human' }, B: { kind: 'ai', level: 1 }, C: { kind: 'ai', level: 5 } };
     const seats = resolveLocalSeats(draft, seeded(3));
     expect(isLocalDraftValid(draft)).toBe(true);
     expect(localHumanCount(draft)).toBe(1);
     expect(seats.A.kind).toBe('human');
     expect(seats.B.kind).toBe('ai');
     expect(seats.C.kind).toBe('ai');
-    expect(seats.C.level).toBe('maxn');
+    expect(seats.C.level).toBe(5);
   });
 
   it('L7：AI 难度可选择（固定档解析为同档）', () => {

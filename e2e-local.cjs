@@ -303,28 +303,28 @@ async function main() {
   check('3 座位行 × 6 选项', seatInfo.length === 3 && seatInfo.every((x) => x.options.length === 6), `rows=${seatInfo.length}`);
   const optionTexts = await cdp.eval(`(() => [...document.querySelectorAll('.seat-row')].map(row => [...row.querySelectorAll('.seat-select option')].map(o => o.textContent)))()`);
   check('AI 选项只显示 ★（隐藏真实档位名）', optionTexts.every((opts) => opts.slice(1).every((t) => /^AI [★☆]+$/.test(t))), JSON.stringify(optionTexts[0]));
-  await seatChange(0, 'random'); await sleep(200);
-  await seatChange(1, 'tactical'); await sleep(200);
+  await seatChange(0, '1'); await sleep(200);
+  await seatChange(1, '2'); await sleep(200);
   let seatsNow = await seatsApi();
-  check('两个 AI 座位可设（内部档位）', seatsNow.A.kind === 'ai' && seatsNow.B.kind === 'ai' && seatsNow.C.kind === 'human', JSON.stringify(seatsNow));
+  check('两个 AI 座位可设（数字星级）', seatsNow.A.kind === 'ai' && seatsNow.A.level === 1 && seatsNow.B.kind === 'ai' && seatsNow.B.level === 2 && seatsNow.C.kind === 'human', JSON.stringify(seatsNow));
   const cBlocked = await cdp.eval(`(() => {
     const sel = [...document.querySelectorAll('.seat-row')][2].querySelector('.seat-select');
     return [...sel.options].filter(o => o.value !== 'human').every(o => o.disabled);
   })()`);
   check('已达 2 AI 上限 → C 的 AI 选项禁用', cBlocked === true);
-  await seatChange(2, 'selfish'); await sleep(200);
+  await seatChange(2, '3'); await sleep(200);
   seatsNow = await seatsApi();
   check('强选 3 AI 被拒（C 保持人类）', seatsNow.C.kind === 'human', JSON.stringify(seatsNow));
   await seatChange(0, 'human'); await sleep(200);
-  await seatChange(1, '3ply'); await sleep(200);
+  await seatChange(1, '4'); await sleep(200);
   seatsNow = await seatsApi();
-  check('主场景座位：A 人类 / B AI(3ply) / C 人类', seatsNow.A.kind === 'human' && seatsNow.B.level === '3ply', JSON.stringify(seatsNow));
+  check('主场景座位：A 人类 / B 4★ AI / C 人类', seatsNow.A.kind === 'human' && seatsNow.B.level === 4, JSON.stringify(seatsNow));
   await closeStartModal();
 
   // ===== 场景 7：AI 自动行动 + THINKING 锁盘 + 日志星级 =====
   await clickFirstLegal(); // A（人类）
   const thinkSeen = await waitUntil(`(() => { const t = window.__tcf.thinking(); return t && t.player === 'B' ? t : null; })()`, 8000, 25);
-  check('B AI THINKING 可见', thinkSeen !== null && thinkSeen.level === '3ply', JSON.stringify(thinkSeen));
+  check('B 4★ AI THINKING 可见', thinkSeen !== null && thinkSeen.level === 4, JSON.stringify(thinkSeen));
   const during = await getState();
   await cdp.eval(`window.__tcf.place(7, 7)`);
   await clickFirstLegal();
@@ -356,12 +356,12 @@ async function main() {
   await importFile(cdp, {
     boardSize: 13,
     rulesVersion: 2,
-    players: { A: { kind: 'human' }, B: { kind: 'ai', level: 'tactical' }, C: { kind: 'human' } },
+    players: { A: { kind: 'human' }, B: { kind: 'ai', level: 2 }, C: { kind: 'human' } },
     moves: [{ turn: 0, player: 'A', row: 7, col: 7 }],
   });
   seatsNow = await seatsApi();
   gs = await getState();
-  check('导入新格式：players 生效', gs.moves.length >= 1 && seatsNow.B.kind === 'ai' && seatsNow.B.level === 'tactical', JSON.stringify(seatsNow));
+  check('导入新格式：players 数字星级生效', gs.moves.length >= 1 && seatsNow.B.kind === 'ai' && seatsNow.B.level === 2, JSON.stringify(seatsNow));
   gs = await waitMoves(2, 10000);
   check('导入后 AI 自动续走', gs.moves.length >= 2, `moves=${gs.moves.length}`);
   // 旧格式（无 players）→ 全人类

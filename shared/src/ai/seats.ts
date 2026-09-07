@@ -1,6 +1,6 @@
 import type { Player } from '../game/types';
 import { PLAYERS } from '../game/types';
-import { AI_LEVELS, type AILevel, type SeatConfig, type SeatConfigs } from './types';
+import { AI_LEVELS, type AiDifficulty, type SeatConfig, type SeatConfigs, type TacticId } from './types';
 
 /**
  * SRSZQ AI 座位配置工具。
@@ -31,10 +31,21 @@ export function isAISeat(seats: SeatConfigs, player: Player): boolean {
   return seats[player]?.kind === 'ai';
 }
 
-export function seatLevel(seats: SeatConfigs, player: Player): AILevel {
+export function seatLevel(seats: SeatConfigs, player: Player): AiDifficulty {
   const cfg = seats[player];
   if (cfg?.kind === 'ai' && cfg.level) return cfg.level;
-  return 'random';
+  return 1;
+}
+
+const LEGACY_DIFFICULTY: Record<TacticId, AiDifficulty> = {
+  random: 1, tactical: 2, selfish: 3, '3ply': 4, maxn: 5,
+};
+
+export function parseAiDifficulty(raw: unknown): AiDifficulty {
+  if (typeof raw === 'number' && AI_LEVELS.includes(raw as AiDifficulty)) return raw as AiDifficulty;
+  if (typeof raw === 'string' && raw in LEGACY_DIFFICULTY) return LEGACY_DIFFICULTY[raw as TacticId];
+  const numeric = Number(raw);
+  return AI_LEVELS.includes(numeric as AiDifficulty) ? numeric as AiDifficulty : 1;
 }
 
 export function aiMode(seats: SeatConfigs): boolean {
@@ -54,7 +65,7 @@ export function canSetAISeat(seats: SeatConfigs, player: Player): boolean {
 
 /**
  * 从任意 JSON 值解析座位配置（导入/持久化）。
- * 非对象 / 缺字段一律回退全人类；非法 level 回退 random；
+ * 非对象 / 缺字段一律回退全人类；非法 level 回退 1★；
  * 三 AI（内部格式）在用户侧回退为「A 人类 + 其余原样」。
  */
 export function parseSeatConfigs(raw: unknown): SeatConfigs {
@@ -66,8 +77,7 @@ export function parseSeatConfigs(raw: unknown): SeatConfigs {
     if (!seat || typeof seat !== 'object') continue;
     const kind = seat.kind;
     if (kind === 'ai') {
-      const level = seat.level;
-      out[p] = { kind: 'ai', level: AI_LEVELS.includes(level as AILevel) ? (level as AILevel) : 'random' };
+      out[p] = { kind: 'ai', level: parseAiDifficulty(seat.level) };
     }
   }
   // 用户约束：至少 1 真人
@@ -83,7 +93,7 @@ export function serializeSeats(seats: SeatConfigs): Record<Player, SeatConfig> {
   const out = {} as Record<Player, SeatConfig>;
   for (const p of PLAYERS) {
     const s = seats[p];
-    out[p] = s?.kind === 'ai' ? { kind: 'ai', level: s.level ?? 'random' } : { kind: 'human' };
+    out[p] = s?.kind === 'ai' ? { kind: 'ai', level: s.level ?? 1 } : { kind: 'human' };
   }
   return out;
 }
@@ -94,7 +104,7 @@ export function seatsEqual(a: SeatConfigs, b: SeatConfigs): boolean {
     const sa = a[p];
     const sb = b[p];
     if (sa?.kind !== sb?.kind) return false;
-    if (sa?.kind === 'ai' && sb?.kind === 'ai') return (sa.level ?? 'random') === (sb.level ?? 'random');
+    if (sa?.kind === 'ai' && sb?.kind === 'ai') return (sa.level ?? 1) === (sb.level ?? 1);
     return true;
   });
 }

@@ -12,6 +12,7 @@ export * from './game/rules';
 export * from './ai/types';
 export * from './ai/seats';
 export * from './ai/rng';
+export * from './ai/tacticMixer';
 export * from './ai/evaluation';
 export * from './ai/chooseAIMove';
 export * from './ai/search';

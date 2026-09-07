@@ -1,12 +1,12 @@
 import type { GameState, Player } from '../../game/types';
-import type { AIDecision, AILevel, AIOptions } from '../types';
+import type { AIDecision, AiDifficulty, AIOptions } from '../types';
 import { chooseAIMove } from '../chooseAIMove';
 
 /**
  * SRSZQ AI Web Worker。
  *
  * 每个请求一个独立 Worker（由客户端创建），单次 job 协议：
- *  - 入站：{ id, state, player, level, options }
+ *  - 入站：{ id, state, player, difficulty, options }
  *  - 出站：{ id, decision } 或 { id, decision: null, error }
  *
  * 所有决策逻辑与主线程完全共享 src/ai + src/game（引擎即规则来源）。
@@ -17,7 +17,7 @@ export interface AIWorkerRequest {
   id: number;
   state: GameState;
   player: Player;
-  level: AILevel;
+  difficulty: AiDifficulty;
   options: AIOptions;
 }
 
@@ -36,9 +36,9 @@ type WorkerLike = {
 const ctx = self as unknown as WorkerLike;
 
 ctx.onmessage = (ev: MessageEvent<AIWorkerRequest>) => {
-  const { id, state, player, level, options } = ev.data;
+  const { id, state, player, difficulty, options } = ev.data;
   try {
-    const decision = chooseAIMove(state, player, level, options);
+    const decision = chooseAIMove(state, player, difficulty, options);
     const resp: AIWorkerResponse = { id, decision };
     ctx.postMessage(resp);
   } catch (e) {

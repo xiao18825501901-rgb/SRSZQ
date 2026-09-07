@@ -14,7 +14,7 @@
     "dev:backend": "npm run dev -w backend",
     "build": "npm run build -w frontend",
     "preview": "npm run preview -w frontend",
-    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck -w frontend",
+    "typecheck": "tsc --noEmit -p tsconfig.json && npm run typecheck -w frontend && npm run typecheck -w backend",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:backend": "tsx backend/tests/api.integration.ts",
@@ -23,7 +23,10 @@
     "e2e:local": "node e2e-local.cjs",
     "e2e:w9": "node e2e-w9.cjs",
     "ai:selfplay": "tsx scripts/ai-selfplay.ts",
-    "ai:benchmark": "tsx scripts/ai-benchmark.ts"
+    "ai:benchmark": "tsx scripts/ai-benchmark.ts",
+    "ai:distribution": "tsx scripts/ai-tactic-distribution.ts",
+    "ai:tournament": "tsx scripts/ai-tournament.ts",
+    "e2e:w10": "node e2e-w10.cjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
