@@ -11,6 +11,7 @@ import type { Player } from '../../../shared/src/game/types';
 import { getEligiblePlayer } from '../../../shared/src/game/eligibility';
 import { Board } from '../components/Board';
 import { BacTimelinePanel } from '../components/BacTimelinePanel';
+import { MobileVictoryTimelineStrip } from '../components/MobileVictoryTimelineStrip';
 import { gameLink } from '../ws';
 import { currentPlayerOf } from '../../../shared/src/game/legalMoves';
 import { Btn } from '../ui';
@@ -231,12 +232,31 @@ export function OnlinePage({ user, onExit }: { user: { username: string }; onExi
           </div>
         ))}
       </div>
+      <div className="online-mobile-players" aria-label="在线对局座位">
+        {(['A', 'B', 'C'] as Player[]).map((p) => {
+          const seat = g.seats[p];
+          const description = seat.kind === 'ai' ? `AI ${'★'.repeat(seat.stars ?? 1)}` : seat.username ?? '真人';
+          return (
+            <div key={p} className={`online-mobile-seat seat-${p.toLowerCase()} ${p === g.mySeat ? 'mine' : ''}`}>
+              <b>{p}</b>
+              <span>{description}</span>
+              {p === g.mySeat && <em>YOU</em>}
+            </div>
+          );
+        })}
+      </div>
+      <MobileVictoryTimelineStrip
+        qualification={g.qualification ?? null}
+        state={g.state}
+        mySeat={g.mySeat}
+        seats={g.seats}
+      />
       <div className="online-layout">
         <section className="online-board-col">
           {gameLink.error && <p className="error-text">{gameLink.error}</p>}
           <Board state={g.state} showLegal={myTurn} showWinning={false} onCellClick={clickCell} />
         </section>
-        <aside>
+        <aside className="online-desktop-bac">
           {/* BAC 资格时间线：视图来自服务器每帧广播的 qualification（权威），断线重连后由 game.start 恢复 */}
           <BacTimelinePanel
             qualification={g.qualification ?? null}

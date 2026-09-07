@@ -189,6 +189,66 @@ async function main(): Promise<void> {
   await api('POST', '/api/tutorial/complete', {}, a.token);
   await api('POST', '/api/tutorial/complete', {}, b.token);
 
+  const w9Users = await Promise.all(['W9Solo', 'W9DuoA', 'W9DuoB', 'W9TriA', 'W9TriB', 'W9TriC'].map(registerUser));
+  await Promise.all(w9Users.map((user) => api('POST', '/api/tutorial/complete', {}, user.token)));
+
+  // W9：用 250ms 可注入 timeout 验证服务器权威的 AI 补位与开局 payload（生产默认仍为 60s）
+  await check('W9 1H timeout → 2AI → room/game.start + 13×13 + BAC payload', async () => {
+    const client = await connect(w9Users[0].token);
+    try {
+      send(client, { type: 'queue.join' });
+      const joined = await waitFor(client, 'queue.joined');
+      assert.equal(joined.timeoutMs, 250);
+      const start = await waitFor(client, 'game.start', 3000);
+      assert.equal(Object.values(start.seats).filter((seat: any) => seat.kind === 'human').length, 1);
+      assert.equal(Object.values(start.seats).filter((seat: any) => seat.kind === 'ai').length, 2);
+      assert.equal(start.state.boardSize, 13);
+      assert.equal(start.state.board.length, 13);
+      assert.deepEqual(start.qualification, {
+        currentRound: 1,
+        currentEligible: null,
+        upcoming: start.qualification.upcoming,
+      });
+      assert.equal(start.qualification.upcoming.find((entry: any) => entry.round === 6)?.player, 'C');
+    } finally {
+      close(client);
+      await sleep(450);
+    }
+  });
+
+  await check('W9 2H timeout → 1AI → both clients receive identical room/seats/BAC', async () => {
+    const clients = await Promise.all([connect(w9Users[1].token), connect(w9Users[2].token)]);
+    try {
+      clients.forEach((client) => send(client, { type: 'queue.join' }));
+      const starts = await Promise.all(clients.map((client) => waitFor(client, 'game.start', 3000)));
+      assert.equal(starts[0].gameId, starts[1].gameId);
+      assert.deepEqual(starts[0].seats, starts[1].seats);
+      assert.deepEqual(starts[0].qualification, starts[1].qualification);
+      assert.equal(Object.values(starts[0].seats).filter((seat: any) => seat.kind === 'human').length, 2);
+      assert.equal(Object.values(starts[0].seats).filter((seat: any) => seat.kind === 'ai').length, 1);
+      assert.equal(starts[0].state.boardSize, 13);
+    } finally {
+      clients.forEach(close);
+      await sleep(450);
+    }
+  });
+
+  await check('W9 3H → immediate normal match without AI', async () => {
+    const clients = await Promise.all(w9Users.slice(3).map((user) => connect(user.token)));
+    try {
+      const startedAt = Date.now();
+      clients.forEach((client) => send(client, { type: 'queue.join' }));
+      const starts = await Promise.all(clients.map((client) => waitFor(client, 'game.start', 1000)));
+      assert.ok(Date.now() - startedAt < 250, '3H must start before the AI-fill timeout');
+      assert.ok(starts.every((start) => start.gameId === starts[0].gameId));
+      assert.ok(starts.every((start) => Object.values(start.seats).every((seat: any) => seat.kind === 'human')));
+      assert.deepEqual(new Set(starts.map((start) => start.yourSeat)), new Set(['A', 'B', 'C']));
+    } finally {
+      clients.forEach(close);
+      await sleep(450);
+    }
+  });
+
   // 1) 教学门禁
   await check('未完成教学不能匹配（tutorial required）', async () => {
     const c1 = await connect(cTut.token);

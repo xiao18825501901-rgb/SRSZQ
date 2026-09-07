@@ -21,6 +21,7 @@
     "test:ws": "tsx backend/tests/ws.integration.ts",
     "e2e": "node e2e.cjs",
     "e2e:local": "node e2e-local.cjs",
+    "e2e:w9": "node e2e-w9.cjs",
     "ai:selfplay": "tsx scripts/ai-selfplay.ts",
     "ai:benchmark": "tsx scripts/ai-benchmark.ts"
   },

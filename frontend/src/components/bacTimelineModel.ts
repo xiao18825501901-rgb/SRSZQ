@@ -44,6 +44,16 @@ export function nextWindowHint(view: QualificationView): { round: number; player
   return e && e.player ? { round: e.round, player: e.player } : null;
 }
 
+/** 当前轮起，指定座位最近一次胜权；只消费服务器/共享引擎提供的时间线窗口。 */
+export function nextVictoryFor(view: QualificationView, seat: Player | null | undefined): { round: number; player: Player } | null {
+  if (!seat) return null;
+  const entry = [
+    { round: view.currentRound, player: view.currentEligible },
+    ...view.upcoming,
+  ].find((item) => item.player === seat);
+  return entry?.player ? { round: entry.round, player: entry.player } : null;
+}
+
 /** 座位显示名：你 / 真人用户名 / AI ★ */
 export function seatName(seat: Player, seats?: Record<Player, SeatLite> | null, mySeat?: Player | null): string {
   if (mySeat === seat) return 'You';

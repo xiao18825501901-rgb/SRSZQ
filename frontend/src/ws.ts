@@ -58,6 +58,7 @@ export function getSocket(): SrszqSocket {
 
 /** 登出/换号：断开并重置全局游戏状态 */
 export function resetSocket(): void {
+  gameLink.detach();
   socket?.close();
   socket = null;
   gameLink.reset();
@@ -114,9 +115,17 @@ class GameLink {
   seatStatus: SeatStatusEvent | null = null;
   private listeners = new Set<() => void>();
   private off: (() => void) | null = null;
+  private wantsQueue = false;
 
   attach(): void {
     const sock = getSocket();
+    sock.onOpen = () => {
+      if (this.phase === 'game' && this.game?.gameId) {
+        sock.send({ type: 'resume', gameId: this.game.gameId });
+      } else if (this.wantsQueue || this.phase === 'queue') {
+        sock.send({ type: 'queue.join' });
+      }
+    };
     if (!this.off) {
       this.off = sock.on((msg) => this.handle(msg));
     }
@@ -128,6 +137,7 @@ class GameLink {
       this.off();
       this.off = null;
     }
+    if (socket) socket.onOpen = null;
   }
 
   reset(): void {
@@ -139,6 +149,7 @@ class GameLink {
     this.endInfo = null;
     this.seatStatus = null;
     this.queueStartAt = 0;
+    this.wantsQueue = false;
     this.emit();
   }
 
@@ -187,6 +198,7 @@ class GameLink {
   private handle(msg: Record<string, any>): void {
     switch (msg.type) {
       case 'queue.joined':
+        this.wantsQueue = true;
         this.phase = 'queue';
         this.waiting = msg.waiting ?? 0;
         this.timeoutMs = msg.timeoutMs ?? this.timeoutMs;
@@ -197,6 +209,7 @@ class GameLink {
         this.error = String(msg.error ?? 'unknown');
         break;
       case 'game.start': {
+        this.wantsQueue = false;
         this.phase = 'game';
         this.game = {
           gameId: String(msg.gameId),
@@ -242,10 +255,12 @@ class GameLink {
   }
 
   joinQueue(): void {
+    this.wantsQueue = true;
     getSocket().send({ type: 'queue.join' });
   }
 
   leaveQueue(): void {
+    this.wantsQueue = false;
     getSocket().send({ type: 'queue.leave' });
   }
 

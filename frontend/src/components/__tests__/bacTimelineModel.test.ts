@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { qualificationOf } from '../../../../shared/src/game/qualification';
 import { createInitialState } from '../../../../shared/src/game/rules';
-import { perspectiveLines, resolveView, rowsFromView, seatName } from '../bacTimelineModel';
+import { nextVictoryFor, perspectiveLines, resolveView, rowsFromView, seatName } from '../bacTimelineModel';
 
 const humanSeats = {
   A: { kind: 'human' as const, username: 'Alice' },
@@ -24,6 +24,13 @@ describe('BAC 时间线 payload 渲染模型（视图 → 行）', () => {
     const rows = rowsFromView(qualificationOf(6));
     expect(rows[0]).toMatchObject({ round: 6, player: 'C', isNow: true });
     expect(rows[1]).toMatchObject({ round: 7, player: 'B', isNext: true });
+  });
+
+  it('移动时间线：从服务器窗口解析自己的当前/下一次胜权', () => {
+    expect(nextVictoryFor(qualificationOf(2), 'B')).toEqual({ round: 7, player: 'B' });
+    expect(nextVictoryFor(qualificationOf(6), 'C')).toEqual({ round: 6, player: 'C' });
+    expect(nextVictoryFor(qualificationOf(7), 'A')).toEqual({ round: 8, player: 'A' });
+    expect(nextVictoryFor(qualificationOf(2), null)).toBeNull();
   });
 
   it('resolveView：优先服务器 payload；缺省时用共享引擎从 state 计算（同一规则源）', () => {
