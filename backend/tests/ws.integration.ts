@@ -571,7 +571,8 @@ async function main(): Promise<void> {
     assert.ok(!noEnd, '好友局不应终局');
     close(ca);
     close(cb);
-    await sleep(200);
+    // 等待服务端处理两个 close 并释放邀请房间，避免下一用例复用用户时撞上旧房间。
+    await sleep(700);
     // 邀请局非排位：games 不应增加
     const after = (await api('GET', '/api/ranking')).json.ranking.find((u: any) => u.id === a.id);
     assert.equal(after?.games ?? 0, gamesBefore, '邀请局不计入排位 games');
@@ -579,10 +580,15 @@ async function main(): Promise<void> {
 
   // 9) Test7：AI 补位局人类退出 → 立即终局（AI 不继续），其他人类胜
   await check('Test7 AI 补位（2H+1AI）：A 退出即终局，B 胜、AI 不继续', async () => {
-    const c1 = await connect(a.token);
-    const c2 = await connect(b.token);
+    // 使用独立用户，避免前一好友局的异步 close/abort 状态污染本用例。
+    const test7Alice = await registerUser('Alice7');
+    const test7Bob = await registerUser('Bob7');
+    await api('POST', '/api/tutorial/complete', {}, test7Alice.token);
+    await api('POST', '/api/tutorial/complete', {}, test7Bob.token);
+    const c1 = await connect(test7Alice.token);
+    const c2 = await connect(test7Bob.token);
     try {
-      const [beforeA, beforeB] = await Promise.all([rankOf(a.id), rankOf(b.id)]);
+      const [beforeA, beforeB] = await Promise.all([rankOf(test7Alice.id), rankOf(test7Bob.id)]);
       send(c1, { type: 'queue.join' });
       send(c2, { type: 'queue.join' });
       const [s1, s2] = await Promise.all([waitFor(c1, 'game.start', 5000), waitFor(c2, 'game.start', 5000)]);
@@ -605,15 +611,20 @@ async function main(): Promise<void> {
       assert.equal(endW.reason, 'PLAYER_FORFEIT');
       assert.deepEqual(endL.loserSeats, [leaverSeat]);
       assert.deepEqual(endL.winnerSeats, [winnerSeat]);
-      assert.deepEqual(endL.winnerIds, [b.id], '另一位人类胜（Bob）');
-      assert.deepEqual(endL.loserIds, [a.id], '离场者 Alice');
+      assert.deepEqual(endL.winnerIds, [test7Bob.id], '另一位人类胜（Bob7）');
+      assert.deepEqual(endL.loserIds, [test7Alice.id], '离场者 Alice7');
       const row = await pollUntil(() => matchRowOf(gameId));
       assert.ok(row);
       assert.equal(row.end_reason, 'PLAYER_FORFEIT');
-      // AI 不继续：终局后无任何 game.state/AI 落子
+      // WebSocket 保序：MATCH_ENDED 已到达时，队列里残留的 game.state 都发生在终局前
+      // （随机到 AI 先手时可能存在）。清掉这些历史事件后，只观察终局后的新消息。
+      for (let i = winner.msgs.length - 1; i >= 0; i--) {
+        if (winner.msgs[i].type === 'game.state') winner.msgs.splice(i, 1);
+      }
+      // AI 不继续：终局后无任何新的 game.state/AI 落子
       const st = await drainUntil(winner, 'game.state', () => true, 500);
       assert.ok(!st, '人类退出后 AI 不应继续推进');
-      const [afterA, afterB] = await Promise.all([rankOf(a.id), rankOf(b.id)]);
+      const [afterA, afterB] = await Promise.all([rankOf(test7Alice.id), rankOf(test7Bob.id)]);
       assert.equal(afterA.rating, beforeA.rating - 10);
       assert.equal(afterA.games, beforeA.games + 1);
       assert.equal(afterB.rating, beforeB.rating + 30);
