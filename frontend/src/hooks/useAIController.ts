@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameState, Player } from '../../../shared/src/game/types';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves';
-import { AI_LEVEL_STARS, type AIDecision, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
+import { AI_LEVEL_STARS, type AIDecision, type AILevel, type MatchPolicyContext, type SeatConfigs } from '../../../shared/src/ai/types';
 import { LEVEL_CONFIG } from '../../../shared/src/ai/config/defaultWeights';
 import { isAISeat, seatLevel, seatsEqual } from '../../../shared/src/ai/seats';
 import { makeSeed } from '../../../shared/src/ai/rng';
@@ -43,6 +43,8 @@ interface UseAIControllerArgs {
   onAIPassNotice?: (text: string) => void;
   /** 默认开启；仅 BAC 模式（CBA/CBACC 座位固定全人类） */
   enabled?: boolean;
+  /** 内部对局策略上下文（NOT PLAYER-FACING；如 HvAI 1H+2AI 的 fastest-threat 防守） */
+  policy?: MatchPolicyContext;
 }
 
 interface UseAIControllerResult {
@@ -72,7 +74,7 @@ function seedForMove(base: number, turnIndex: number, movesLen: number): number 
  * 避免“看起来没思考”的闪烁。
  */
 export function useAIController(args: UseAIControllerArgs): UseAIControllerResult {
-  const { state, seats, placeStone, passTurn, onAIMove, onAIError, onAIPassNotice } = args;
+  const { state, seats, placeStone, passTurn, onAIMove, onAIError, onAIPassNotice, policy } = args;
   const enabled = args.enabled ?? true;
 
   const [thinking, setThinking] = useState<AIThinking | null>(null);
@@ -212,6 +214,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
             timeBudgetMs: Math.min(400, cfg.timeBudgetMs ?? 400),
             candidateK: Math.min(6, cfg.candidateK ?? 6),
             maxDepth: Math.min(4, cfg.maxDepth ?? 4),
+            policy,
           });
         } catch {
           fallback = null;
@@ -240,7 +243,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
       }
     };
 
-    p.worker = requestAIMove(state, player, level, { seed: p.seed, timeBudgetMs: cfg.timeBudgetMs, maxDepth: cfg.maxDepth, candidateK: cfg.candidateK }, handleResult);
+    p.worker = requestAIMove(state, player, level, { seed: p.seed, timeBudgetMs: cfg.timeBudgetMs, maxDepth: cfg.maxDepth, candidateK: cfg.candidateK, policy }, handleResult);
     pendingRef.current = p;
 
     return () => {

@@ -792,3 +792,26 @@ button.linklike { color: var(--color-wood-700); font-weight: 700; text-decoratio
   .stone-win { animation: none !important; box-shadow: 0 0 0 4px #fff2c7, var(--shadow-piece); }
   .fade-in { animation: none !important; }
 }
+
+/* ============ W8：手机竖屏：胜权轨道移到棋盘上方 + 横向排列（Desktop 保持右侧布局） ============ */
+@media (max-width: 900px) and (orientation: portrait) {
+  /* Online 页：bac 面板在 aside 内，提到棋盘前 */
+  .online-layout { display: flex; flex-direction: column; }
+  .online-layout > aside { order: -1; }
+  .online-layout > .online-board-col { order: 0; }
+
+  /* 本地/人机 Host：side-col 展开为格子项，只把 bac 面板提到棋盘前，其余控制/历史保持在棋盘后 */
+  .main { display: grid; grid-template-columns: 1fr; }
+  .main > .side-col { display: contents; }
+  .main .bac-panel { order: 1; margin-bottom: 12px; }
+  .main > .board-col { order: 2; }
+  .main .side-col > *:not(.bac-panel) { order: 3; }
+
+  /* 胜权轨道横向：可滚动，当前项/当前胜权默认可见 */
+  .bac-rows { flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+  .bac-row { flex: 0 0 auto; flex-direction: column; align-items: center; width: 62px; gap: 2px; padding: 6px 4px; }
+  .bac-row .bac-rno { width: auto; }
+  .bac-row .bac-flag { width: auto; }
+  .bac-row .bac-pname { max-width: 58px; font-size: 10.5px; }
+  .bac-collapse-btn { display: none; }
+}

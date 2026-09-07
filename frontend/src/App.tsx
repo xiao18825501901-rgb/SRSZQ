@@ -17,7 +17,7 @@ import { importMoves, applyAutoPassChain } from '../../shared/src/game/rules';
 import { getWinningPoints, getForbiddenCells } from '../../shared/src/game/legalMoves';
 import { getEligiblePlayer } from '../../shared/src/game/eligibility';
 import type { GameState } from '../../shared/src/game/types';
-import type { AIDecision, AILevel, SeatConfigs } from '../../shared/src/ai/types';
+import type { AIDecision, AILevel, MatchPolicyContext, SeatConfigs } from '../../shared/src/ai/types';
 import { AI_LEVEL_STARS } from '../../shared/src/ai/types';
 import { allHumanSeats, countAI, countHuman, isAISeat, parseSeatConfigs, serializeSeats } from '../../shared/src/ai/seats';
 import { useAIController, type AIThinking } from './hooks/useAIController';
@@ -40,6 +40,8 @@ export interface PlatformHostProps {
   embedded?: boolean;
   /** 教程教练：在状态栏下渲染一行上下文教学提示（仅教程页提供） */
   coach?: (ctx: CoachContext) => ReactNode;
+  /** 内部对局策略上下文（NOT PLAYER-FACING；如 HvAI 1H+2AI fastest-threat） */
+  aiPolicy?: MatchPolicyContext;
 }
 
 export interface CoachContext {
@@ -52,7 +54,7 @@ export interface CoachContext {
 }
 
 export default function App(props: PlatformHostProps = {}) {
-  const { hostTitle, presetSeats, onExit, onGameEnd, embedded, coach } = props;
+  const { hostTitle, presetSeats, onExit, onGameEnd, embedded, coach, aiPolicy } = props;
   const game = useGame(13);
   const { state } = game;
 
@@ -144,6 +146,7 @@ export default function App(props: PlatformHostProps = {}) {
     onAIMove: handleAIMove,
     onAIError: handleAIError,
     onAIPassNotice: handleAIPassNotice,
+    policy: aiPolicy,
   });
   const thinking: AIThinking | null = ai.thinking;
   const currentIsAI = ai.currentIsAI;

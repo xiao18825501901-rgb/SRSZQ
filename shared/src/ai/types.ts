@@ -64,6 +64,24 @@ export interface AIOptions {
   seed?: number;
   /** 候选动作上限（3ply / maxn 剪枝） */
   candidateK?: number;
+  /** 对局策略上下文（内部 only，NOT PLAYER-FACING） */
+  policy?: MatchPolicyContext;
+}
+
+/** 内部对局策略上下文（绝不展示给玩家）。difficulty 与 policy 分离。 */
+export interface MatchPolicyContext {
+  /**
+   * Online 1H+2AI 且 acting AI 难度 ∈ {3★,4★,5★}：防守目标偏好——
+   * 当 Human 与另一个 AI 都有 meaningful 防守候选时，优先封堵另一个 AI。
+   * 绝不覆盖 AI 自己的立即获胜；若 Human 是唯一真实威胁则照常堵 Human。
+   */
+  protectSingleHuman?: boolean;
+  /** 唯一真人座位（protectSingleHuman 时提供） */
+  humanSeat?: Player;
+  /**
+   * HvAI 1H+2AI：无自胜时优先封堵“预计轮数上最快能赢”的对手（不区分真人/AI）。
+   */
+  defenseFastestThreat?: boolean;
 }
 
 /** 决策上下文 */

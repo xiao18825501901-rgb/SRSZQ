@@ -38,14 +38,17 @@ describe('Human seat 随机 A/B/C（T4/T5/T6）', () => {
 });
 
 describe('AI difficulty 初始化随机（T7/T8/T9/T10）', () => {
-  it('两个 AI 难度来自真实 registry、可不同也可相同', () => {
+  it('两个 AI 难度仅来自 1★/2★/3★（4/5 不可能）、可不同也可相同', () => {
     let anyEqual = false;
     const seen = new Set<string>();
     for (let s = 0; s < 200; s++) {
       const seats = createTutorialAssignment(seeded(s));
       const levels = PLAYERS.filter((p) => seats[p].kind === 'ai').map((p) => seats[p].level!);
       expect(levels).toHaveLength(2);
-      levels.forEach((l) => expect(AI_LEVELS.includes(l)).toBe(true));
+      levels.forEach((l) => {
+        expect(['random', 'tactical', 'selfish']).toContain(l);
+        expect(['3ply', 'maxn']).not.toContain(l);
+      });
       seen.add(levels.join('|'));
       if (levels[0] === levels[1]) anyEqual = true;
     }

@@ -213,7 +213,7 @@ async function main(): Promise<void> {
       const ais = seats.filter((s) => s.kind === 'ai');
       assert.equal(ais.length, 2);
       assert.ok(ais.every((s) => typeof s.stars === 'number' && s.stars >= 1 && s.stars <= 5));
-      assert.ok(ais.every((s) => s.stars === 4 || s.stars === 5), 'Online 系统 AI 补位只允许 4★/5★');
+      assert.ok(ais.every((s) => [2, 3, 4, 5].includes(s.stars!)), 'Online 1H+2AI 补位只允许 2★/3★/4★/5★');
       assert.ok(ais.every((s) => !('aiLevel' in s)), '客户端不得见到真实 AI 档位');
       assert.equal(start.mode, 'online');
       const me = start.yourSeat as string;

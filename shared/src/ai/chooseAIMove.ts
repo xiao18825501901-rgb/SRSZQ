@@ -6,6 +6,7 @@ import { tacticalAgent } from './tacticalAgent';
 import { selfishAgent } from './selfishAgent';
 import { threePlySearch, maxnSearch } from './searchAgents';
 import { makeRng } from './rng';
+import { applyDefensePolicy } from './defensePolicy';
 
 /**
  * SRSZQ AI 统一决策入口。
@@ -72,6 +73,21 @@ export function chooseAIMove(state: GameState, player: Player, level: AILevel, o
         reason: `MaxN depth ${r.depth} best utility`,
       };
       break;
+    }
+  }
+
+  // 内部防守策略（NOT PLAYER-FACING）：
+  //  - Online 1H+2AI 仅 3/4/5★ 启用 Human 保护偏好（2★ 无）；
+  //  - HvAI 最快威胁策略对除 1★(random) 外的档位生效。
+  if (options.policy) {
+    const protectOk = options.policy.protectSingleHuman === true && (level === 'selfish' || level === '3ply' || level === 'maxn');
+    const fastestOk = options.policy.defenseFastestThreat === true && level !== 'random';
+    if (protectOk || fastestOk) {
+      decision = applyDefensePolicy(state, player, decision, options.policy, rng);
+      if (!decision.pass) {
+        const ok = legal.some((m) => m.row === decision.row && m.col === decision.col);
+        if (!ok) decision = { row: legal[0].row, col: legal[0].col, pass: false, reason: 'policy fallback' };
+      }
     }
   }
 

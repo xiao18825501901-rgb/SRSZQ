@@ -1,6 +1,6 @@
 import type { Player } from '../game/types';
 import { PLAYERS } from '../game/types';
-import { AI_LEVELS, type AILevel } from './types';
+import type { AILevel } from './types';
 
 /**
  * SRSZQ 随机分配工具（seat / AI difficulty）。
@@ -38,12 +38,24 @@ export function tutorialHumanSeat(rand: Rng = defaultRng): Player {
   return pickUniform(PLAYERS, rand);
 }
 
-/** 教程单个 AI 难度：真实 registry 全档均匀随机（1★–5★），独立可重复 */
+/** 教程单个 AI 难度：仅 1★/2★/3★（random/tactical/selfish）均匀随机，独立可重复 */
 export function tutorialAiLevel(rand: Rng = defaultRng): AILevel {
-  return pickUniform(AI_LEVELS, rand);
+  return pickUniform<AILevel>(['random', 'tactical', 'selfish'], rand);
 }
 
-/** Online Match 系统 AI 补位难度：仅 4★(3ply) / 5★(maxn)，独立随机，不全部固定 5★ */
-export function onlineAiFillLevel(rand: Rng = defaultRng): AILevel {
-  return pickUniform<AILevel>(['3ply', 'maxn'], rand);
+/**
+ * Online 1H+2AI 的单个 AI 补位难度（累计区间，每个 AI 独立调用）：
+ *   2★=20% [0.00,0.20) · 3★=30% [0.20,0.50) · 4★=40% [0.50,0.90) · 5★=10% [0.90,1.00)
+ */
+export function pickOnlineSingleHumanAiDifficulty(rand: Rng = defaultRng): AILevel {
+  const r = rand();
+  if (r < 0.2) return 'tactical'; // 2★
+  if (r < 0.5) return 'selfish'; // 3★
+  if (r < 0.9) return '3ply'; // 4★
+  return 'maxn'; // 5★
+}
+
+/** Online 2H+1AI 的 AI 补位难度：4★=60% [0.00,0.60)，5★=40% [0.60,1.00) */
+export function pickOnlineTwoHumanAiDifficulty(rand: Rng = defaultRng): AILevel {
+  return rand() < 0.6 ? '3ply' : 'maxn';
 }

@@ -12,7 +12,8 @@ import { createInitialState, applyMove, forcePass, skipCurrentPlayer } from '../
 import type { GameState } from '../../../shared/src/game/types.js';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves.js';
 import { qualificationFromState } from '../../../shared/src/game/qualification.js';
-import { onlineAiFillLevel, shuffled } from '../../../shared/src/ai/assignment.js';
+import { pickOnlineSingleHumanAiDifficulty, pickOnlineTwoHumanAiDifficulty, shuffled } from '../../../shared/src/ai/assignment.js';
+import type { MatchPolicyContext } from '../../../shared/src/ai/types.js';
 import { chooseAIMove } from '../../../shared/src/ai/chooseAIMove.js';
 import type { AILevel } from '../../../shared/src/ai/types.js';
 import { OFFLINE_LEVEL_CONFIG } from '../../../shared/src/ai/config/defaultWeights.js';
@@ -75,6 +76,8 @@ interface Room {
   phase: RoomPhase;
   endReason?: EndReason;
   disconnectTimers: Map<Seat, ReturnType<typeof setTimeout>>; // online=判负宽限；invite=自动跳过
+  /** 内部 AI 策略上下文（NOT PLAYER-FACING）：online 1H+2AI 保护偏好 */
+  policy: MatchPolicyContext | null;
 }
 
 const AI_WEIGHTS: Array<{ level: AILevel; w: number }> = [
@@ -271,8 +274,11 @@ export class GameServer {
   }
 
   /** 启动对局：
-   *  - online（排位队列）：参与者座位由服务器随机分配（1H/2H/3H 统一），
-   *    系统 AI 补位难度仅 4★(3ply)/5★(maxn)、逐个独立随机（不全部固定 5★）；
+   *  - online（排位队列）：参与者座位由服务器随机分配（1H/2H/3H 统一）；
+   *    AI 补位难度按真人数量分级：
+   *      1H+2AI：每个 AI 独立 2★20% / 3★30% / 4★40% / 5★10%（3/4/5★ 启用内部 Human 保护偏好，2★ 不启用）；
+   *      2H+1AI：4★60% / 5★40%（无保护）；
+   *      3H：无 AI。
    *  - invite（好友邀请）：保持邀请顺序（发送者/接受者），AI 补位沿用原有 1–5★ 权重。 */
   private startRoom(humanIds: string[], mode: 'online' | 'invite' = 'online'): void {
     const live = humanIds.filter((id) => this.clients.has(id));
@@ -283,7 +289,12 @@ export class GameServer {
     if (humans.length === 0) return;
     const participants: SeatInfo[] = [...humans];
     while (participants.length < 3) {
-      const lvl = mode === 'online' ? onlineAiFillLevel() : pickAiLevel();
+      let lvl: AILevel;
+      if (mode === 'online') {
+        lvl = humans.length === 1 ? pickOnlineSingleHumanAiDifficulty() : pickOnlineTwoHumanAiDifficulty();
+      } else {
+        lvl = pickAiLevel();
+      }
       participants.push({ kind: 'ai', stars: AI_STARS[lvl], aiLevel: lvl });
     }
     // 随机分配“参与者 → A/B/C 座位”；不改变 A→B→C 的行动顺序（只换谁坐在哪）
@@ -292,6 +303,11 @@ export class GameServer {
     for (const s of SEATS) {
       const si = assigned[SEATS.indexOf(s)];
       if (si.kind === 'human' && si.userId) members[si.userId] = s;
+    }
+    // 内部策略上下文：online 1H+2AI → 保护唯一真人（3/4/5★ 生效，2★ 由 chooseAIMove 忽略）
+    let policy: MatchPolicyContext | null = null;
+    if (mode === 'online' && humans.length === 1 && humans[0].userId) {
+      policy = { protectSingleHuman: true, humanSeat: members[humans[0].userId] ?? undefined };
     }
     const room: Room = {
       id: randomUUID(),
@@ -304,6 +320,7 @@ export class GameServer {
       running: false,
       phase: 'PLAYING',
       disconnectTimers: new Map(),
+      policy,
     };
     this.rooms.set(room.id, room);
     for (const h of humans) {
@@ -446,6 +463,7 @@ export class GameServer {
           timeBudgetMs: this.opts.aiTimeBudgetMs,
           maxDepth: OFFLINE_LEVEL_CONFIG[seat.aiLevel].maxDepth,
           candidateK: OFFLINE_LEVEL_CONFIG[seat.aiLevel].candidateK,
+          policy: room.policy ?? undefined,
         });
         const res = applyMove(room.state, decision.row, decision.col);
         if (res.rejected) break;

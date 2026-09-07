@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Player } from '../../../shared/src/game/types';
 import { PLAYERS } from '../../../shared/src/game/types';
-import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
+import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type MatchPolicyContext, type SeatConfigs } from '../../../shared/src/ai/types';
+import { countAI, countHuman } from '../../../shared/src/ai/seats';
 import App from '../App';
 import type { CoachContext } from '../App';
 import { HowToPlayContent, RulesQuickView } from '../components/HowToPlay';
@@ -279,9 +280,24 @@ function Landing({ user }: { user: PublicUser | null }) {
               </>
             )}
           </div>
+          {!user && (
+            <ol className="guest-quick" aria-label="三步上手">
+              <li><b>1</b>三人轮流下</li>
+              <li><b>2</b>先下出四颗连子的人获胜</li>
+              <li><b>3</b>每人每三轮有一次胜权，有胜权时才可连成四颗子</li>
+            </ol>
+          )}
           <p className="land-more">
-            第一次玩？<button className="linklike" onClick={() => go('/rules')}>先看「三人四子棋怎么玩」</button>
-            ，一分钟讲清胜权规则。
+            {user ? (
+              <>
+                第一次玩？<button className="linklike" onClick={() => go('/rules')}>先看「三人四子棋怎么玩」</button>
+                ，一分钟讲清胜权规则。
+              </>
+            ) : (
+              <>
+                如果还没看懂，可以前往<button className="linklike" onClick={() => go('/rules')}>「怎么玩」查看详细规则</button>。
+              </>
+            )}
           </p>
         </div>
         <figure className="land-board">
@@ -596,7 +612,6 @@ function FriendsPage() {
 }
 
 /* ---------------- Tutorial ---------------- */
-const TUTORIAL_ROUNDS = 3;
 const SEAT_COLOR_NAME: Record<Player, string> = { A: '珊瑚色', B: '薄荷色', C: '天空蓝' };
 
 /** 教程教练：根据对局上下文给一行轻量教学提示（progressive/contextual，不弹窗轰炸） */
@@ -642,7 +657,6 @@ function TutorialPage({
   onExit: () => void;
 }) {
   const route = useRoute();
-  const [round, setRound] = useState(0);
   const [lastResult, setLastResult] = useState('');
   const [finished, setFinished] = useState(false);
   // 教程 session 初始化：一次确定真人座位 + 两名 AI 难度（immutable；重渲染不改变）
@@ -669,22 +683,9 @@ function TutorialPage({
     return (
       <div className="pf-page pf-center">
         <h2>教学完成！</h2>
-        <p className="muted">三局 1 真人 + 2 AI 练习已完成（胜负不影响积分）。本局你在 {humanSeat} 座，对手：{opponents}。</p>
+        <p className="muted">一盘 1 真人 + 2 AI 已下到终局（输赢都算通过，不影响积分）。本局你在 {humanSeat} 座，对手：{opponents}。</p>
         <div className="btn-row" style={{ justifyContent: 'center' }}>
-          <button
-            className="btn primary big"
-            onClick={async () => {
-              try {
-                const { data } = await authApi.completeTutorial();
-                applyAuth(getToken() ?? '', data.user);
-              } catch {
-                /* 后端异常时仍放行到大厅（本地已完成教学） */
-              }
-              onDone();
-            }}
-          >
-            进入大厅
-          </button>
+          <button className="btn primary big" onClick={onDone}>进入大厅</button>
           <button className="btn" onClick={() => route.navigate('/rules')}>规则速览</button>
         </div>
       </div>
@@ -692,14 +693,16 @@ function TutorialPage({
   }
 
   const handleEnd = (winner: Player | null) => {
-    setLastResult(winner ? `第 ${round + 1} 局结束：玩家 ${winner} 获胜` : `第 ${round + 1} 局结束：和棋`);
-    setTimeout(() => {
-      if (round + 1 >= TUTORIAL_ROUNDS) {
-        setFinished(true);
-      } else {
-        setRound((r) => r + 1);
-        setLastResult('');
+    // 合法终局即通过（Human win / loss / draw 均可）；中途退出/刷新不算
+    setLastResult(winner ? `本局结束：玩家 ${winner} 获胜` : '本局结束：和棋');
+    setTimeout(async () => {
+      try {
+        const { data } = await authApi.completeTutorial();
+        applyAuth(getToken() ?? '', data.user);
+      } catch {
+        /* 后端异常时仍放行到大厅（本地已完成教学） */
       }
+      setFinished(true);
     }, 1500);
   };
 
@@ -708,7 +711,7 @@ function TutorialPage({
       <div className="pf-nav">
         <span className="pf-brand">新手教学 · 三人四子棋</span>
         <span className="muted">
-          第 {round + 1} / {TUTORIAL_ROUNDS} 局 · 你在 {humanSeat} 座（执{SEAT_COLOR_NAME[humanSeat]}）
+          一盘制 · 下到终局即通过（输赢都算） · 你在 {humanSeat} 座（执{SEAT_COLOR_NAME[humanSeat]}）
         </span>
         <button className="btn ghost" onClick={() => route.navigate('/rules')}>规则速览</button>
         <button className="btn ghost" onClick={onExit}>返回</button>
@@ -727,21 +730,19 @@ function TutorialPage({
         <div className="tut-identity-note">真人座位与两名 AI 难度都在本局开始时随机确定；重开教程会重新随机。</div>
       </section>
 
-      {round === 0 && (
-        <details className="tut-rules" open>
-          <summary>规则速览 · 一分钟看懂胜权（可收起）</summary>
-          <RulesQuickView />
-          <div style={{ marginTop: 10 }}>
-            <button className="btn ghost tiny" onClick={() => route.navigate('/rules')}>查看完整规则与胜权详解 →</button>
-          </div>
-        </details>
-      )}
+      <details className="tut-rules" open>
+        <summary>规则速览 · 一分钟看懂胜权（可收起）</summary>
+        <RulesQuickView />
+        <div style={{ marginTop: 10 }}>
+          <button className="btn ghost tiny" onClick={() => route.navigate('/rules')}>查看完整规则与胜权详解 →</button>
+        </div>
+      </details>
 
       {lastResult && <div className="notice info">{lastResult}</div>}
       <App
-        key={`tut-${round}-${assignmentKey}`}
+        key={`tut-${assignmentKey}`}
         presetSeats={assignment}
-        hostTitle={`新手教学 ${round + 1}/${TUTORIAL_ROUNDS} · 1 真人 + 2 AI`}
+        hostTitle="新手教学 · 1 真人 + 2 AI · 一盘制"
         coach={coach}
         onGameEnd={handleEnd}
         onExit={onExit}
@@ -776,12 +777,16 @@ function LocalHost({ mode, user, onExit }: { mode: 'local' | 'vsai'; user: Publi
   const seats: SeatConfigs =
     cfg ?? { A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'human' } };
   const title = mode === 'local' ? '本地对局 Local Match' : 'Human vs AI · 人机对局';
+  // 内部策略（NOT PLAYER-FACING）：HvAI 1H+2AI → 无自胜时优先封堵预计最快获胜的对手（身份无关）
+  const aiPolicy: MatchPolicyContext | undefined =
+    mode === 'vsai' && countHuman(seats) === 1 && countAI(seats) === 2 ? { defenseFastestThreat: true } : undefined;
   return (
     <App
       key={mode === 'local' ? `local-${JSON.stringify(cfg)}` : `vsai-${JSON.stringify(cfg)}`}
       presetSeats={seats}
       hostTitle={title}
       onExit={onExit}
+      aiPolicy={aiPolicy}
     />
   );
 }

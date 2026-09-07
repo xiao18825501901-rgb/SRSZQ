@@ -81,6 +81,21 @@ async function main() {
   const setVal = async (selector, value) => {
     await cdp.eval(`(() => { const el=document.querySelector('${selector}'); if(!el) return false; const set=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set; set.call(el,'${value}'); el.dispatchEvent(new Event('input',{bubbles:true})); return true; })()`);
   };
+  const importFile = async (payloadObj) => {
+    const payload = JSON.stringify(payloadObj);
+    await cdp.eval(`(async () => {
+      const input = document.querySelector('input[type=file]');
+      if (!input) return false;
+      const file = new File([${JSON.stringify(payload)}], 't.json', { type: 'application/json' });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((r2) => setTimeout(r2, 300));
+      return true;
+    })()`);
+    await sleep(400);
+  };
   const goto = async (hash) => { await cdp.eval(`window.location.hash='${hash}'`); await sleep(400); };
 
   for (let i = 0; i < 40; i++) { try { if ((await cdp.eval(`!!document.querySelector('.hero, .landing, .app')`))) break; } catch {} await sleep(400); }
@@ -94,6 +109,7 @@ async function main() {
   check('Landing 渲染（Hero SRSZQ）', /SRSZQ/.test(txt) && /Play Online|注册并开始/.test(txt), txt.slice(0, 120));
   check('Landing 无真实 AI 档位名', !/Random|Tactical|Selfish|3-Ply|MaxN/.test(txt), '');
   check('Landing 规则速览 above the fold（含胜权摘要）', txt.includes('怎么玩') && txt.includes('胜权') && txt.includes('C → B → A'), txt.slice(0, 150));
+  check('Guest 首页三条速学规则 + 详细规则链接', txt.includes('三人轮流下') && txt.includes('先下出四颗连子的人获胜') && txt.includes('每人每三轮有一次胜权') && txt.includes('详细规则'), txt.slice(0, 180));
 
   // 1b) 规则页（TEST1/TEST2/TEST3：入口明显、胜权完整解释、时间线与引擎一致）
   await goto('/rules');
@@ -165,15 +181,31 @@ async function main() {
   txt = await bodyText();
   check('教学中返回仍被门禁拦截', txt.includes('新手教学'), txt.slice(0, 120));
 
-  // 4) 直接调用后端完成教学 → 重载同步会话 → 大厅解锁
-  await cdp.eval(`(async () => {
-    const t = localStorage.getItem('srszq_token');
-    await fetch(${JSON.stringify(API + '/api/tutorial/complete')}, { method: 'POST', headers: { Authorization: 'Bearer ' + t } });
-  })()`);
-  await cdp.eval(`location.reload()`);
-  await sleep(1500);
-  await click('button', '进入大厅');
-  await sleep(500);
+  // 4) 教程一盘制：导入一局已到终局的对局 → 终局即通过（赢/输/和都算），无需获胜
+  await importFile({
+    boardSize: 13,
+    rulesVersion: 2,
+    moves: [
+      { turn: 0, player: 'A', row: 2, col: 2 }, { turn: 1, player: 'B', row: 1, col: 2 },
+      { turn: 2, player: 'C', row: 8, col: 2 }, { turn: 3, player: 'A', row: 4, col: 4 },
+      { turn: 4, player: 'B', row: 3, col: 3 }, { turn: 5, player: 'C', row: 8, col: 3 },
+      { turn: 6, player: 'A', row: 6, col: 6 }, { turn: 7, player: 'B', row: 12, col: 13 },
+      { turn: 8, player: 'C', row: 8, col: 4 }, { turn: 9, player: 'A', row: 1, col: 13 },
+      { turn: 10, player: 'B', row: 13, col: 12 }, { turn: 11, player: 'C', row: 1, col: 1 },
+      { turn: 12, player: 'A', row: 13, col: 1 }, { turn: 13, player: 'B', row: 11, col: 13 },
+      { turn: 14, player: 'C', row: 13, col: 13 }, { turn: 15, player: 'A', row: 12, col: 12 },
+      { turn: 16, player: 'B', row: 13, col: 11 }, { turn: 17, player: 'C', row: 8, col: 5 },
+    ],
+  });
+  let tutDone = '';
+  const td0 = Date.now();
+  while (Date.now() - td0 < 8000) {
+    tutDone = await bodyText();
+    if (tutDone.includes('教学已完成') || tutDone.includes('教学完成')) break;
+    await sleep(300);
+  }
+  check('教程终局即通过（一盘制，无需获胜）', tutDone.includes('教学已完成') || tutDone.includes('教学完成'), tutDone.slice(0, 140));  await click('button', '进入大厅');
+  await sleep(600);
   await goto('/lobby');
   await sleep(600);
   txt = await bodyText();
