@@ -317,7 +317,7 @@ function Landing({ user }: { user: PublicUser | null }) {
         {!user && (
           <div className="land-rules-cta">
             <Btn variant="primary" onClick={() => go('/auth')}>注册并开始新手教程</Btn>
-            <span className="muted">三局教学：你会随机坐入 A/B/C，一起迎战两名随机星级 AI。</span>
+            <span className="muted">一盘教学：你会随机坐入 A/B/C，一起迎战两名随机 1★–3★ AI。</span>
           </div>
         )}
       </section>
@@ -363,7 +363,7 @@ function AuthCard(props: { busy: boolean; err: string; onAuth: (mode: 'login' | 
     <div className="auth-shell">
       <Card className="auth-card2 fade-in">
         <h2>{mode === 'register' ? '注册 SRSZQ' : '登录 SRSZQ'}</h2>
-        <p className="sub">{mode === 'register' ? '注册后完成 3 局教学即可进入在线对战。' : '登录继续你的 SRSZQ 征程。'}</p>
+        <p className="sub">{mode === 'register' ? '注册后完成 1 局教学即可进入在线对战。' : '登录继续你的 SRSZQ 征程。'}</p>
         <div className="auth-tabs">
           <Btn variant={mode === 'register' ? 'primary' : 'ghost'} onClick={() => setMode('register')}>注册</Btn>
           <Btn variant={mode === 'login' ? 'primary' : 'ghost'} onClick={() => setMode('login')}>登录</Btn>
