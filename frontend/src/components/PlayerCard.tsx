@@ -1,6 +1,6 @@
 import type { Player } from '../../../shared/src/game/types';
-import { PLAYER_LABELS } from '../../../shared/src/game/types';
 import { AI_LEVEL_STARS, type SeatConfig } from '../../../shared/src/ai/types';
+import { PLAYER_COLOR_NAMES } from '../playerPresentation';
 
 interface Props {
   player: Player;
@@ -44,7 +44,7 @@ export function PlayerCard({ player, stoneCount, isCurrent, hasEligible, forbidd
         {winningPointCount > 0 && <span>胜点：{winningPointCount}</span>}
       </div>
       <div className="player-sub muted">
-        {PLAYER_LABELS[player]}
+        {PLAYER_COLOR_NAMES[player]}
         {isAI && !thinking && ' · AI 自动行动，点击棋盘无效'}
         {!isAI && isCurrent && !gameOver && !thinking && ' · 轮到你落子'}
       </div>

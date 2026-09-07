@@ -59,7 +59,7 @@ const QUICK_ITEMS: Array<{ t: string; d: ReactNode }> = [
     t: '三名玩家',
     d: (
       <>
-        A（红）· B（绿）· C（白），按 A → B → C 轮流各落一子；一个 Round = 三人各下一手。
+        A（珊瑚）· B（薄荷）· C（天空蓝），按 A → B → C 轮流各落一子；一个 Round = 三人各下一手。
       </>
     ),
   },
@@ -204,7 +204,7 @@ export function HowToPlayContent({ onStartTutorial, onBack }: { onStartTutorial?
       <section className="howto-block" aria-labelledby="detail-heading">
         <h2 id="detail-heading">完整规则</h2>
         <ol className="howto-full">
-          <li>玩家：A（红）、B（绿）、C（白），行动顺序固定 A → B → C → A → …</li>
+          <li>玩家：A（珊瑚）、B（薄荷）、C（天空蓝），行动顺序固定 A → B → C → A → …</li>
           <li>一个 Round = A、B、C 各行动一次。</li>
           <li>Round 1–5：无人拥有胜权；任何会形成自己 ≥4 连的落子都非法（禁手）。</li>
           <li>Round 6 起进入胜权循环；只有「本回合行动者 == 胜权玩家」才可能凭本手获胜。</li>

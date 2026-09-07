@@ -106,7 +106,7 @@ async function main() {
   for (const name of PAGES) {
     try {
       const pageSuffix = suffix + name.slice(0, 2);
-      if (name === 'landing') { await go('/'); await sleep(1200); }
+      if (name === 'landing') { await go('/'); await sleep(2500); }
       else if (name === 'auth') { await go('/auth'); }
       else if (name === 'local') { await go('/local'); await sleep(1200); }
       else if (name === 'game') { await go('/local'); await sleep(1200); await cdp.eval(`(() => { const b=[...document.querySelectorAll('button')].find(x=>/START|开始/.test(x.textContent||'')); if(b) b.click(); return true; })()`); await sleep(700); }

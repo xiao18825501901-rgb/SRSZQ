@@ -1,7 +1,7 @@
 import type { Player } from '../../../shared/src/game/types';
-import { PLAYER_LABELS } from '../../../shared/src/game/types';
 import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
 import { canSetAISeat, countAI, isAISeat, seatLevel } from '../../../shared/src/ai/seats';
+import { PLAYER_COLOR_NAMES } from '../playerPresentation';
 
 /** 每座位可选值：人类 + 五档 AI = 每座位六种选择 */
 export type SeatChoice = 'human' | AILevel;
@@ -41,7 +41,7 @@ export function SeatSetup({ seats, disabled, onChange }: Props) {
               </span>
               <span className="seat-name">
                 玩家 {p}
-                <span className="muted"> · {PLAYER_LABELS[p]}</span>
+                <span className="muted"> · {PLAYER_COLOR_NAMES[p]}</span>
               </span>
               <select
                 className="seat-select"

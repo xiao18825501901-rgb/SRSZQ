@@ -16,7 +16,7 @@ export function RulesModal({ onClose }: Props) {
         </div>
         <div className="modal-body">
           <ol className="rules-list">
-            <li>共 3 名玩家：A（红）、B（绿）、C（白），固定行动顺序 A → B → C → A → …</li>
+            <li>共 3 名玩家：A（珊瑚）、B（薄荷）、C（天空蓝），固定行动顺序 A → B → C → A → …</li>
             <li>一个 Round = A、B、C 各行动一次（A→B→C）。</li>
             <li>Round 1–5：没有任何玩家拥有胜权，任何会形成自己 ≥4 连的落子均非法（禁手）。</li>
             <li>从 Round 6 起进入资格循环，只有「当前玩家 == 胜权玩家」才可能凭本手获胜。</li>

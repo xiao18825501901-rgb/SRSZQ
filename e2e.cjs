@@ -132,9 +132,9 @@ async function main() {
   check('新用户注册后进入教学（门禁）', txt.includes('新手教学') || txt.includes('与 AI 练习'), txt.slice(0, 150));
   // 教程 = 1 真人（随机 A/B/C）+ 2 AI（各自随机难度，来自真实 registry，可相同）
   const humanSeatMatch = txt.match(/玩家 ([ABC])（真人）/);
-  const aiLines = (txt.match(/玩家 [ABC] · AI · /g) || []);
+  const aiLines = (txt.match(/玩家 [ABC] · AI · ★{1,5}☆{0,4}/g) || []);
   const tutAi = (txt.match(/(Random|Tactical|Selfish|3-Ply|MaxN)/g) || []);
-  check('教程身份：随机 1 真人（A/B/C 之一）+ 2 AI', !!humanSeatMatch && aiLines.length === 2 && tutAi.length >= 2, `${txt.slice(0, 170)} | human=${humanSeatMatch?.[1]}`);
+  check('教程身份：随机 1 真人（A/B/C 之一）+ 2 个纯星级 AI', !!humanSeatMatch && aiLines.length === 2 && tutAi.length === 0, `${txt.slice(0, 170)} | human=${humanSeatMatch?.[1]}`);
   check('教程页规则速览可展开（胜权一句话）', txt.includes('规则速览') && txt.includes('胜权'), '');
 
   // 3) 未完成教学不能进大厅/在线
@@ -158,7 +158,7 @@ async function main() {
   }
   check('教学首局 AI 自动应手（真人任意座）', tLines >= 2, `lines=${tLines}`);
   const tutCards = await cdp.eval(`[...document.querySelectorAll('.players-row .player-card')].map(c=>c.innerText.replace(/\\s+/g,' '))`);
-  const aiCard = tutCards.find((c) => c.includes('🤖 AI'));
+  const aiCard = tutCards.find((c) => c.includes('AI ·'));
   check('教学 AI 座位为 ★ 显示', !!aiCard && /AI · ★+/.test(aiCard ?? '') && !/Random|Tactical|Selfish/.test(aiCard ?? ''), (aiCard ?? '').slice(0, 60));
   await click('button', '返回');
   await sleep(500);
@@ -187,7 +187,7 @@ async function main() {
   let cellsVs = await cdp.eval(`document.querySelectorAll('.board .cell').length`);
   check('Human vs AI 开局（13×13）', cellsVs === 169, `cells=${cellsVs}`);
   let cardB = await cdp.eval(`document.querySelectorAll('.players-row .player-card')[1]?.innerText || ''`);
-  check('AI 座位只显示 ★ 星级', /🤖 AI · ★+/.test(cardB) && !/Random|Tactical|Selfish|3-Ply|MaxN/.test(cardB), cardB.replace(/\s+/g, ' ').slice(0, 60));
+  check('AI 座位只显示 ★ 星级', /AI · ★+/.test(cardB) && !/Random|Tactical|Selfish|3-Ply|MaxN/.test(cardB), cardB.replace(/\s+/g, ' ').slice(0, 60));
   await cdp.eval(`(() => { const el=document.querySelector('.cell.legal'); if(el) el.click(); return true; })()`);
   const t0 = Date.now();
   let lines = 0;

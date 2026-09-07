@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { BoardSize, Player } from '../../shared/src/game/types';
-import { PLAYER_LABELS } from '../../shared/src/game/types';
 import { useGame } from './hooks/useGame';
+import { PLAYER_COLOR_NAMES } from './playerPresentation';
 import { Board } from './components/Board';
 import { PlayerCard } from './components/PlayerCard';
 import { BacTimelinePanel } from './components/BacTimelinePanel';
@@ -597,7 +597,7 @@ export default function App(props: PlatformHostProps = {}) {
             {state.winner}
           </span>
           <p>
-            玩家 {state.winner}（{state.winner ? PLAYER_LABELS[state.winner] : ''}）在 R{round} 凭当前落子形成 ≥4 连，获得胜利！
+            玩家 {state.winner}（{state.winner ? PLAYER_COLOR_NAMES[state.winner] : ''}）在 R{round} 凭当前落子形成 ≥4 连，获得胜利！
           </p>
           <p className="muted">获胜连线已在棋盘上高亮显示。点击「查看棋盘」可回看终局。</p>
         </div>
