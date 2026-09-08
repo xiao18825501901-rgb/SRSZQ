@@ -35,7 +35,7 @@ def dirichlet_mix(legal, alpha=0.3, eps=0.25, rng=None):
 
 
 class NNMCTS:
-    def __init__(self, net, device, sims=16, exact=None, rng=None, train=False, c_puct=1.4):
+    def __init__(self, net, device, sims=16, exact=None, rng=None, train=False, c_puct=1.4, inference_service=None):
         import random
         self.net = net
         self.device = device
@@ -44,9 +44,12 @@ class NNMCTS:
         self.rng = rng or random.Random(0)
         self.train = train
         self.c_puct = c_puct
+        self.inference_service = inference_service
         self.root = None
 
     def _net_eval(self, s):
+        if self.inference_service is not None:
+            return self.inference_service.evaluate_state(s)
         import numpy as np
         planes = np.asarray(enc.encode_state(s), dtype=np.float32)[None]
         with torch.no_grad():

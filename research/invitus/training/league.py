@@ -280,6 +280,7 @@ def play_league_episode(
     bridge: TacticBridge,
     historical_networks: dict[str, Any],
     temperature_first: int = 8,
+    inference_service: Any | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     from mcts.nn_mcts import NNMCTS
 
@@ -308,6 +309,7 @@ def play_league_episode(
                 exact=None,
                 rng=random.Random(rng.getrandbits(32)),
                 train=True,
+                inference_service=inference_service,
             )
             search.search(state)
             temperature = 1.0 if move_no < temperature_first else 0.0
@@ -374,6 +376,7 @@ def play_league_episode(
         "league_bucket": composition.bucket,
         "seats": composition.seats,
         "bridge_metrics": bridge_delta,
+        "inference_metrics": inference_service.metrics_snapshot() if inference_service is not None else {},
         "seconds": round(time.monotonic() - started, 3),
     }
     return samples, metadata

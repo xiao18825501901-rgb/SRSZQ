@@ -37,7 +37,7 @@ def board_mix(rng):
     return 13 if rng.random() < 0.6 else 17
 
 
-def play_episode(net, device, sims, rng, cp_id, train=True):
+def play_episode(net, device, sims, rng, cp_id, train=True, inference_service=None):
     """一局完整对局：三座均为 Invitus（v1 self-play；league 预留）。返回 (samples, result, meta)。"""
     size = board_mix(rng)
     s = srszq.create_state(size)
@@ -53,7 +53,15 @@ def play_episode(net, device, sims, rng, cp_id, train=True):
             srszq._advance_pass_chain(s)
             guard += 1
             continue
-        m = NNMCTS(net, device, sims=sims, exact=None, rng=random.Random(rng.getrandbits(32)), train=train)
+        m = NNMCTS(
+            net,
+            device,
+            sims=sims,
+            exact=None,
+            rng=random.Random(rng.getrandbits(32)),
+            train=train,
+            inference_service=inference_service,
+        )
         m.search(s)
         temp = 1.0 if move_no < 8 else 0.0
         mv, _ = m.best_move(temperature=temp)
@@ -91,6 +99,7 @@ def play_episode(net, device, sims, rng, cp_id, train=True):
     meta = {
         "game_id": gid, "boardSize": size, "result": result, "num_samples": len(samples),
         "mcts_sims": sims, "checkpoint": cp_id, "seconds": round(time.time() - t0, 3),
+        "inference_metrics": inference_service.metrics_snapshot() if inference_service is not None else {},
     }
     return samples, meta
 
@@ -123,6 +132,7 @@ def make_ledger_record(meta: dict, checkpoint_id: str) -> dict:
         "terminal_result": meta["result"],
         "duration_seconds": meta["seconds"],
         "bridge_metrics": meta.get("bridge_metrics", {}),
+        "inference_metrics": meta.get("inference_metrics", {}),
     }
 
 
@@ -197,6 +207,10 @@ def main():
     ap.add_argument("--league", type=int, default=0)
     ap.add_argument("--history-dir", default=CKPT_DIR)
     ap.add_argument("--history-limit", type=int, default=8)
+    ap.add_argument("--inference-batch", type=int, default=128)
+    ap.add_argument("--inference-wait-ms", type=float, default=2.0)
+    ap.add_argument("--precision", choices=("fp32", "bf16"), default="fp32")
+    ap.add_argument("--compile-model", action="store_true")
     args = ap.parse_args()
 
     net, device = make_model(args.channels, args.blocks)
@@ -215,6 +229,15 @@ def main():
                 random.setstate(rng_state)
             print(f"RESUMED from {p} at episode {counter}", flush=True)
     rb = ReplayBuffer()
+    from inference.service import InferenceService
+    inference_service = InferenceService(
+        net,
+        device,
+        max_batch_size=args.inference_batch,
+        max_wait_ms=args.inference_wait_ms,
+        precision=args.precision,
+        compile_model=args.compile_model,
+    )
     bridge = None
     historical_networks = {}
     if args.league:
@@ -257,12 +280,13 @@ def main():
                             bridge,
                             historical_networks,
                             8,
+                            inference_service,
                         )
                         for episode_rng in episode_rngs
                     ]
                 else:
                     futs = [
-                        ex.submit(play_episode, net, device, args.sims, episode_rng, cp_id, True)
+                        ex.submit(play_episode, net, device, args.sims, episode_rng, cp_id, True, inference_service)
                         for episode_rng in episode_rngs
                     ]
                 for fut in futs:
@@ -286,6 +310,7 @@ def main():
             gph = counter / max(1e-6, (time.time() - t_start) / 3600)
             print(f"[wave {wave}] formal={counter}/{args.episodes} gph={gph:.1f} loss={loss:.4f} pl={pl:.4f} vl={vl:.4f} gn={gn:.2f}",
                   flush=True)
+            print(json.dumps({"event": "inference_metrics", **inference_service.metrics_snapshot()}), flush=True)
             # 每波保存 latest（限制断电损失）；STOP 文件出现 → 优雅停训
             save_ckpt(os.path.join(CKPT_DIR, "latest.pt"), net, opt, sched, counter, random.getstate(), vars(args),
                       {"games_per_hour": round(gph, 1), "wave": wave})
@@ -302,6 +327,7 @@ def main():
     finally:
         if bridge is not None:
             bridge.close()
+        inference_service.close()
     save_ckpt(os.path.join(CKPT_DIR, f"invitus_{counter:06d}_final.pt"), net, opt, sched, counter, random.getstate(), vars(args), {})
     print(f"DONE formal episodes={counter} (target {args.episodes})", flush=True)
 
