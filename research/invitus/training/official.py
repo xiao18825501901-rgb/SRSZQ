@@ -251,6 +251,23 @@ def main() -> int:
     if not history_paths:
         raise RuntimeError(f"opponent league requires at least one historical checkpoint in {history_dir}")
 
+    # Official league pool = external history + official checkpoints (majors and
+    # numbered snapshots). latest.pt/_final.pt/current resume path are excluded;
+    # the pool ACCUMULATES across major-pool restarts inside one process.
+    def _is_league_candidate(path: str) -> bool:
+        name = os.path.basename(path)
+        return not name.startswith("latest") and "_final" not in name
+
+    official_history: list[str] = []
+    if Path(train.CKPT_DIR).exists():
+        discovered, _ = discover_historical_checkpoints(train.CKPT_DIR, limit=max(8, args.history_limit * 2))
+        official_history = [
+            p for p in discovered
+            if _is_league_candidate(p) and (not resume_path or os.path.abspath(p) != os.path.abspath(resume_path))
+        ]
+    league_paths = list(dict.fromkeys(history_paths + official_history))
+    print(json.dumps({"event": "league_pool", "size": len(league_paths)}), flush=True)
+
     write_run_manifest(Path(train.DATA_ROOT), args, git_sha, run_id)
     replay = ReplayBuffer(train.REPLAY_DIR, max_shards=128, max_samples_per_shard=512)
 
@@ -267,7 +284,7 @@ def main() -> int:
         compile_model=args.compile_model,
     )
     compile_and_warmup_seconds = warmup_process_broker(broker, args.warmup_passes, args.workers)
-    pool = ProcessSelfPlayPool(broker, args.workers, history_paths, REPO_ROOT)
+    pool = ProcessSelfPlayPool(broker, args.workers, league_paths, REPO_ROOT)
     sampler = ResourceSampler(Path(train.DATA_ROOT) / "metrics" / "resources.csv", args.sample_interval)
     sampler.start()
 
@@ -402,12 +419,11 @@ def main() -> int:
                 )
                 staged = stage_major_backup(Path(train.DATA_ROOT), major_path, counter)
                 print(json.dumps({"event": "major_checkpoint", "counter": counter, "staged": staged}), flush=True)
-                # Major checkpoints join the historical league; restart pool with the merged history.
-                refreshed, _ = discover_historical_checkpoints(history_dir, limit=args.history_limit)
-                merged = refreshed + [str(Path(train.CKPT_DIR) / f"invitus_{counter:06d}_major.pt")]
+                # Major checkpoints join the historical league; restart pool with the accumulated list.
+                league_paths = list(dict.fromkeys(league_paths + [str(major_path)]))
                 pool.close()
-                pool = ProcessSelfPlayPool(broker, args.workers, merged, REPO_ROOT)
-                print(json.dumps({"event": "league_refresh", "historical": len(merged)}), flush=True)
+                pool = ProcessSelfPlayPool(broker, args.workers, league_paths, REPO_ROOT)
+                print(json.dumps({"event": "league_refresh", "historical": len(league_paths)}), flush=True)
                 next_major = counter + args.major_every
     except KeyboardInterrupt:
         print(json.dumps({"event": "interrupt", "formal": counter}), flush=True)
