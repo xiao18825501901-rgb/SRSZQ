@@ -1,14 +1,15 @@
-# INVICTUS_FINAL_REPORT（Phase 2 更新）
+# INVICTUS_FINAL_REPORT（Phase 3B 更新）
 
 # 1 STATUS
 
-**PARTIAL / BLOCKED_BY_COMPUTE**（formal <100,000；本机 CPU ETA 30–52 天；神经网络与训练管线已真实运行、计数在增长，但未达 READY 门槛。）
+**PARTIAL / BLOCKED_BY_STORAGE**（official formal = 0；GPU 500 局 benchmark GREEN 已核实，官方长跑因 AutoDL 数据盘 50G < 100G 冻结门槛未启动。等待扩容。）
 
 # 2 Training Count
 
-- Completed **formal** Training Episodes：**smoke 24 + 后台持续增长**（每次提交时用 verify_training_ledger.py 复算；唯一 game_id、completed、samples>0 才计）
-- Pilot（不计入）：2
-- **FORMAL TRAINING: xxxxx / 100000+**（实时见 INVICTUS_TRAINING_PROGRESS.md 与 logs/INVICTUS_TRAINING_LEDGER.jsonl）
+- **OFFICIAL FORMAL TRAINING: 0 / 100000**
+- CPU 历史 118 局（含 pilot 2 局）已封存为 historical evidence，**不计数**。
+- GPU benchmark/smoke（12/20/100/500 局）全部 formal=false，**不计数**。
+- 官方计数从干净命名空间 `/root/autodl-tmp/invitus/official` 的 0 开始；每 500 局 audit 复算（唯一 game_id、completed、samples>0 才计）。
 
 # 3 Champion Checkpoint
 
@@ -32,11 +33,11 @@
 
 # 8 Hardware
 
-CPU-only（见 INVICTUS_HARDWARE_REPORT.md / INVICTUS_COMPUTE_SCALING_REPORT.md）。
+AutoDL NVIDIA RTX 6000D（85,651 MiB VRAM，driver 595.71.05 / CUDA 13.2，torch 2.12.1+cu130）；~22 核 / ~1TB RAM；数据盘 /root/autodl-tmp 50G（待扩容 ≥100G）。详见 INVICTUS_GPU_MIGRATION_REPORT.md。
 
 # 9 Training Time
 
-已运行：smoke 20+resume 4=24 局；正式训练后台持续运行中；games/hour ≈ 70–140（sims 8–16）。
+未启动 official 训练（formal=0）。实测吞吐：16 sims ≈ 2507 局/时（500 局 benchmark 全量）；ETA 三档见 GPU_MIGRATION_REPORT（BEST ~150h / EXPECTED ~200h / CONSERVATIVE ~260h，¥7.35/h）。
 
 # 10 Training Curves
 
@@ -62,23 +63,23 @@ self-play 三座全 Invitus；座位影响将在最终大样本赛评估。
 
 无。
 
-# 19 Known Weaknesses
+# 19 Known Weaknesses / Blockers
 
-- CPU 吞吐不足：sims=16 时 ~70–90 局/时 → 100k 需 30–52 天（GPU 迁移计划见 COMPUTE_SCALING）。
-- league 当前为 invitus×3 简化版（TS tactics 桥接未接，避免每步子进程开销）；后续按 50/20/20/10 采样扩展。
-- 训练早期价值学习慢（vl≈ln4 附近），属正常冷启动。
+- **BLOCKED_BY_STORAGE**：/root/autodl-tmp 50G < 100G 冻结门槛；等待扩容后启动官方长跑。
+- GPU 利用率仅 ~5.7%（瓶颈在 Python/MCTS/IPC，非 GPU 算力）；已记录为后续优化项，不因此升级更贵 GPU。
+- 训练早期价值学习慢（vl≈ln4 附近）属正常冷启动；champion gate 将用实测强度判定 sims curriculum。
 
-# 20 Files Changed（本阶段新增）
+# 20 Files Changed（Phase 3B 新增）
 
-model/network.py · model/encode.py · mcts/nn_mcts.py · training/replay.py · training/train.py · training/verify_training_ledger.py（升级硬约束）· INVICTUS_{BASELINE_REPORT,TRAINING_PROGRESS,COMPUTE_SCALING_REPORT}.md · 更新本文件。
+training/official.py · training/benchmark.py · training/process_selfplay.py · training/league.py · training/audit_training_state.py · inference/process_service.py · eval/{match,champion_gate,exact_oracle,exact_agree}.py · tools/tactic_worker.ts · INVICTUS_GPU_MIGRATION_{PLAN,SPEC,REPORT}.md · 更新 TRAINING_PROGRESS 与本文件。
 
 # 21 Git SHAs
 
-research/invitus（基于 87e6c58）；本阶段提交见 git log。未 merge main、未部署。
+research/invitus：6a80263（500 局报告）、1cefcb5（官方入口）、0c6fcc3（champion gate）、fe65014（exact 探针）。未 merge main、未部署、未触碰生产。
 
 # 22 Reproduction Commands
 
-见 INVICTUS_TRAINING_PROGRESS.md「Resume 命令」。
+见 INVICTUS_TRAINING_PROGRESS.md「官方训练启动命令」（GPU，training/official.py；评估用 eval/champion_gate.py、eval/exact_oracle.py、eval/exact_agree.py）。
 
 # 23 Integration Plan
 
@@ -90,5 +91,20 @@ research/invitus（基于 87e6c58）；本阶段提交见 git log。未 merge ma
 
 # 25 重要声明
 
-- **INVICTUS IS NOT TRAINED YET.**
+```
+FORMAL 0/100000
+13x13: N/A（官方未启动；benchmark 58.8%）
+17x17: N/A（官方未启动；benchmark 41.2%）
+LATEST CHECKPOINT: 无 official checkpoint
+CURRENT CHAMPION: 无
+LEAGUE: COMPLETE（50/20/20/10，benchmark 0 fallback）
+GAMES/HOUR: 2507（16 sims，benchmark 实测）
+ETA: 扩容后 ~150–260h
+TRAINING HEALTH: 未启动
+FINAL EVAL: 未执行
+READY NO
+INVICTUS IS NOT TRAINED YET.
+```
+
+- formal<100000 → **READY=NO**。
 - 不满足：formal≥100000、17×17≥30%、大样本统计显著、exact oracle、calibration、search scaling → 按冻结的 ACCEPTANCE_CRITERIA 判 PARTIAL/BLOCKED，绝不写 READY。
