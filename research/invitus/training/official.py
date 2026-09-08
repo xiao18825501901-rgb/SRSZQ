@@ -445,6 +445,18 @@ def main() -> int:
 
     final_path = os.path.join(train.CKPT_DIR, f"invitus_{counter:06d}_final.pt")
     train.save_ckpt(final_path, net, optimizer, scheduler, counter, random.getstate(), vars(args), {"run_id": run_id})
+    # Segment finals that land on a major boundary (5000/10000/...) also get a
+    # major checkpoint + backup staging (the in-loop major branch cannot fire
+    # for the segment-final wave because the loop exits at counter == episodes).
+    if counter > 0 and counter % args.major_every == 0:
+        major_path = Path(train.CKPT_DIR) / f"invitus_{counter:06d}_major.pt"
+        train.save_ckpt(
+            str(major_path), net, optimizer, scheduler, counter,
+            random.getstate(), vars(args), {"games_per_hour": round(counter / max(1e-9, time.monotonic() - t_start) * 3600, 1),
+                                            "major": True, "run_id": run_id},
+        )
+        staged = stage_major_backup(Path(train.DATA_ROOT), major_path, counter)
+        print(json.dumps({"event": "segment_final_major", "counter": counter, "staged": staged}), flush=True)
     state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha)
     elapsed = time.monotonic() - t_start
     summary = {
