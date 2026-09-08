@@ -228,6 +228,12 @@ def main() -> int:
             champion_service.close()
 
     champion_match = next((m for m in matchups if m["opponents"] == "champion+champion"), None)
+    initial_gate = False
+    if champion_match is None and not champion_state.get("champion"):
+        # No champion exists yet: the FIRST champion must beat the strongest
+        # acceptance baseline (5*+5*) significantly before being crowned.
+        champion_match = next(m for m in matchups if m["opponents"] == "5star+5star")
+        initial_gate = True
     if champion_match is not None:
         promoted = (
             champion_match["seatAdjustedWinRate"] > 1 / 3
@@ -249,6 +255,7 @@ def main() -> int:
         },
         "matchups": matchups,
         "promoted": promoted,
+        "initialGate": initial_gate,
     }
     run_id = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     _atomic_json(evaluations_dir / f"champion_gate_{run_id}.json", record)
