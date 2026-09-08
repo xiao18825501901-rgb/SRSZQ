@@ -40,7 +40,8 @@ cd /root/SRSZQ/research/invitus && python3 -m training.audit_training_state --ro
 ## 状态
 
 - GPU 迁移：**PASS**（500 局 benchmark GREEN、checkpoint resume PASS、0 错误）
-- 官方训练入口：**PASS**（GPU 冒烟 4/4 formal、STATE_CONSISTENT=true）
-- 评估链（champion gate / exact oracle / exact agreement）：**PASS**（GPU 冒烟通过）
-- 正式训练：**NOT STARTED — BLOCKED_BY_STORAGE**（数据盘 50G < 100G 冻结门槛）
+- 官方训练入口：**PASS**（GPU 冒烟 4/4 formal、STATE_CONSISTENT=true；resume 链 4→6 验证通过）
+- 评估链（champion gate / exact oracle / exact agreement / calibration / search scaling）：**PASS**（GPU 冒烟通过）
+- 原项目回归基线（Windows）：**PASS 5/5**（typecheck · 149/149 tests · backend · ws · build；e2e 留最终验收）
+- 正式训练：**NOT STARTED — BLOCKED_BY_STORAGE**（数据盘 50G < 100G 冻结门槛；扩容中/待确认实例状态）
 - **INVICTUS IS NOT TRAINED YET.**
