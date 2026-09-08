@@ -223,18 +223,26 @@ def main() -> int:
             )
         )
         if not resume_path or not os.path.exists(resume_path):
-            raise RuntimeError(f"resume checkpoint not found: {args.resume}")
-        counter, rng_state = train.load_ckpt(net, optimizer, scheduler, resume_path)
-        if rng_state:
-            random.setstate(rng_state)
-        # Resume gate: the on-disk state must already be audit-consistent.
-        state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha)
-        if not state["stateConsistent"] or state["formalEpisodes"] != counter:
-            raise RuntimeError(
-                f"resume refused: checkpoint counter {counter} != consistent formal {state['formalEpisodes']} "
-                f"or inconsistent state {state['consistencyErrors']}"
-            )
-        print(json.dumps({"event": "resumed", "checkpoint": resume_path, "counter": counter}), flush=True)
+            ledger_path = Path(train.LEDGER)
+            if ledger_path.exists() and ledger_path.stat().st_size > 0:
+                raise RuntimeError(
+                    f"resume checkpoint not found ({args.resume}) but official ledger is non-empty; "
+                    "manual reconciliation required"
+                )
+            print(json.dumps({"event": "fresh_start", "resume": args.resume, "counter": 0}), flush=True)
+            resume_path = ""
+        else:
+            counter, rng_state = train.load_ckpt(net, optimizer, scheduler, resume_path)
+            if rng_state:
+                random.setstate(rng_state)
+            # Resume gate: the on-disk state must already be audit-consistent.
+            state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha)
+            if not state["stateConsistent"] or state["formalEpisodes"] != counter:
+                raise RuntimeError(
+                    f"resume refused: checkpoint counter {counter} != consistent formal {state['formalEpisodes']} "
+                    f"or inconsistent state {state['consistencyErrors']}"
+                )
+            print(json.dumps({"event": "resumed", "checkpoint": resume_path, "counter": counter}), flush=True)
     else:
         if Path(train.LEDGER).exists() and Path(train.LEDGER).stat().st_size > 0:
             raise RuntimeError("refusing fresh start over a non-empty official ledger; use a clean data root")

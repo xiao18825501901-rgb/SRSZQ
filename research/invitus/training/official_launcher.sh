@@ -35,7 +35,7 @@ for attempt in $(seq 1 $((MAX_RESTARTS + 1))); do
     exit 3
   fi
   log "segment attempt ${attempt}/$((MAX_RESTARTS + 1)) start (target ${SEGMENT} episodes, args: $*)"
-  (cd "${REPO}" && PYTHONUNBUFFERED=1 python3 -m training.official --episodes "${SEGMENT}" --resume latest "$@")
+  (cd "${REPO}" && PYTHONUNBUFFERED=1 python3 -m training.official --episodes "${SEGMENT}" --data-root "${DATA_ROOT}" --resume latest "$@")
   RC=$?
   if [ "${RC}" -eq 0 ]; then
     log "segment attempt ${attempt} completed rc=0"
