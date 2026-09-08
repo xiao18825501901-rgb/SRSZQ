@@ -2,14 +2,14 @@
 
 # 1 STATUS
 
-**PARTIAL / BLOCKED_BY_STORAGE**（official formal = 0；GPU 500 局 benchmark GREEN 已核实，官方长跑因 AutoDL 数据盘 50G < 100G 冻结门槛未启动。等待扩容。）
+**TRAINING IN PROGRESS**（official formal 正在增长：2026-09-08T16:19Z 启动；数据盘已扩至 110G，DISK_GATE=PASS。距离 READY 尚远，READY 保持 NO。）
 
 # 2 Training Count
 
-- **OFFICIAL FORMAL TRAINING: 0 / 100000**
+- **OFFICIAL FORMAL TRAINING: RUNNING，从 0 增长（目标 100000）**，实时数见 ledger 与 TRAINING_PROGRESS。
 - CPU 历史 118 局（含 pilot 2 局）已封存为 historical evidence，**不计数**。
 - GPU benchmark/smoke（12/20/100/500 局）全部 formal=false，**不计数**。
-- 官方计数从干净命名空间 `/root/autodl-tmp/invitus/official` 的 0 开始；每 500 局 audit 复算（唯一 game_id、completed、samples>0 才计）。
+- 官方命名空间 `/root/autodl-tmp/invitus/official`；每 500 局 audit 复算（唯一 game_id、completed、samples>0 才计）。
 
 # 3 Champion Checkpoint
 
