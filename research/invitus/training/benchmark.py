@@ -18,6 +18,7 @@ import numpy as np
 import torch
 
 from engine import srszq
+from inference.process_service import ProcessInferenceBroker
 from inference.service import InferenceService
 from model import encode
 from model.network import InvitusNet, make_model
@@ -29,6 +30,7 @@ from training.league import (
     play_league_episode,
 )
 from training.replay import ReplayBuffer
+from training.process_selfplay import ProcessSelfPlayPool
 
 
 NETWORKS = {
@@ -177,6 +179,28 @@ def warmup(service: InferenceService, passes: int, workers: int) -> float:
     return time.monotonic() - started
 
 
+def warmup_process_broker(
+    broker: ProcessInferenceBroker, passes: int, workers: int
+) -> float:
+    state = srszq.create_state(17)
+    planes = np.asarray(encode.encode_state(state), dtype=np.float32)
+    clients = [broker.client(index) for index in range(workers)]
+    counts = [passes // workers + (1 if index < passes % workers else 0) for index in range(workers)]
+
+    def run_client(index: int) -> None:
+        for _ in range(counts[index]):
+            clients[index].infer_encoded(planes)
+
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(run_client, index) for index in range(workers) if counts[index]]
+        for future in futures:
+            future.result()
+    if broker.device.type == "cuda":
+        torch.cuda.synchronize(broker.device)
+    return time.monotonic() - started
+
+
 def run(args: argparse.Namespace) -> dict[str, Any]:
     if not torch.cuda.is_available() and not args.allow_cpu:
         raise RuntimeError("GPU benchmark requires torch.cuda.is_available()=True")
@@ -195,27 +219,55 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     net, device = make_model(channels, blocks)
     optimizer = torch.optim.AdamW(net.parameters(), lr=2e-3, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20_000, gamma=0.5)
-    service = InferenceService(
-        net,
-        device,
-        max_batch_size=args.batch,
-        max_wait_ms=args.inference_wait_ms,
-        precision=args.precision,
-        compile_model=args.compile_model,
-    )
-    compile_and_warmup_seconds = warmup(service, args.warmup_passes, args.workers)
-
     history_dir = Path(args.history_dir).expanduser().resolve() if args.history_dir else Path(disk["checkpoints"])
     history_paths, history_errors = discover_historical_checkpoints(history_dir, limit=args.history_limit)
     if history_errors:
         print(json.dumps({"event": "historical_checkpoint_errors", "errors": history_errors}), flush=True)
     if not history_paths:
-        service.close()
         raise RuntimeError(f"no valid historical checkpoints found in {history_dir}")
-    historical_networks = load_historical_networks(history_paths, device)
 
     repo_root = Path(__file__).resolve().parents[3]
-    bridge = TacticBridge(repo_root)
+    service: InferenceService | ProcessInferenceBroker
+    process_pool: ProcessSelfPlayPool | None = None
+    bridge: TacticBridge | None = None
+    historical_networks: dict[str, Any] = {}
+    if args.execution == "processes":
+        service = ProcessInferenceBroker(
+            net,
+            device,
+            worker_count=args.workers,
+            max_batch_size=args.batch,
+            max_wait_ms=args.inference_wait_ms,
+            precision=args.precision,
+            compile_model=args.compile_model,
+        )
+        compile_and_warmup_seconds = warmup_process_broker(
+            service, args.warmup_passes, args.workers
+        )
+        process_pool = ProcessSelfPlayPool(
+            service, args.workers, history_paths, repo_root
+        )
+    else:
+        service = InferenceService(
+            net,
+            device,
+            max_batch_size=args.batch,
+            max_wait_ms=args.inference_wait_ms,
+            precision=args.precision,
+            compile_model=args.compile_model,
+        )
+        compile_and_warmup_seconds = warmup(service, args.warmup_passes, args.workers)
+        historical_networks = load_historical_networks(history_paths, device)
+        bridge = TacticBridge(repo_root)
+    bridge_metrics = {
+        "requests": 0,
+        "successfulResponses": 0,
+        "fallbacks": 0,
+        "timeouts": 0,
+        "protocolErrors": 0,
+        "processErrors": 0,
+        "restarts": 0,
+    }
     sampler = ResourceSampler(run_root / "gpu_metrics.csv", args.sample_interval)
     sampler.start()
     rng = random.Random(args.seed)
@@ -224,40 +276,50 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     try:
         while completed < args.games:
             wave_games = min(args.games_per_wave, args.games - completed)
-            episode_rngs = [random.Random(rng.getrandbits(64)) for _ in range(wave_games)]
-            with ThreadPoolExecutor(max_workers=args.workers) as executor:
-                futures = [
-                    executor.submit(
-                        play_league_episode,
-                        net,
-                        device,
-                        args.sims,
-                        episode_rng,
-                        run_id,
-                        bridge,
-                        historical_networks,
-                        8,
-                        service,
-                    )
-                    for episode_rng in episode_rngs
+            seeds = [rng.getrandbits(64) for _ in range(wave_games)]
+            if process_pool is not None:
+                jobs = [
+                    (completed + index, seed, args.sims, run_id)
+                    for index, seed in enumerate(seeds)
                 ]
-                wave_samples: list[dict[str, Any]] = []
-                for future in futures:
-                    samples, meta = future.result()
-                    if not samples:
-                        raise RuntimeError(f"benchmark game {meta['game_id']} produced no training samples")
-                    for sample in samples:
-                        replay.add(sample)
-                    replay.flush()
-                    append_jsonl(
-                        ledger_path,
-                        make_benchmark_record(meta, run_id, "smoke" if args.stage == "smoke" else "benchmark"),
-                    )
-                    wave_samples.extend(samples)
-                    completed += 1
-                    total_samples += len(samples)
-                    total_moves += int(meta.get("moves", 0))
-                    total_nodes += int(meta.get("mcts_nodes", 0))
+                episode_results = process_pool.play(jobs)
+            else:
+                assert bridge is not None
+                with ThreadPoolExecutor(max_workers=args.workers) as executor:
+                    futures = [
+                        executor.submit(
+                            play_league_episode,
+                            net,
+                            device,
+                            args.sims,
+                            random.Random(seed),
+                            run_id,
+                            bridge,
+                            historical_networks,
+                            8,
+                            service,
+                        )
+                        for seed in seeds
+                    ]
+                    episode_results = [future.result() for future in futures]
+            wave_samples: list[dict[str, Any]] = []
+            for samples, meta in episode_results:
+                if not samples:
+                    raise RuntimeError(f"benchmark game {meta['game_id']} produced no training samples")
+                for sample in samples:
+                    replay.add(sample)
+                replay.flush()
+                append_jsonl(
+                    ledger_path,
+                    make_benchmark_record(meta, run_id, "smoke" if args.stage == "smoke" else "benchmark"),
+                )
+                for key, value in meta.get("bridge_metrics", {}).items():
+                    bridge_metrics[key] += value
+                wave_samples.extend(samples)
+                completed += 1
+                total_samples += len(samples)
+                total_moves += int(meta.get("moves", 0))
+                total_nodes += int(meta.get("mcts_nodes", 0))
             if wave_samples and args.train_steps_per_wave:
                 for _ in range(args.train_steps_per_wave):
                     selected = [rng.choice(wave_samples) for _ in range(args.train_batch)]
@@ -267,15 +329,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     if not all(np.isfinite(value) for value in (policy_loss, value_loss, loss, gradient_norm)):
                         raise FloatingPointError("benchmark training produced NaN or Inf")
                 scheduler.step()
-            if bridge.metrics["fallbacks"] or service.metrics_snapshot()["errors"]:
+            if bridge_metrics["fallbacks"] or service.metrics_snapshot()["errors"]:
                 raise RuntimeError(
-                    f"benchmark dependency failure: bridge={bridge.metrics} inference={service.metrics_snapshot()}"
+                    f"benchmark dependency failure: bridge={bridge_metrics} inference={service.metrics_snapshot()}"
                 )
             print(json.dumps({"event": "benchmark_progress", "completed": completed, "target": args.games}), flush=True)
     finally:
         elapsed = time.monotonic() - started
         sampler.stop()
-        bridge.close()
+        if process_pool is not None:
+            process_pool.close()
+        if bridge is not None:
+            bridge.close()
         service_metrics = service.metrics_snapshot()
         service.close()
 
@@ -286,6 +351,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "channels": channels,
         "blocks": blocks,
         "workers": args.workers,
+        "execution": args.execution,
         "batch": args.batch,
         "sims": args.sims,
         "precision": args.precision,
@@ -338,7 +404,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "performanceGate": performance_gate(games_per_hour),
         "disk": disk_snapshot,
         "inference": service_metrics,
-        "bridge": bridge.metrics,
+        "bridge": bridge_metrics,
         "resources": sampler.summary(),
         "historicalCheckpoints": history_paths,
         "checkpointResumeVerified": True,
@@ -359,6 +425,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage", choices=("smoke", "100", "500", "search"), required=True)
     parser.add_argument("--network", choices=tuple(NETWORKS), default="small")
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--execution", choices=("processes", "threads"), default="processes")
     parser.add_argument("--batch", type=int, default=128)
     parser.add_argument("--sims", type=int, default=16)
     parser.add_argument("--precision", choices=("fp32", "bf16"), default="fp32")
