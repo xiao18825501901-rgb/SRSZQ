@@ -1,0 +1,54 @@
+{
+  "formalEpisodes": 0,
+  "ledgerFormalEpisodes": 118,
+  "latestCheckpoint": "checkpoints/invitus_000024_final.pt",
+  "latestConsistentCheckpoint": null,
+  "latestGameId": null,
+  "rawLatestGameId": "4fc354a14f3f4cf1899f6e2042dbfc85",
+  "checkpointEpisodeCount": 24,
+  "progressEpisodeCount": 24,
+  "optimizerStep": 22,
+  "schedulerStep": 6,
+  "replayChunkCount": 64,
+  "replaySampleCount": 7252,
+  "replayFormalGameCount": 64,
+  "replayMinEpisode": 55,
+  "replayMaxEpisode": 118,
+  "boardCounts": {
+    "13": 0,
+    "17": 0
+  },
+  "rawBoardCounts": {
+    "13": 70,
+    "17": 48
+  },
+  "seatCounts": {
+    "A": 0,
+    "B": 0,
+    "C": 0
+  },
+  "rawSeatCounts": {
+    "A": 118,
+    "B": 118,
+    "C": 118
+  },
+  "modelConfig": {
+    "name": "Tiny",
+    "channels": 32,
+    "blocks": 4
+  },
+  "gitSha": "65d2642117bfdc2c74de6e0069361cf2b4f55d76",
+  "rngStatePresent": true,
+  "checkpointSha256": "86d2b5bf484d0e8863567e10d23857e18e41c0c11583fd0b4ecbbc47185bc336",
+  "ledgerRows": 120,
+  "duplicateGameIds": 0,
+  "invalidLedgerRows": 0,
+  "excludedLedgerRows": 2,
+  "checkpointErrors": {},
+  "consistencyErrors": [
+    "ledger episode 118 is ahead of checkpoint episode 24",
+    "checkpoint episode 24 is absent from retained replay"
+  ],
+  "stateConsistent": false,
+  "verifiedAt": "2026-09-08T08:42:50.982412Z"
+}
