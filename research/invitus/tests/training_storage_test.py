@@ -16,6 +16,13 @@ from training import train
 
 
 class TrainingStorageTest(unittest.TestCase):
+    def test_disk_space_policy_has_start_warning_and_stop_gates(self) -> None:
+        gib = 1024 ** 3
+        self.assertEqual(train.classify_disk_space(150 * gib, 100), "ok")
+        self.assertEqual(train.classify_disk_space(50 * gib, 100), "start_blocked")
+        self.assertEqual(train.classify_disk_space(15 * gib, 0), "warning")
+        self.assertEqual(train.classify_disk_space(9 * gib, 0), "stop")
+
     def test_configure_storage_routes_all_large_state_under_data_root(self) -> None:
         root = Path(tempfile.mkdtemp()) / "invitus-data"
 

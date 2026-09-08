@@ -12,6 +12,7 @@ import json
 import math
 import os
 import random
+import shutil
 import sys
 import time
 import uuid
@@ -60,6 +61,27 @@ def configure_storage(root):
     }
 
 
+def classify_disk_space(free_bytes: int, minimum_start_gib: float) -> str:
+    free_gib = free_bytes / (1024 ** 3)
+    if free_gib < 10:
+        return "stop"
+    if free_gib < 20:
+        return "warning"
+    if free_gib < minimum_start_gib:
+        return "start_blocked"
+    return "ok"
+
+
+def disk_space_snapshot(minimum_start_gib: float = 0) -> dict[str, float | str]:
+    usage = shutil.disk_usage(DATA_ROOT)
+    return {
+        "path": str(DATA_ROOT),
+        "totalGiB": round(usage.total / (1024 ** 3), 3),
+        "freeGiB": round(usage.free / (1024 ** 3), 3),
+        "status": classify_disk_space(usage.free, minimum_start_gib),
+    }
+
+
 def board_mix(rng):
     return 13 if rng.random() < 0.6 else 17
 
@@ -73,6 +95,7 @@ def play_episode(net, device, sims, rng, cp_id, train=True, inference_service=No
     t0 = time.time()
     guard = 0
     move_no = 0
+    mcts_nodes = 0
     while s["status"] == "playing" and guard < size * size + 32:
         actor = srszq.current_player(s)
         legal = srszq.legal_moves(s)
@@ -90,6 +113,7 @@ def play_episode(net, device, sims, rng, cp_id, train=True, inference_service=No
             inference_service=inference_service,
         )
         m.search(s)
+        mcts_nodes += m.root.N
         temp = 1.0 if move_no < 8 else 0.0
         mv, _ = m.best_move(temperature=temp)
         # 训练样本（MCTS visit 分布 target；直接从 root.children 取）
@@ -125,6 +149,7 @@ def play_episode(net, device, sims, rng, cp_id, train=True, inference_service=No
         smp["outcome"] = oc
     meta = {
         "game_id": gid, "boardSize": size, "result": result, "num_samples": len(samples),
+        "moves": move_no, "mcts_nodes": mcts_nodes,
         "mcts_sims": sims, "checkpoint": cp_id, "seconds": round(time.time() - t0, 3),
         "inference_metrics": inference_service.metrics_snapshot() if inference_service is not None else {},
     }
@@ -157,6 +182,8 @@ def make_ledger_record(meta: dict, checkpoint_id: str) -> dict:
         "checkpoint": checkpoint_id,
         "mcts_sims": meta["mcts_sims"],
         "num_samples": meta["num_samples"],
+        "moves": meta.get("moves"),
+        "mcts_nodes": meta.get("mcts_nodes"),
         "terminal_result": meta["result"],
         "duration_seconds": meta["seconds"],
         "bridge_metrics": meta.get("bridge_metrics", {}),
@@ -258,9 +285,22 @@ def main():
     ap.add_argument("--precision", choices=("fp32", "bf16"), default="fp32")
     ap.add_argument("--compile-model", action="store_true")
     ap.add_argument("--data-root", default=".")
+    ap.add_argument("--min-start-free-gib", type=float)
     args = ap.parse_args()
     storage = configure_storage(args.data_root)
     print(json.dumps({"event": "storage_configured", **storage}), flush=True)
+    minimum_start_gib = (
+        args.min_start_free_gib
+        if args.min_start_free_gib is not None
+        else (100.0 if args.episodes >= 100_000 else 0.0)
+    )
+    disk = disk_space_snapshot(minimum_start_gib)
+    print(json.dumps({"event": "disk_space", **disk}), flush=True)
+    if disk["status"] in {"stop", "start_blocked"}:
+        raise RuntimeError(
+            f"data disk gate failed: status={disk['status']} freeGiB={disk['freeGiB']} "
+            f"requiredGiB={minimum_start_gib}"
+        )
 
     net, device = make_model(args.channels, args.blocks)
     opt = torch.optim.AdamW(net.parameters(), lr=2e-3, weight_decay=1e-4)
@@ -363,6 +403,12 @@ def main():
             # 每波保存 latest（限制断电损失）；STOP 文件出现 → 优雅停训
             save_ckpt(os.path.join(CKPT_DIR, "latest.pt"), net, opt, sched, counter, random.getstate(), vars(args),
                       {"games_per_hour": round(gph, 1), "wave": wave})
+            disk = disk_space_snapshot()
+            if disk["status"] == "warning":
+                print(json.dumps({"event": "disk_warning", **disk}), flush=True)
+            elif disk["status"] == "stop":
+                print(json.dumps({"event": "disk_stop", **disk}), flush=True)
+                break
             if os.path.exists(STOP_FILE):
                 print("[stop-file] graceful stop requested", flush=True)
                 break

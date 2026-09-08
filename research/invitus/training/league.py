@@ -291,6 +291,7 @@ def play_league_episode(
     samples: list[dict[str, Any]] = []
     game_id = uuid.uuid4().hex
     move_no = 0
+    mcts_nodes = 0
     guard = 0
     bridge_before = dict(bridge.metrics)
     while state["status"] == "playing" and guard < size * size + 32:
@@ -312,6 +313,7 @@ def play_league_episode(
                 inference_service=inference_service,
             )
             search.search(state)
+            mcts_nodes += search.root.N
             temperature = 1.0 if move_no < temperature_first else 0.0
             move, _ = search.best_move(temperature=temperature)
             visits = {legal_move: 0.0 for legal_move in legal}
@@ -342,6 +344,7 @@ def play_league_episode(
                 train=False,
             )
             search.search(state)
+            mcts_nodes += search.root.N
             move, _ = search.best_move(temperature=0.0)
         else:
             move = bridge.move(state, seat, agent[1], rng.getrandbits(31))
@@ -371,6 +374,8 @@ def play_league_episode(
         "boardSize": size,
         "result": terminal_result,
         "num_samples": len(samples),
+        "moves": move_no,
+        "mcts_nodes": mcts_nodes,
         "mcts_sims": sims,
         "checkpoint": checkpoint_id,
         "league_bucket": composition.bucket,
