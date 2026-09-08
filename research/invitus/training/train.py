@@ -16,6 +16,7 @@ import sys
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 sys.path.insert(0, ".")
 import torch
@@ -101,6 +102,30 @@ def write_ledger(rec: dict):
         os.fsync(f.fileno())
 
 
+def make_ledger_record(meta: dict, checkpoint_id: str) -> dict:
+    league_bucket = meta.get("league_bucket", "selfplay")
+    return {
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "kind": "formal",
+        "formal": True,
+        "game_id": meta["game_id"],
+        "completed": True,
+        "replay_persisted": True,
+        "board_size": meta["boardSize"],
+        "seat_assignments": meta.get(
+            "seats",
+            {"A": ("invitus",), "B": ("invitus",), "C": ("invitus",)},
+        ),
+        "opponents": f"league:{league_bucket}",
+        "checkpoint": checkpoint_id,
+        "mcts_sims": meta["mcts_sims"],
+        "num_samples": meta["num_samples"],
+        "terminal_result": meta["result"],
+        "duration_seconds": meta["seconds"],
+        "bridge_metrics": meta.get("bridge_metrics", {}),
+    }
+
+
 def train_batch(net, device, opt, samples, l2=1e-4):
     net.train()
     X, P, V = [], [], []
@@ -169,6 +194,9 @@ def main():
     ap.add_argument("--resume", default="")
     ap.add_argument("--channels", type=int, default=32)
     ap.add_argument("--blocks", type=int, default=4)
+    ap.add_argument("--league", type=int, default=0)
+    ap.add_argument("--history-dir", default=CKPT_DIR)
+    ap.add_argument("--history-limit", type=int, default=8)
     args = ap.parse_args()
 
     net, device = make_model(args.channels, args.blocks)
@@ -176,15 +204,39 @@ def main():
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=20000, gamma=0.5)
     counter = 0
     rng_state = random.getstate()
+    resume_path = ""
     if args.resume:
         p = args.resume if args.resume != "latest" else max(
             (os.path.join(CKPT_DIR, f) for f in os.listdir(CKPT_DIR) if f.endswith(".pt")), key=os.path.getmtime, default="")
         if p and os.path.exists(p):
+            resume_path = p
             counter, rng_state = load_ckpt(net, opt, sched, p)
             if rng_state:
                 random.setstate(rng_state)
             print(f"RESUMED from {p} at episode {counter}", flush=True)
     rb = ReplayBuffer()
+    bridge = None
+    historical_networks = {}
+    if args.league:
+        from training.league import (
+            TacticBridge,
+            discover_historical_checkpoints,
+            load_historical_networks,
+            play_league_episode,
+        )
+        repo_root = Path(__file__).resolve().parents[2]
+        historical_paths, historical_errors = discover_historical_checkpoints(
+            args.history_dir,
+            exclude_path=resume_path or None,
+            limit=args.history_limit,
+        )
+        if historical_errors:
+            print(json.dumps({"event": "historical_checkpoint_errors", "errors": historical_errors}), flush=True)
+        if not historical_paths:
+            raise RuntimeError("opponent league requires at least one loadable historical checkpoint")
+        historical_networks = load_historical_networks(historical_paths, device)
+        bridge = TacticBridge(repo_root)
+        print(f"[league] persistent tactic worker started; historical={len(historical_networks)}", flush=True)
     t_start = time.time()
     wave = 0
     next_ckpt = counter + args.cp_every
@@ -192,22 +244,34 @@ def main():
         while counter < args.episodes:
             cp_id = f"invitus_{counter:06d}"
             with ThreadPoolExecutor(max_workers=args.workers) as ex:
-                futs = [ex.submit(play_episode, net, device, args.sims, random.Random(), cp_id, True) for _ in range(args.games_per_wave)]
+                episode_rngs = [random.Random(random.getrandbits(64)) for _ in range(args.games_per_wave)]
+                if args.league:
+                    futs = [
+                        ex.submit(
+                            play_league_episode,
+                            net,
+                            device,
+                            args.sims,
+                            episode_rng,
+                            cp_id,
+                            bridge,
+                            historical_networks,
+                            8,
+                        )
+                        for episode_rng in episode_rngs
+                    ]
+                else:
+                    futs = [
+                        ex.submit(play_episode, net, device, args.sims, episode_rng, cp_id, True)
+                        for episode_rng in episode_rngs
+                    ]
                 for fut in futs:
                     samples, meta = fut.result()
                     for smp in samples:
                         rb.add(smp)
                     rb.flush()
                     counter += 1
-                    rec = {
-                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                        "kind": "formal", "game_id": meta["game_id"], "completed": True,
-                        "board_size": meta["boardSize"], "seat_assignments": "invitus-invitus-invitus",
-                        "opponents": "invitus-selfplay-v1", "checkpoint": cp_id, "mcts_sims": meta["mcts_sims"],
-                        "num_samples": meta["num_samples"], "terminal_result": meta["result"],
-                        "start_time": meta["seconds"], "end_time": meta["seconds"],
-                    }
-                    write_ledger(rec)
+                    write_ledger(make_ledger_record(meta, cp_id))
             # 训练步骤
             shards = rb.shards()[-32:]
             batch_samples = []
@@ -222,6 +286,12 @@ def main():
             gph = counter / max(1e-6, (time.time() - t_start) / 3600)
             print(f"[wave {wave}] formal={counter}/{args.episodes} gph={gph:.1f} loss={loss:.4f} pl={pl:.4f} vl={vl:.4f} gn={gn:.2f}",
                   flush=True)
+            # 每波保存 latest（限制断电损失）；STOP 文件出现 → 优雅停训
+            save_ckpt(os.path.join(CKPT_DIR, "latest.pt"), net, opt, sched, counter, random.getstate(), vars(args),
+                      {"games_per_hour": round(gph, 1), "wave": wave})
+            if os.path.exists("logs/STOP"):
+                print("[stop-file] graceful stop requested", flush=True)
+                break
             if counter >= next_ckpt:
                 save_ckpt(os.path.join(CKPT_DIR, f"invitus_{counter:06d}.pt"), net, opt, sched, counter,
                           random.getstate(), vars(args), {"games_per_hour": round(gph, 1)})
@@ -229,6 +299,9 @@ def main():
                 next_ckpt = counter + args.cp_every
     except KeyboardInterrupt:
         print("\n[interrupt] graceful checkpoint...", flush=True)
+    finally:
+        if bridge is not None:
+            bridge.close()
     save_ckpt(os.path.join(CKPT_DIR, f"invitus_{counter:06d}_final.pt"), net, opt, sched, counter, random.getstate(), vars(args), {})
     print(f"DONE formal episodes={counter} (target {args.episodes})", flush=True)
 
