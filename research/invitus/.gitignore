@@ -3,3 +3,6 @@ logs/diff_*.jsonl
 checkpoints/
 replay/
 logs/progress.json
+logs/STOP
+__pycache__/
+*.pyc
