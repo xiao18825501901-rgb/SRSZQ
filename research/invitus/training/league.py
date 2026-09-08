@@ -41,7 +41,7 @@ class TacticBridge:
         self.timeout = timeout
         worker = self.root / "research" / "invitus" / "tools" / "tactic_worker.ts"
         tsx = self.root / "node_modules" / "tsx" / "dist" / "cli.mjs"
-        self.command = command or ["node", str(tsx), str(worker)]
+        self.command = command or [self._find_node(), str(tsx), str(worker)]
         self.env = dict(os.environ if env is None else env)
         if os.name == "nt" and command is None:
             patch = self.root / "research" / "invitus" / "tools" / "node_user_patch.cjs"
@@ -63,6 +63,29 @@ class TacticBridge:
         }
         self.last_error: str | None = None
         self.start()
+
+    @staticmethod
+    def _find_node() -> str:
+        """Resolve the node binary without relying on the ambient PATH.
+
+        SSH non-login shells often lack the profile PATH entries (e.g. conda's
+        bin), which made tactic workers die with FileNotFoundError('node').
+        """
+        import shutil
+
+        candidates = [os.environ.get("INVITUS_NODE_BIN"), shutil.which("node"), shutil.which("nodejs")]
+        candidates += [
+            "/root/miniconda3/bin/node",
+            "/usr/local/bin/node",
+            "/usr/bin/node",
+            "/opt/node/bin/node",
+        ]
+        for candidate in candidates:
+            if candidate and os.path.exists(candidate):
+                return candidate
+        raise RuntimeError(
+            "node binary not found for tactic worker; set INVITUS_NODE_BIN or install node"
+        )
 
     @property
     def healthy(self) -> bool:

@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import multiprocessing as mp
+import queue
 import random
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -25,7 +27,7 @@ def _worker_main(
     torch.set_num_threads(1)
     device = torch.device("cpu")
     historical_networks = load_historical_networks(historical_paths, device)
-    bridge = TacticBridge(Path(repo_root))
+    bridge = None
     try:
         while True:
             job = job_queue.get()
@@ -33,6 +35,8 @@ def _worker_main(
                 return
             job_id, seed, sims, checkpoint_id = job
             try:
+                if bridge is None:
+                    bridge = TacticBridge(Path(repo_root))
                 samples, metadata = play_league_episode(
                     None,
                     device,
@@ -50,7 +54,8 @@ def _worker_main(
                     (job_id, None, None, f"{type(error).__name__}: {error}\n{traceback.format_exc()}")
                 )
     finally:
-        bridge.close()
+        if bridge is not None:
+            bridge.close()
 
 
 class ProcessSelfPlayPool:
@@ -92,8 +97,17 @@ class ProcessSelfPlayPool:
         for job in jobs:
             self.job_queue.put(job, timeout=30)
         results: dict[int, tuple[list[dict[str, Any]], dict[str, Any]]] = {}
+        deadline = time.monotonic() + timeout_seconds
         for _ in jobs:
-            job_id, samples, metadata, error = self.result_queue.get(timeout=timeout_seconds)
+            while True:
+                try:
+                    job_id, samples, metadata, error = self.result_queue.get(timeout=5)
+                    break
+                except queue.Empty:
+                    if any(not process.is_alive() for process in self.processes):
+                        raise RuntimeError("self-play worker process died; pool aborted")
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError("self-play pool timed out waiting for results")
             if error is not None:
                 raise RuntimeError(f"self-play worker failed for job {job_id}: {error}")
             results[job_id] = samples, metadata
