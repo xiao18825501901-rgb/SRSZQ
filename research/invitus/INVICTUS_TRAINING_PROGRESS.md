@@ -5,7 +5,7 @@
 
 | 项 | 值 |
 |---|---|
-| OFFICIAL FORMAL | **RUNNING — 从 0 增长**（2026-09-08T16:19Z 启动，目标 100000） |
+| OFFICIAL FORMAL | **RUNNING — 1744 并持续增长**（2026-09-08T16:19Z 启动，本段目标 5000；总目标 100000） |
 | CPU 历史证据 | 118 局 formal（已封存为 historical evidence，仅作历史对手/研究证据） |
 | 500-game GPU benchmark | 500/500，GPH **2507.1**，COMPUTE_GATE=GREEN（formal=false） |
 | 13×13 / 17×17 | 官方采样 60% / 40%（benchmark 实测 294/206） |
