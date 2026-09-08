@@ -27,10 +27,37 @@ from mcts.nn_mcts import NNMCTS
 from exact.solver import ExactSolver
 from training.replay import ReplayBuffer
 
-LEDGER = "logs/INVICTUS_TRAINING_LEDGER.jsonl"
-PROGRESS = "logs/progress.json"
-CKPT_DIR = "checkpoints"
+DATA_ROOT = Path(".").resolve()
+LEDGER = str(DATA_ROOT / "logs" / "INVICTUS_TRAINING_LEDGER.jsonl")
+PROGRESS = str(DATA_ROOT / "logs" / "progress.json")
+CKPT_DIR = str(DATA_ROOT / "checkpoints")
+REPLAY_DIR = str(DATA_ROOT / "replay")
+STOP_FILE = str(DATA_ROOT / "logs" / "STOP")
 CANVAS = 17
+
+
+def configure_storage(root):
+    """Route all mutable training state below one explicit data root."""
+    global DATA_ROOT, LEDGER, PROGRESS, CKPT_DIR, REPLAY_DIR, STOP_FILE
+    DATA_ROOT = Path(root).expanduser().resolve()
+    logs_dir = DATA_ROOT / "logs"
+    checkpoints_dir = DATA_ROOT / "checkpoints"
+    replay_dir = DATA_ROOT / "replay"
+    for directory in (logs_dir, checkpoints_dir, replay_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    LEDGER = str(logs_dir / "INVICTUS_TRAINING_LEDGER.jsonl")
+    PROGRESS = str(logs_dir / "progress.json")
+    CKPT_DIR = str(checkpoints_dir)
+    REPLAY_DIR = str(replay_dir)
+    STOP_FILE = str(logs_dir / "STOP")
+    return {
+        "data_root": str(DATA_ROOT),
+        "ledger": LEDGER,
+        "progress": PROGRESS,
+        "checkpoints": CKPT_DIR,
+        "replay": REPLAY_DIR,
+        "stop": STOP_FILE,
+    }
 
 
 def board_mix(rng):
@@ -105,6 +132,7 @@ def play_episode(net, device, sims, rng, cp_id, train=True, inference_service=No
 
 
 def write_ledger(rec: dict):
+    Path(LEDGER).parent.mkdir(parents=True, exist_ok=True)
     with open(LEDGER, "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         f.flush()
@@ -175,17 +203,35 @@ def train_batch(net, device, opt, samples, l2=1e-4):
 
 
 def save_ckpt(path, net, opt, sched, counter, rng_state, cfg, extra):
-    os.makedirs(CKPT_DIR, exist_ok=True)
-    torch.save({
-        "model": net.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
-        "counter": counter, "rng": rng_state, "cfg": cfg, "extra": extra, "net": "Tiny",
-    }, path)
-    with open(PROGRESS, "w", encoding="utf-8") as f:
-        json.dump({"counter": counter, "path": path, **extra}, f, ensure_ascii=False, indent=2)
+    checkpoint_path = Path(path).expanduser().resolve()
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    checkpoint_tmp = checkpoint_path.with_name(checkpoint_path.name + ".tmp")
+    with open(checkpoint_tmp, "wb") as f:
+        torch.save({
+            "model": net.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
+            "counter": counter, "rng": rng_state, "cfg": cfg, "extra": extra, "net": "Tiny",
+        }, f)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(checkpoint_tmp, checkpoint_path)
+
+    progress_path = Path(PROGRESS)
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+    progress_tmp = progress_path.with_name(progress_path.name + ".tmp")
+    with open(progress_tmp, "w", encoding="utf-8") as f:
+        json.dump(
+            {"counter": counter, "path": str(checkpoint_path), **extra},
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(progress_tmp, progress_path)
 
 
 def load_ckpt(net, opt, sched, path):
-    ck = torch.load(path, map_location="cpu")
+    ck = torch.load(path, map_location="cpu", weights_only=False)
     net.load_state_dict(ck["model"])
     opt.load_state_dict(ck["opt"])
     sched.load_state_dict(ck["sched"])
@@ -205,13 +251,16 @@ def main():
     ap.add_argument("--channels", type=int, default=32)
     ap.add_argument("--blocks", type=int, default=4)
     ap.add_argument("--league", type=int, default=0)
-    ap.add_argument("--history-dir", default=CKPT_DIR)
+    ap.add_argument("--history-dir", default="")
     ap.add_argument("--history-limit", type=int, default=8)
     ap.add_argument("--inference-batch", type=int, default=128)
     ap.add_argument("--inference-wait-ms", type=float, default=2.0)
     ap.add_argument("--precision", choices=("fp32", "bf16"), default="fp32")
     ap.add_argument("--compile-model", action="store_true")
+    ap.add_argument("--data-root", default=".")
     args = ap.parse_args()
+    storage = configure_storage(args.data_root)
+    print(json.dumps({"event": "storage_configured", **storage}), flush=True)
 
     net, device = make_model(args.channels, args.blocks)
     opt = torch.optim.AdamW(net.parameters(), lr=2e-3, weight_decay=1e-4)
@@ -228,7 +277,7 @@ def main():
             if rng_state:
                 random.setstate(rng_state)
             print(f"RESUMED from {p} at episode {counter}", flush=True)
-    rb = ReplayBuffer()
+    rb = ReplayBuffer(base_dir=REPLAY_DIR)
     from inference.service import InferenceService
     inference_service = InferenceService(
         net,
@@ -249,7 +298,7 @@ def main():
         )
         repo_root = Path(__file__).resolve().parents[2]
         historical_paths, historical_errors = discover_historical_checkpoints(
-            args.history_dir,
+            args.history_dir or CKPT_DIR,
             exclude_path=resume_path or None,
             limit=args.history_limit,
         )
@@ -314,7 +363,7 @@ def main():
             # 每波保存 latest（限制断电损失）；STOP 文件出现 → 优雅停训
             save_ckpt(os.path.join(CKPT_DIR, "latest.pt"), net, opt, sched, counter, random.getstate(), vars(args),
                       {"games_per_hour": round(gph, 1), "wave": wave})
-            if os.path.exists("logs/STOP"):
+            if os.path.exists(STOP_FILE):
                 print("[stop-file] graceful stop requested", flush=True)
                 break
             if counter >= next_ckpt:
