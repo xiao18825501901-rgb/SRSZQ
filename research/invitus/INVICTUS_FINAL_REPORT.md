@@ -1,62 +1,62 @@
-# INVICTUS_FINAL_REPORT（阶段报告 · 进行中）
+# INVICTUS_FINAL_REPORT（Phase 2 更新）
 
 # 1 STATUS
 
-**PARTIAL**（研究前中期完成；未达 100,000 formal training episodes；未做最终基准；不 READY。）
+**PARTIAL / BLOCKED_BY_COMPUTE**（formal <100,000；本机 CPU ETA 30–52 天；神经网络与训练管线已真实运行、计数在增长，但未达 READY 门槛。）
 
 # 2 Training Count
 
-- Completed **formal** Training Episodes: **0**
-- Pilot（rollout-MCTS，不计入 formal 100k）: **2**（ledger 已验证：unique 2 / duplicates 0）
-- 说明：正式训练 = 数据进入 neural replay/training pipeline 的完整对局；当前 neural 训练循环尚未启动，因此正式计数为 0。
+- Completed **formal** Training Episodes：**smoke 24 + 后台持续增长**（每次提交时用 verify_training_ledger.py 复算；唯一 game_id、completed、samples>0 才计）
+- Pilot（不计入）：2
+- **FORMAL TRAINING: xxxxx / 100000+**（实时见 INVICTUS_TRAINING_PROGRESS.md 与 logs/INVICTUS_TRAINING_LEDGER.jsonl）
 
 # 3 Champion Checkpoint
 
-无（尚无 trained checkpoint）。
+无（未到 champion 阶段）。
 
 # 4 Model Architecture
 
-设计见 INVICTUS_ARCHITECTURE.md（Residual CNN + 4-way value + policy mask；未训练）。
+`model/network.py` InvitusNet：16 通道统一 17×17 输入（A/B/C 石、actor、胜权 A/B/C/无、forbidden mask、active mask、棋盘尺寸 flag、turn phase）→ Tiny(32ch/4blk，默认)/Small/Medium 可选 → policy 289 logits（合法 mask 后 softmax）+ value 4-way softmax [A,B,C,DRAW]。**无 [-1,+1] scalar**。device=cuda/cpu 自适应。
 
 # 5 MCTS Architecture
 
-已实现 Python 多玩家 PUCT（actor-aware Q+U、向量 W_ABCD backup、root Dirichlet 可选、temperature、exact 叶集成）——单测覆盖合法/稳定/seed 可复现。bug 修复记录：visits 方向、扩展时机、rollout 不污染叶状态。
+`mcts/nn_mcts.py`：actor-aware PUCT + 向量 backup；叶值=网络 value（exact region → 精确向量）；训练 root Dirichlet + 早局 temperature；评估 noise 关、temperature=0。policy 永不含非法步（mask 后再 softmax）。
 
 # 6 Multi-player Value Design
 
-[A,B,C,DRAW] 4 元向量；exact solver 输出 MaxN 精确向量（和=1 已测）。
+[A,B,C,DRAW] 4 元；value loss 用 4 元 CE；MCTS W_ABCD 向量。
 
 # 7 Exact Solver
 
-已实现（D4 canonical key + TT + 无启发穷举 + best_move 最优性自检）；单测：立即胜/小残局精确求解 PASS。max_branch 性能实验（6/8/10/12）与 oracle dataset 批量生成待跑。
+上轮实现（D4 canonical + TT + 无启发穷举）；本轮接入 NNMCTS 叶（in_exact_region → exact）。max_branch 6/8/10/12 性能与 oracle dataset（2000–5000 残局）待 GPU/后续批次生成。
 
 # 8 Hardware
 
-见 INVICTUS_HARDWARE_REPORT.md：i7-13620H 10C/16T · 15.7GB RAM · **无 CUDA（torch CPU）** · 磁盘 15.3GB → CPU fallback，小网络/小 batch/≤2 worker。
+CPU-only（见 INVICTUS_HARDWARE_REPORT.md / INVICTUS_COMPUTE_SCALING_REPORT.md）。
 
 # 9 Training Time
 
-尚未开始 formal 训练；pilot 2 局（13×13、sims=4）完成，速度受 CPU 限制（每局数十秒级）。
+已运行：smoke 20+resume 4=24 局；正式训练后台持续运行中；games/hour ≈ 70–140（sims 8–16）。
 
 # 10 Training Curves
 
-无（0 正式局）。
+见训练进程日志（每 wave 打印 pl/vl/loss/gn）；初期 pl≈5.0、vl≈1.0–1.3 有限无 NaN。
 
 # 11 Baseline Results
 
-待跑（scripts/ai:selfplay、ai:benchmark 或新评估脚本；13/17、全座位、win/draw/时长/延迟/座位优势）。
+见 INVICTUS_BASELINE_REPORT.md：maxn 暂为 strongest baseline；13×13 小样本完成、17×17 完成中；seat C 优势明显。
 
 # 12 13×13 Results / # 13 17×17 Results
 
-待训练后。
+训练中（60/40 采样；已出现 17×17 样本）。
 
 # 14 Seat Analysis
 
-pilot 2 局均为 A_WIN（样本量 2，无统计意义；座位优势需大样本）。
+self-play 三座全 Invitus；座位影响将在最终大样本赛评估。
 
 # 15 Value Calibration / # 16 Search Scaling / # 17 Exact Oracle Accuracy
 
-待 NN 训练后；exact solver 正确性已由单测 + 100k differential 间接覆盖。
+待训练达标后（100k 后必做）。
 
 # 18 Final Win Rates
 
@@ -64,35 +64,31 @@ pilot 2 局均为 A_WIN（样本量 2，无统计意义；座位优势需大样�
 
 # 19 Known Weaknesses
 
-- 纯 Python MCTS/rollout 慢（CPU-only）：需 numpy 向量化/限制 rollout 深度/batch。
-- exact solver 的 pass 链在极端残局可能触发多次 O(n²) 扫描（已按生产语义加 boardSize² 保护）。
-- 尚无神经网络与训练循环（下一步）。
+- CPU 吞吐不足：sims=16 时 ~70–90 局/时 → 100k 需 30–52 天（GPU 迁移计划见 COMPUTE_SCALING）。
+- league 当前为 invitus×3 简化版（TS tactics 桥接未接，避免每步子进程开销）；后续按 50/20/20/10 采样扩展。
+- 训练早期价值学习慢（vl≈ln4 附近），属正常冷启动。
 
-# 20 Files Changed（本分支）
+# 20 Files Changed（本阶段新增）
 
-- research/invitus/INVICTUS_{EXISTING_AI_AUDIT,HARDWARE_REPORT,ARCHITECTURE,ACCEPTANCE_CRITERIA,FINAL_REPORT}.md
-- research/invitus/engine/srszq.py（Python 引擎；**100,000/100,000 differential 与生产引擎一致**）
-- research/invitus/tools/gen_diff_cases.ts · diff_check.py
-- research/invitus/exact/solver.py · mcts/mcts.py · selfplay/selfplay.py · training/verify_training_ledger.py · tests/run_all.py（6/6 PASS）· logs/
+model/network.py · model/encode.py · mcts/nn_mcts.py · training/replay.py · training/train.py · training/verify_training_ledger.py（升级硬约束）· INVICTUS_{BASELINE_REPORT,TRAINING_PROGRESS,COMPUTE_SCALING_REPORT}.md · 更新本文件。
 
 # 21 Git SHAs
 
-分支 research/invitus（基于 main 2752d29）；提交见 git log（未 merge、未部署）。
+research/invitus（基于 87e6c58）；本阶段提交见 git log。未 merge main、未部署。
 
 # 22 Reproduction Commands
 
-```
-npx tsx research/invitus/tools/gen_diff_cases.ts 100000 research/invitus/logs/diff_100k.jsonl
-python research/invitus/tools/diff_check.py research/invitus/logs/diff_100k.jsonl   # TOTAL 100000 MISMATCH 0
-python research/invitus/tests/run_all.py                                            # 6/6
-python research/invitus/selfplay/selfplay.py <games> <sims>
-python research/invitus/training/verify_training_ledger.py <ledger>
-```
+见 INVICTUS_TRAINING_PROGRESS.md「Resume 命令」。
 
 # 23 Integration Plan
 
-READY 后：ONNX 导出 → 后端/Node 推理 → HvAI/Online 可选接入 → 与 5 tactics 并存；此前不合并、不部署。
+不变：READY 后 ONNX→后端/Node；此前不合并不部署。
 
 # 24 Rollback Plan
 
-研究分支独立：放弃=删除分支；主仓库不受影响（未改 main、未动生产/DB/Caddy）。
+研究分支独立；删除分支即回滚；生产零影响。
+
+# 25 重要声明
+
+- **INVICTUS IS NOT TRAINED YET.**
+- 不满足：formal≥100000、17×17≥30%、大样本统计显著、exact oracle、calibration、search scaling → 按冻结的 ACCEPTANCE_CRITERIA 判 PARTIAL/BLOCKED，绝不写 READY。
