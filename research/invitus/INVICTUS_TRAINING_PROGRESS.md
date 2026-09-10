@@ -5,13 +5,14 @@
 
 | 项 | 值 |
 |---|---|
-| OFFICIAL FORMAL | **RUNNING — 1744 并持续增长**（2026-09-08T16:19Z 启动，本段目标 5000；总目标 100000） |
+| OFFICIAL FORMAL | **5000 / 100000**（0–5K 段完成；5K 诊断发现政策坍塌，修复验证后继续） |
 | CPU 历史证据 | 118 局 formal（已封存为 historical evidence，仅作历史对手/研究证据） |
 | 500-game GPU benchmark | 500/500，GPH **2507.1**，COMPUTE_GATE=GREEN（formal=false） |
 | 13×13 / 17×17 | 官方采样 60% / 40%（benchmark 实测 294/206） |
 | 冻结官方配置 | Small 64×6 · 20 进程 · batch 128 · 16 sims · FP32 · torch.compile |
-| Latest checkpoint | checkpoints/latest.pt（每波原子更新） |
-| Current champion | 无（champion gate 工具就绪，5k 起启用） |
+| Latest checkpoint | invitus_005000_major.pt（sha256 1ea31fcf…，已备份 staging） |
+| Current champion | **none**（5K gate 0/900 胜，坍塌模型不加冕） |
+| 训练健康 | **POLICY COLLAPSE 已确认并定位**（根 Dirichlet 混用 + 无熵正则 + one-hot 目标）；修复 v2（τ=2.0, λ=0.05）验证中 |
 | League | 50% self / 20% historical / 20% strong / 10% diverse（persistent Node worker，benchmark 0 fallback） |
 | games/hour（含训练步） | 16 sims + 8 步/波 ≈ **1087**（实测，wave 1–5）；纯对局 2507（benchmark） |
 | ETA to 100k | 按 1087（0–5k 段）起算，动态 curriculum：BEST ~180h / EXPECTED ~230h / CONSERVATIVE ~300h |
