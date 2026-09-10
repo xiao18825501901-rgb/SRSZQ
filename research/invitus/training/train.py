@@ -191,7 +191,7 @@ def make_ledger_record(meta: dict, checkpoint_id: str) -> dict:
     }
 
 
-def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0):
+def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_tau=1.0):
     net.train()
     import numpy as np
     X, P, V, masks = [], [], [], []
@@ -213,7 +213,9 @@ def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0):
         for (r, c) in legal:
             mask[r * 17 + c] = 0.0
         masks.append(mask)
-        target = enc.policy_target(legal, {tuple(map(int, k.split(","))): v for k, v in smp["visits"].items()})
+        target = enc.policy_target(
+            legal, {tuple(map(int, k.split(","))): v for k, v in smp["visits"].items()}, tau=target_tau
+        )
         P.append(target)
         V.append(smp["outcome"])
     X = torch.from_numpy(np.asarray(X, dtype=np.float32)).to(device)

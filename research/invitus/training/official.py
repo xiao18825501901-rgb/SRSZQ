@@ -165,7 +165,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--games-per-wave", type=int, default=8)
     parser.add_argument("--steps-per-wave", type=int, default=8)
     parser.add_argument("--train-batch", type=int, default=128)
-    parser.add_argument("--entropy-weight", type=float, default=0.02, help="policy entropy regularization weight")
+    parser.add_argument("--entropy-weight", type=float, default=0.05, help="policy entropy regularization weight")
+    parser.add_argument("--target-tau", type=float, default=1.0, help="soften visit targets: visits^(1/tau); >1 prevents one-hot targets")
     parser.add_argument("--sample-interval", type=float, default=5.0)
     parser.add_argument("--cp-every", type=int, default=500)
     parser.add_argument("--major-every", type=int, default=5000)
@@ -350,7 +351,7 @@ def main() -> int:
                     idxs = [random.randrange(len(batch_samples)) for _ in range(args.train_batch)]
                     policy_loss, value_loss, loss, gradient_norm, policy_entropy = train.train_batch(
                         net, device, optimizer, [batch_samples[i] for i in idxs],
-                        entropy_weight=args.entropy_weight,
+                        entropy_weight=args.entropy_weight, target_tau=args.target_tau,
                     )
                     if not all(np.isfinite(v) for v in (policy_loss, value_loss, loss, gradient_norm, policy_entropy)):
                         raise FloatingPointError(

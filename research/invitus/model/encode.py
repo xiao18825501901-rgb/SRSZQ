@@ -62,14 +62,16 @@ def encode_state(s) -> list:
     return planes
 
 
-def policy_target(legal, visits_map, n=17 * 17):
-    """稀疏 visits → 289 维分布（仅在 legal 上归一）。"""
+def policy_target(legal, visits_map, n=17 * 17, tau=1.0):
+    """稀疏 visits → 289 维分布（仅在 legal 上归一）。
+    tau>1 时按 visits^(1/tau) 软化目标（防 one-hot 坍塌，默认 1.0=原行为）。"""
     out = [0.0] * (CANVAS * CANVAS)
     tot = 0.0
     for (r, c) in legal:
         v = visits_map.get((r, c), 0.0)
-        out[r * CANVAS + c] = v
-        tot += v
+        softened = v ** (1.0 / tau) if tau != 1.0 else v
+        out[r * CANVAS + c] = softened
+        tot += softened
     if tot > 0:
         out = [x / tot for x in out]
     return out
