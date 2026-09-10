@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import numpy as np
 
 from inference.process_service import ProcessInferenceBroker
 from model.network import make_model
@@ -351,6 +352,11 @@ def main() -> int:
                         net, device, optimizer, [batch_samples[i] for i in idxs],
                         entropy_weight=args.entropy_weight,
                     )
+                    if not all(np.isfinite(v) for v in (policy_loss, value_loss, loss, gradient_norm, policy_entropy)):
+                        raise FloatingPointError(
+                            f"official training produced NaN/Inf: pl={policy_loss} vl={value_loss} "
+                            f"loss={loss} gn={gradient_norm} entropy={policy_entropy}"
+                        )
                 scheduler.step()
 
             inference_metrics = broker.metrics_snapshot()
