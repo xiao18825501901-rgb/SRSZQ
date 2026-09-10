@@ -191,9 +191,10 @@ def make_ledger_record(meta: dict, checkpoint_id: str) -> dict:
     }
 
 
-def train_batch(net, device, opt, samples, l2=1e-4):
+def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0):
     net.train()
-    X, P, V = [], [], []
+    import numpy as np
+    X, P, V, masks = [], [], [], []
     for smp in samples:
         n = smp["size"]
         # 重建 state
@@ -208,25 +209,36 @@ def train_batch(net, device, opt, samples, l2=1e-4):
         planes = enc.encode_state(s)
         X.append(planes)
         legal = [tuple(x) for x in smp["legal"]]
+        mask = np.full(289, -np.inf, dtype=np.float32)
+        for (r, c) in legal:
+            mask[r * 17 + c] = 0.0
+        masks.append(mask)
         target = enc.policy_target(legal, {tuple(map(int, k.split(","))): v for k, v in smp["visits"].items()})
         P.append(target)
         V.append(smp["outcome"])
-    import numpy as np
     X = torch.from_numpy(np.asarray(X, dtype=np.float32)).to(device)
     P = torch.from_numpy(np.asarray(P, dtype=np.float32)).to(device)
     V = torch.from_numpy(np.asarray(V, dtype=np.float32)).to(device)
+    mask_t = torch.from_numpy(np.asarray(masks, dtype=np.float32)).to(device)
     logits, logv = net(X)
     logp = torch.log_softmax(logits, dim=1)
     policy_loss = -(P * logp).sum(dim=1).mean()
     value_loss = -(V * logv).sum(dim=1).mean()
+    entropy = 0.0
+    if entropy_weight > 0:
+        # 合法步 mask 后 softmax 的策略熵（防 one-hot 坍塌正则项）
+        masked_logits = logits + mask_t
+        logpm = torch.log_softmax(masked_logits, dim=1)
+        pm = torch.exp(logpm)
+        entropy = -(pm * logpm).sum(dim=1).mean()
     l2reg = sum((p ** 2).sum() for p in net.parameters()) * l2
-    loss = policy_loss + value_loss + l2reg
+    loss = policy_loss + value_loss + l2reg - entropy_weight * entropy
     opt.zero_grad()
     loss.backward()
     gn = math.sqrt(sum((p.grad ** 2).sum().item() for p in net.parameters() if p.grad is not None))
     torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
     opt.step()
-    return float(policy_loss.item()), float(value_loss.item()), float(loss.item()), gn
+    return float(policy_loss.item()), float(value_loss.item()), float(loss.item()), gn, float(entropy.item())
 
 
 def save_ckpt(path, net, opt, sched, counter, rng_state, cfg, extra):

@@ -25,13 +25,14 @@ class NNode:
         self.P = {}
 
 
-def dirichlet_mix(legal, alpha=0.3, eps=0.25, rng=None):
+def dirichlet_noise(legal, alpha=0.3, rng=None):
+    """纯 Dirichlet(alpha) 噪声（AlphaZero 式根节点探索噪声）。"""
     import random
     import numpy as np
     rnd = random.Random(rng.randint(0, 2**31 - 1))
     g = np.random.default_rng(rnd.getrandbits(32)).gamma(alpha, 1.0, size=len(legal))
     g = g / g.sum()
-    return {m: eps * float(g[i]) + (1 - eps) * (1.0 / len(legal)) for i, m in enumerate(legal)}
+    return {m: float(g[i]) for i, m in enumerate(legal)}
 
 
 class NNMCTS:
@@ -72,14 +73,19 @@ class NNMCTS:
         P = {m: float(e[i]) for i, m in enumerate(legal)}
         return P
 
-    def search(self, s0):
+    def search(self, s0, dirichlet_eps: float = 0.25, dirichlet_alpha: float = 0.3):
         root = NNode()
         self.root = root
         legal = srszq.legal_moves(s0)
         if not legal:
             return root
         if self.train:
-            root.P = dirichlet_mix(legal, rng=self.rng)
+            # AlphaZero 式：根先验 = (1-eps)*网络策略 + eps*Dirichlet 噪声。
+            # （此前实现把噪声混进均匀分布，根节点脱离网络策略，
+            #   而内部节点用网络尖先验无噪声 → 策略坍塌正反馈。）
+            p_net = self._prior(s0)
+            noise = dirichlet_noise(legal, alpha=dirichlet_alpha, rng=self.rng)
+            root.P = {m: (1 - dirichlet_eps) * p_net[m] + dirichlet_eps * noise[m] for m in legal}
         else:
             root.P = self._prior(s0)
         for _ in range(self.sims):

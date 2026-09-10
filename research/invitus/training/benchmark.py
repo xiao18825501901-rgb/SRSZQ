@@ -323,7 +323,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             if wave_samples and args.train_steps_per_wave:
                 for _ in range(args.train_steps_per_wave):
                     selected = [rng.choice(wave_samples) for _ in range(args.train_batch)]
-                    policy_loss, value_loss, loss, gradient_norm = train.train_batch(
+                    policy_loss, value_loss, loss, gradient_norm, policy_entropy = train.train_batch(
                         net, device, optimizer, selected
                     )
                     if not all(np.isfinite(value) for value in (policy_loss, value_loss, loss, gradient_norm)):

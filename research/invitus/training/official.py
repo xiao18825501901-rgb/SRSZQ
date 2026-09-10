@@ -164,6 +164,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--games-per-wave", type=int, default=8)
     parser.add_argument("--steps-per-wave", type=int, default=8)
     parser.add_argument("--train-batch", type=int, default=128)
+    parser.add_argument("--entropy-weight", type=float, default=0.02, help="policy entropy regularization weight")
     parser.add_argument("--sample-interval", type=float, default=5.0)
     parser.add_argument("--cp-every", type=int, default=500)
     parser.add_argument("--major-every", type=int, default=5000)
@@ -307,7 +308,7 @@ def main() -> int:
     wave = 0
     next_ckpt = counter + args.cp_every
     next_major = counter + args.major_every
-    policy_loss = value_loss = loss = gradient_norm = 0.0
+    policy_loss = value_loss = loss = gradient_norm = policy_entropy = 0.0
     last_inference_metrics: dict[str, Any] = {}
     try:
         while counter < args.episodes:
@@ -346,8 +347,9 @@ def main() -> int:
             if batch_samples:
                 for _ in range(args.steps_per_wave):
                     idxs = [random.randrange(len(batch_samples)) for _ in range(args.train_batch)]
-                    policy_loss, value_loss, loss, gradient_norm = train.train_batch(
-                        net, device, optimizer, [batch_samples[i] for i in idxs]
+                    policy_loss, value_loss, loss, gradient_norm, policy_entropy = train.train_batch(
+                        net, device, optimizer, [batch_samples[i] for i in idxs],
+                        entropy_weight=args.entropy_weight,
                     )
                 scheduler.step()
 
@@ -370,6 +372,7 @@ def main() -> int:
                     "loss": round(loss, 4),
                     "policyLoss": round(policy_loss, 4),
                     "valueLoss": round(value_loss, 4),
+                    "policyEntropy": round(policy_entropy, 4),
                     "gradientNorm": round(gradient_norm, 3),
                     "inferenceErrors": inference_metrics.get("errors", 0),
                     "bridgeFallbacks": bridge_totals.get("fallbacks", 0),
