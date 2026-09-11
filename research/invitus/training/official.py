@@ -177,6 +177,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--history-limit", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260908)
     parser.add_argument("--resume", default="")
+    parser.add_argument("--warm-start", default="", help="load model weights ONLY from an external checkpoint (fresh optimizer/counter/ledger; 与 --resume 互斥)")
     parser.add_argument("--min-free-gib", type=float, default=100.0)
     args = parser.parse_args()
     if args.games_per_wave < 1 or args.workers < 1 or args.batch < 1:
@@ -250,6 +251,17 @@ def main() -> int:
     else:
         if Path(train.LEDGER).exists() and Path(train.LEDGER).stat().st_size > 0:
             raise RuntimeError("refusing fresh start over a non-empty official ledger; use a clean data root")
+
+    if args.warm_start:
+        # Recovery 臂：只继承外部 checkpoint 的模型权重（实验用途，formal 场景不用于 official）
+        if not os.path.exists(args.warm_start):
+            raise RuntimeError(f"warm-start checkpoint not found: {args.warm_start}")
+        warm = torch.load(args.warm_start, map_location="cpu", weights_only=False)
+        net.load_state_dict(warm["model"])
+        optimizer = torch.optim.AdamW(net.parameters(), lr=2e-3, weight_decay=1e-4)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20_000, gamma=0.5)
+        counter = 0
+        print(json.dumps({"event": "warm_start", "checkpoint": args.warm_start, "counter": counter}), flush=True)
 
     history_paths: list[str] = []
     history_errors: dict[str, str] = {}
