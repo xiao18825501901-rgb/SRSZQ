@@ -191,7 +191,7 @@ def make_ledger_record(meta: dict, checkpoint_id: str) -> dict:
     }
 
 
-def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_tau=1.0):
+def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_tau=1.0, value_smooth=0.0):
     net.train()
     import numpy as np
     X, P, V, masks = [], [], [], []
@@ -218,6 +218,9 @@ def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_t
         )
         P.append(target)
         V.append(smp["outcome"])
+    if value_smooth > 0:
+        # 标签平滑：V' = (1-s)*V + s/4，防止 value 头多数类坍缩（如学成 P(C)=0.93）
+        V = [(1.0 - value_smooth) * np.asarray(v, dtype=np.float32) + value_smooth / 4.0 for v in V]
     X = torch.from_numpy(np.asarray(X, dtype=np.float32)).to(device)
     P = torch.from_numpy(np.asarray(P, dtype=np.float32)).to(device)
     V = torch.from_numpy(np.asarray(V, dtype=np.float32)).to(device)
