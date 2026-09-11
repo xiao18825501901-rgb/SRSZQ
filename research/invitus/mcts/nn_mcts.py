@@ -35,6 +35,13 @@ def dirichlet_noise(legal, alpha=0.3, rng=None):
     return {m: float(g[i]) for i, m in enumerate(legal)}
 
 
+def root_prior_mix(p_net, legal, eps=0.25, alpha=0.3, rng=None):
+    """AlphaZero 根先验：(1-eps)*网络策略 + eps*Dirichlet 噪声。
+    （绝不能是 eps*Dirichlet + (1-eps)*均匀 —— 那是 5K 政策坍塌根因。）"""
+    noise = dirichlet_noise(legal, alpha=alpha, rng=rng)
+    return {m: (1 - eps) * p_net[m] + eps * noise[m] for m in legal}
+
+
 class NNMCTS:
     def __init__(self, net, device, sims=16, exact=None, rng=None, train=False, c_puct=1.4, inference_service=None):
         import random
@@ -81,11 +88,8 @@ class NNMCTS:
             return root
         if self.train:
             # AlphaZero 式：根先验 = (1-eps)*网络策略 + eps*Dirichlet 噪声。
-            # （此前实现把噪声混进均匀分布，根节点脱离网络策略，
-            #   而内部节点用网络尖先验无噪声 → 策略坍塌正反馈。）
             p_net = self._prior(s0)
-            noise = dirichlet_noise(legal, alpha=dirichlet_alpha, rng=self.rng)
-            root.P = {m: (1 - dirichlet_eps) * p_net[m] + dirichlet_eps * noise[m] for m in legal}
+            root.P = root_prior_mix(p_net, legal, eps=dirichlet_eps, alpha=dirichlet_alpha, rng=self.rng)
         else:
             root.P = self._prior(s0)
         for _ in range(self.sims):

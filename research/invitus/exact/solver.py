@@ -43,9 +43,14 @@ def canonical_key(s):
     return min(keys) + f"|t{s['turn']}|{s['status']}|{s['winner'] or '-'}"
 
 
+class SolverBudgetExceeded(RuntimeError):
+    pass
+
+
 class ExactSolver:
-    def __init__(self, max_branch: int = 10):
+    def __init__(self, max_branch: int = 10, max_nodes: int = 0):
         self.max_branch = max_branch
+        self.max_nodes = max_nodes  # 0=不限；超出抛 SolverBudgetExceeded
         self.tt: dict[str, tuple] = {}
         self.nodes = 0
 
@@ -54,6 +59,8 @@ class ExactSolver:
 
     def solve(self, s) -> tuple:
         """返回精确 outcome 向量 (P(A),P(B),P(C),P(DRAW))（MaxN 语义）。"""
+        if self.max_nodes and self.nodes > self.max_nodes:
+            raise SolverBudgetExceeded(f"nodes > {self.max_nodes}")
         if s["status"] == "won":
             idx = srszq.PLAYERS.index(s["winner"])
             v = [0.0, 0.0, 0.0, 0.0]
