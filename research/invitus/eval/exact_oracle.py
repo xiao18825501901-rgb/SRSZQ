@@ -111,25 +111,40 @@ def harvest_replay_tails(
     return candidates
 
 
+def _actor_k(size: int, actor: str, max_branch: int) -> int | None:
+    """选 k∈[4..max_branch] 使 turn=(n²-k) 的当前行动者 == actor。"""
+    for k in range(max_branch, 3, -1):
+        if (size * size - k) % 3 == ACTOR_INDEX[actor]:
+            return k
+    return None
+
+
 def synthetic_states(
     size: int,
     count: int,
     max_branch: int,
     rng: random.Random,
-    max_attempts_per_state: int = 100,
+    actor: str = "",
+    max_attempts_per_state: int = 120,
 ) -> list[dict[str, Any]]:
-    """随机合法对局走至空位<=max_branch（禁止直接获胜手），保证 reachable。
-    用 creates_four_through 免 deepcopy 判定获胜手（性能关键）。"""
+    """随机合法对局走至"精确 k 个空位"（禁止直接获胜手），保证 reachable。
+    k 由目标 actor 决定：turn=(n²-k) 的当前行动者 == actor（确定性座位平衡）。"""
     states: list[dict[str, Any]] = []
     attempts = 0
     while len(states) < count and attempts < count * max_attempts_per_state:
         attempts += 1
         state = srszq.create_state(size)
+        target_k = _actor_k(size, actor, max_branch) if actor else None
         while True:
             legal = srszq.legal_moves(state)
             if not legal:
                 break
-            if len(legal) <= max_branch:
+            if target_k is not None:
+                if len(legal) == target_k:
+                    break
+                if len(legal) < target_k:
+                    break  # 越过目标（极少数），重开
+            elif len(legal) <= max_branch:
                 break
             player = srszq.current_player(state)
             non_winning = [
@@ -140,7 +155,11 @@ def synthetic_states(
                 break  # 任意着都赢 → 放弃此局重开
             (r, c) = rng.choice(non_winning)
             srszq.apply_move(state, r, c)
-        if state["status"] == "playing" and 0 < len(srszq.legal_moves(state)) <= max_branch:
+        legal = srszq.legal_moves(state)
+        ok = state["status"] == "playing" and 0 < len(legal) <= max_branch
+        if ok and actor and srszq.current_player(state) != actor:
+            ok = False
+        if ok:
             states.append(state)
     return states
 
@@ -154,6 +173,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-positions", type=int, default=200)
     parser.add_argument("--synthetic", action="store_true")
     parser.add_argument("--synthetic-sizes", default="13,17")
+    parser.add_argument("--actor-filter", default="", help="synthetic 模式只保留该 actor（A/B/C）的位置")
     parser.add_argument("--seed", type=int, default=20260908)
     args = parser.parse_args()
     if not args.synthetic and not args.replay_dir:
@@ -186,12 +206,17 @@ def main() -> int:
 
         if args.synthetic:
             sizes = [int(x) for x in args.synthetic_sizes.split(",") if x.strip()]
-            per_size = args.max_positions // len(sizes) + 1
+            # 座位平衡：A/B/C 轮流生成，目标各 ~max_positions/3 每尺寸
+            actors = ["A", "B", "C"]
             for size in sizes:
-                for state in synthetic_states(size, per_size, args.max_branch, rng):
-                    if written >= args.max_positions:
-                        break
-                    emit(state, None)
+                per_actor = (args.max_positions // len(sizes) // 3) + 1
+                for actor in actors:
+                    for state in synthetic_states(size, per_actor, args.max_branch, rng, actor=actor):
+                        if written >= args.max_positions:
+                            break
+                        if args.actor_filter and srszq.current_player(state) != args.actor_filter:
+                            continue
+                        emit(state, None)
         else:
             candidates = harvest_replay_tails(args.replay_dir, args.per_game_tail, args.max_branch, rng)
             for game_id, sample in candidates:
