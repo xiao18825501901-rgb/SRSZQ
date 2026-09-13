@@ -54,6 +54,12 @@ LEAGUE_CONTRACT = {"selfplay": 0.50, "historical": 0.20, "strong": 0.20, "divers
 BOARD_MIX = {"13": 0.60, "17": 0.40}
 
 
+def bounded_wave_size(counter: int, target: int, maximum: int, boundaries: list[int]) -> int:
+    """End a wave exactly on the next telemetry/checkpoint boundary."""
+    future = [boundary - counter for boundary in boundaries if boundary > counter]
+    return min([maximum, target - counter, *future])
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -336,7 +342,7 @@ def main() -> int:
     wave = 0
     next_ckpt = counter + args.cp_every
     next_major = counter + args.major_every
-    next_metrics = counter + 100
+    next_metrics = (counter // 100 + 1) * 100
     metrics_metadata: list[dict[str, Any]] = []
     metrics_samples: list[dict[str, Any]] = []
     sentinel = CollapseSentinel(window=100)
@@ -355,7 +361,12 @@ def main() -> int:
     try:
         while counter < args.episodes:
             cp_id = f"invitus_{counter:06d}"
-            wave_games = min(args.games_per_wave, args.episodes - counter)
+            wave_games = bounded_wave_size(
+                counter,
+                args.episodes,
+                args.games_per_wave,
+                [next_metrics, next_ckpt, next_major],
+            )
             seeds = [rng.getrandbits(64) for _ in range(wave_games)]
             jobs = [(counter + index, seed, args.sims, cp_id) for index, seed in enumerate(seeds)]
             episode_results = pool.play(jobs)
@@ -482,7 +493,7 @@ def main() -> int:
                 print(json.dumps(hundred, ensure_ascii=False), flush=True)
                 metrics_metadata.clear()
                 metrics_samples.clear()
-                next_metrics = counter + 100
+                next_metrics = (counter // 100 + 1) * 100
 
             if collapse_stop:
                 print(

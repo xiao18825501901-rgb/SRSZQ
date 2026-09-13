@@ -16,6 +16,8 @@ Generated: 2026-09-14 (Asia/Shanghai)
 REPOSITORY: xiao18825501901-rgb/SRSZQ
 BRANCH: research/invitus
 BASE_GIT_SHA: 1aa0a5a96868f9c28409eb28152204d8bed8cbcc
+TAKEOVER_CHECKPOINT_SHA: d50128d0f497a99609dfdd6503a32024ea8dcd48
+CURRENT_VALIDATED_SHA: 0de67e48887374d589606c0a9deadf4d969401bd
 BASE_HEAD_EQUALS_ORIGIN: true
 TRACKED_MODIFICATIONS: 0
 LOCAL_AHEAD_BEHIND: 0 / 0
@@ -73,11 +75,12 @@ READY: NO
 
 ```text
 SSH_ENDPOINT: connect.westc.seetacloud.com:12836
-EXPECTED_GPU: 1 x RTX 5090
-SERVER_AUDIT: PENDING
-CUDA_GATE: PENDING
-DATA_ROOT: PENDING_REAL_DISK_AUDIT
-DISK_GATE: PENDING (requires at least 100 GiB free; 150 GiB recommended)
+GPU: NVIDIA GeForce RTX 5090, 32607 MiB
+SERVER_AUDIT: PASS
+CUDA_GATE: PASS (PyTorch 2.12.1+cu130)
+DATA_ROOT: /root/autodl-tmp/invitus-codex (writable XFS data volume)
+DISK_GATE: FAIL_FOR_OFFICIAL (50 GiB total; requires at least 100 GiB free)
+PUBLIC_DATA_MOUNT: /autodl-pub/data is read-only and is not a training target
 ```
 
 No password, token, private key, or secret is stored in this document.
