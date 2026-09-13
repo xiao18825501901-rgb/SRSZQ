@@ -32,7 +32,7 @@ OFFICIAL FORMAL: 0 / 100000+
 LATEST CHECKPOINT: none
 CHAMPION: none
 GPH: 1236.724 best bounded self-play benchmark (20 workers, batch cap 256, 16 sims)
-ERRORS: one benchmark-only zero-entropy metric bug found, regression-tested, fixed in 843b955
+ERRORS: zero-entropy benchmark metric fixed in 843b955; resumed-run GPH accounting fixed after a safe stop at 290
 COST: provider UI reported less than 24 hours; only checkpoint-bounded experiments allowed
 ETA: Replica 2K approximately 1.6 h pure self-play; training/evaluation overhead measured separately
 EXTERNAL BACKUP: NOT_CONFIGURED

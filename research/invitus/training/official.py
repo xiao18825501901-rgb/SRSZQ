@@ -60,6 +60,10 @@ def bounded_wave_size(counter: int, target: int, maximum: int, boundaries: list[
     return min([maximum, target - counter, *future])
 
 
+def segment_games_per_hour(counter: int, segment_start_counter: int, elapsed_seconds: float) -> float:
+    return max(0, counter - segment_start_counter) / max(1e-9, elapsed_seconds) * 3600
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -282,6 +286,8 @@ def main() -> int:
         counter = 0
         print(json.dumps({"event": "warm_start", "checkpoint": args.warm_start, "counter": counter}), flush=True)
 
+    segment_start_counter = counter
+
     history_paths: list[str] = []
     history_errors: dict[str, str] = {}
     history_dir = args.history_dir or os.path.join(train.CKPT_DIR, "..", "history")
@@ -427,7 +433,7 @@ def main() -> int:
                 raise RuntimeError(f"tactic bridge fallbacks detected: {bridge_totals}")
 
             wave += 1
-            gph = counter / max(1e-6, (time.monotonic() - t_start) / 3600)
+            gph = segment_games_per_hour(counter, segment_start_counter, time.monotonic() - t_start)
             wave_search = summarize_games(wave_metadata)
             wave_targets = target_metrics(wave_samples, args.target_tau)
             print(
@@ -571,7 +577,7 @@ def main() -> int:
         major_path = Path(train.CKPT_DIR) / f"invitus_{counter:06d}_major.pt"
         train.save_ckpt(
             str(major_path), net, optimizer, scheduler, counter,
-            random.getstate(), vars(args), {"games_per_hour": round(counter / max(1e-9, time.monotonic() - t_start) * 3600, 1),
+            random.getstate(), vars(args), {"games_per_hour": round(segment_games_per_hour(counter, segment_start_counter, time.monotonic() - t_start), 1),
                                             "major": True, "run_id": run_id},
         )
         staged = stage_major_backup(Path(train.DATA_ROOT), major_path, counter)
@@ -585,6 +591,8 @@ def main() -> int:
         "recordKind": record_kind,
         "formal": counter if args.run_class == "official" else 0,
         "experimental": counter if args.run_class == "replica" else 0,
+        "segmentStartEpisode": segment_start_counter,
+        "segmentGames": counter - segment_start_counter,
         "target": args.episodes,
         "stateConsistent": state["stateConsistent"],
         "network": args.network,
@@ -600,7 +608,7 @@ def main() -> int:
         "moves": total_moves,
         "mctsNodes": total_nodes,
         "elapsedSeconds": round(elapsed, 3),
-        "gamesPerHour": round(counter / max(1e-9, elapsed) * 3600, 3),
+        "gamesPerHour": round(segment_games_per_hour(counter, segment_start_counter, elapsed), 3),
         "boardCounts": board_counts,
         "seatCounts": seat_counts,
         "bridge": bridge_totals,
