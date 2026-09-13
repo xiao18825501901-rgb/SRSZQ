@@ -26,6 +26,53 @@ from exact.solver import ExactSolver, SolverBudgetExceeded, canonical_key
 ACTOR_INDEX = {"A": 0, "B": 1, "C": 2}
 
 
+def _balanced_cell_targets(
+    total: int, sizes: list[int], actors: list[str]
+) -> list[tuple[int, str, int]]:
+    cells = [(size, actor) for size in sizes for actor in actors]
+    if total < 1 or not cells:
+        raise ValueError("total and size/actor cells must be non-empty")
+    base, remainder = divmod(total, len(cells))
+    return [
+        (size, actor, base + (1 if index < remainder else 0))
+        for index, (size, actor) in enumerate(cells)
+    ]
+
+
+def _fill_synthetic_cell(
+    size: int,
+    actor: str,
+    target: int,
+    max_branch: int,
+    rng: random.Random,
+    emit: Any,
+    max_batches: int = 20,
+) -> int:
+    """Keep sampling one balance cell until solver failures are replaced."""
+    accepted = 0
+    for _ in range(max_batches):
+        if accepted >= target:
+            break
+        remaining = target - accepted
+        states = synthetic_states(
+            size,
+            max(4, remaining),
+            max_branch,
+            rng,
+            actor=actor,
+        )
+        for state in states:
+            if emit(state, None):
+                accepted += 1
+                if accepted >= target:
+                    break
+    if accepted != target:
+        raise RuntimeError(
+            f"synthetic oracle cell {size}:{actor} produced {accepted}/{target} solved unique positions"
+        )
+    return accepted
+
+
 def rebuild_state(sample: dict[str, Any]) -> dict[str, Any]:
     size = int(sample["size"])
     state = srszq.create_state(size)
@@ -206,17 +253,15 @@ def main() -> int:
 
         if args.synthetic:
             sizes = [int(x) for x in args.synthetic_sizes.split(",") if x.strip()]
-            # 座位平衡：A/B/C 轮流生成，目标各 ~max_positions/3 每尺寸
             actors = ["A", "B", "C"]
-            for size in sizes:
-                per_actor = (args.max_positions // len(sizes) // 3) + 1
-                for actor in actors:
-                    for state in synthetic_states(size, per_actor, args.max_branch, rng, actor=actor):
-                        if written >= args.max_positions:
-                            break
-                        if args.actor_filter and srszq.current_player(state) != args.actor_filter:
-                            continue
-                        emit(state, None)
+            if args.actor_filter:
+                actors = [args.actor_filter]
+            for size, actor, target in _balanced_cell_targets(args.max_positions, sizes, actors):
+                _fill_synthetic_cell(size, actor, target, args.max_branch, rng, emit)
+            if written != args.max_positions:
+                raise RuntimeError(
+                    f"synthetic oracle produced {written}/{args.max_positions} solved unique positions"
+                )
         else:
             candidates = harvest_replay_tails(args.replay_dir, args.per_game_tail, args.max_branch, rng)
             for game_id, sample in candidates:
