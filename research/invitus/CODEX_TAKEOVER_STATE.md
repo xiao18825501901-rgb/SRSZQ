@@ -17,7 +17,7 @@ REPOSITORY: xiao18825501901-rgb/SRSZQ
 BRANCH: research/invitus
 BASE_GIT_SHA: 1aa0a5a96868f9c28409eb28152204d8bed8cbcc
 TAKEOVER_CHECKPOINT_SHA: d50128d0f497a99609dfdd6503a32024ea8dcd48
-CURRENT_VALIDATED_SHA: 0de67e48887374d589606c0a9deadf4d969401bd
+CURRENT_VALIDATED_SOURCE_SHA: 45311cea3b3c4d348f42ab490830d270b8a283ca
 BASE_HEAD_EQUALS_ORIGIN: true
 TRACKED_MODIFICATIONS: 0
 LOCAL_AHEAD_BEHIND: 0 / 0
@@ -87,14 +87,11 @@ No password, token, private key, or secret is stored in this document.
 
 ## Execution plan
 
-1. Push the takeover checkpoint to `origin/research/invitus`.
-2. Authenticate to the new server without storing credentials and run a read-only hardware/CUDA/storage audit.
-3. Establish the real large writable data root and create isolated experiment namespaces.
-4. Clone the exact branch SHA, run the full regression suite, and validate the tactic bridge.
-5. Measure RTX 5090 throughput with bounded benchmarks before selecting process and batch settings.
-6. Re-run clean V2 Replica A and B with fixed seeds, fixed probes, collapse sentinel, exact probes, and strength probes.
-7. Prefer a fresh repaired official run from formal 0. A recovery arm is optional and only permitted if a validated Broken V1 checkpoint becomes available.
-8. Start `invitus-small-v2` only after every frozen preflight gate passes.
+1. Preserve the completed RTX 5090 V2 A/B replicas as experimental evidence: both reached 2,000 audited games without policy collapse.
+2. Reject V2 for official use because value-seat bias persists and both replicas remained 0/30 against 3-star and MaxN pairs at 2,000 games.
+3. Preserve the stopped 500-game V3 smoothing diagnostic. It improved random-pair balance but did not fix value bias or strong-baseline performance.
+4. Use the validated 200-position exact set and the passing 16/24/32 search-health results as the evaluation baseline for the next value-target/tactical-learning change.
+5. Require at least 100 GiB writable storage and all frozen scientific gates before any fresh official run from formal 0.
 
 ## Current status
 
@@ -105,5 +102,10 @@ OFFICIAL_FORMAL: 0 / 100000+
 LATEST_CHECKPOINT: none
 CURRENT_CHAMPION: none
 EXTERNAL_BACKUP: NOT_CONFIGURED
+V2_REPLICA_A: 2000 / 2000 COMPLETE, FULL_GATE_FAIL
+V2_REPLICA_B: 2000 / 2000 COMPLETE, FULL_GATE_FAIL
+EXACT_PIPELINE: PASS, 200 UNIQUE BALANCED POSITIONS
+SEARCH_HEALTH: PASS, NO 16/24/32 DEGRADATION
+V3_SMOOTHING_ONLY: STOPPED_AT_500, INSUFFICIENT
 READY: NO
 ```
