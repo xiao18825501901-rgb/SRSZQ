@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import queue
 import random
@@ -19,6 +20,13 @@ sys.path.insert(0, ".")
 from engine import srszq
 
 AgentSpec = tuple[str] | tuple[str, str | int]
+
+
+def _distribution_entropy(values: list[float]) -> float:
+    total = sum(values)
+    if total <= 0:
+        return 0.0
+    return -sum((value / total) * math.log(value / total) for value in values if value > 0)
 
 
 @dataclass(frozen=True)
@@ -315,6 +323,8 @@ def play_league_episode(
     game_id = uuid.uuid4().hex
     move_no = 0
     mcts_nodes = 0
+    opening_moves: list[str] = []
+    search_diagnostics: list[dict[str, Any]] = []
     guard = 0
     bridge_before = dict(bridge.metrics)
     while state["status"] == "playing" and guard < size * size + 32:
@@ -342,6 +352,20 @@ def play_league_episode(
             visits = {legal_move: 0.0 for legal_move in legal}
             for child_move, child in search.root.children.items():
                 visits[child_move] = float(child.N)
+            network_prior = list(search.root_network_prior.values())
+            root_prior = list(search.root.P.values())
+            visit_values = list(visits.values())
+            search_diagnostics.append(
+                {
+                    "networkPriorEntropy": _distribution_entropy(network_prior),
+                    "rootPriorEntropy": _distribution_entropy(root_prior),
+                    "visitEntropy": _distribution_entropy(visit_values),
+                    "maxPolicyProbability": max(network_prior, default=0.0),
+                    "visitedActionCount": sum(value > 0 for value in visit_values),
+                    "legalActionCount": len(legal),
+                    "valuePrediction": list(search.root_network_value),
+                }
+            )
             samples.append(
                 {
                     "board": ["".join("." if cell is None else cell for cell in row) for row in state["board"]],
@@ -379,6 +403,8 @@ def play_league_episode(
         if result.startswith("rejected"):
             raise RuntimeError(f"league produced illegal move {move}: {result}")
         move_no += 1
+        if len(opening_moves) < 9:
+            opening_moves.append(f"{move[0]},{move[1]}")
         guard += 1
     if state["status"] == "playing":
         state["status"] = "draw"
@@ -392,6 +418,22 @@ def play_league_episode(
     for sample in samples:
         sample["outcome"] = outcome
     bridge_delta = {key: bridge.metrics[key] - bridge_before[key] for key in bridge.metrics}
+    diagnostic_summary: dict[str, Any] = {"invitusMoveCount": len(search_diagnostics)}
+    if search_diagnostics:
+        for key in (
+            "networkPriorEntropy",
+            "rootPriorEntropy",
+            "visitEntropy",
+            "maxPolicyProbability",
+            "visitedActionCount",
+            "legalActionCount",
+        ):
+            diagnostic_summary[key] = sum(float(row[key]) for row in search_diagnostics) / len(search_diagnostics)
+        width = len(search_diagnostics[0]["valuePrediction"])
+        diagnostic_summary["valuePrediction"] = [
+            sum(float(row["valuePrediction"][index]) for row in search_diagnostics) / len(search_diagnostics)
+            for index in range(width)
+        ]
     metadata = {
         "game_id": game_id,
         "boardSize": size,
@@ -406,5 +448,7 @@ def play_league_episode(
         "bridge_metrics": bridge_delta,
         "inference_metrics": inference_service.metrics_snapshot() if inference_service is not None else {},
         "seconds": round(time.monotonic() - started, 3),
+        "openingMoves": opening_moves,
+        "searchDiagnostics": diagnostic_summary,
     }
     return samples, metadata

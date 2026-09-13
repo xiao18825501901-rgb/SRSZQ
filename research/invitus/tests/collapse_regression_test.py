@@ -151,6 +151,9 @@ def test_search_actor_vector_backup():
     mcts = NNMCTS(net, torch.device("cpu"), sims=8, rng=random.Random(rng.getrandbits(32)), train=False)
     mcts.search(state)
     assert mcts.root.N == 8, mcts.root.N
+    assert abs(sum(mcts.root_network_prior.values()) - 1.0) < 1e-6
+    assert len(mcts.root_network_value) == 4
+    assert all(math.isfinite(value) for value in mcts.root_network_value)
     stack = [mcts.root]
     while stack:
         node = stack.pop()

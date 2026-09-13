@@ -43,7 +43,8 @@ from training.audit_training_state import (
     _optimizer_step,
     audit_training_state,
 )
-from training.benchmark import NETWORKS, ResourceSampler, warmup_process_broker
+from training.benchmark import NETWORKS, ResourceSampler, append_jsonl, warmup_process_broker
+from training.diagnostics import CollapseSentinel, summarize_games, target_metrics
 from training.league import discover_historical_checkpoints
 from training.process_selfplay import ProcessSelfPlayPool
 from training.replay import ReplayBuffer
@@ -76,12 +77,16 @@ def write_light_state(
     blocks: int,
     sims: int,
     run_id: str,
+    run_class: str,
 ) -> None:
     """Atomic per-wave training_state.json (authoritative audit rebuilds it every 500)."""
     _atomic_json(
         data_root / "training_state.json",
         {
-            "formalEpisodes": counter,
+            "recordKind": "formal" if run_class == "official" else "experiment",
+            "episodeCount": counter,
+            "formalEpisodes": counter if run_class == "official" else 0,
+            "experimentalEpisodes": counter if run_class == "replica" else 0,
             "latestCheckpoint": latest_checkpoint,
             "latestGameId": latest_game_id,
             "optimizerStep": _optimizer_step({"opt": optimizer.state_dict()}),
@@ -95,7 +100,8 @@ def write_light_state(
             "sims": sims,
             "rngStatePresent": True,
             "runId": run_id,
-            "official": True,
+            "official": run_class == "official",
+            "runClass": run_class,
         },
     )
 
@@ -103,6 +109,9 @@ def write_light_state(
 def write_run_manifest(data_root: Path, args: argparse.Namespace, git_sha: str, run_id: str) -> None:
     manifest = {
         "officialRunId": run_id,
+        "runClass": args.run_class,
+        "official": args.run_class == "official",
+        "recordKind": "formal" if args.run_class == "official" else "experiment",
         "gitSha": git_sha,
         "network": args.network,
         "channels": NETWORKS[args.network][0],
@@ -152,6 +161,7 @@ def stage_major_backup(data_root: Path, checkpoint_path: Path, counter: int) -> 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=100000)
+    parser.add_argument("--run-class", choices=("official", "replica"), default="official")
     parser.add_argument("--sims", type=int, default=16)
     parser.add_argument("--network", choices=tuple(NETWORKS), default="small")
     parser.add_argument("--channels", type=int, default=None, help="checkpoint cfg record only")
@@ -187,7 +197,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    run_id = args.run_id or time.strftime("invitus-small-v1-%Y%m%d-%H%M", time.gmtime())
+    run_id = args.run_id or time.strftime(f"invitus-{args.run_class}-%Y%m%d-%H%M", time.gmtime())
+    record_kind = "formal" if args.run_class == "official" else "experiment"
     storage = train.configure_storage(args.data_root)
     print(json.dumps({"event": "storage_configured", "runId": run_id, **storage}), flush=True)
 
@@ -241,10 +252,10 @@ def main() -> int:
             if rng_state:
                 random.setstate(rng_state)
             # Resume gate: the on-disk state must already be audit-consistent.
-            state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha)
-            if not state["stateConsistent"] or state["formalEpisodes"] != counter:
+            state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha, record_kind=record_kind)
+            if not state["stateConsistent"] or state["episodeCount"] != counter:
                 raise RuntimeError(
-                    f"resume refused: checkpoint counter {counter} != consistent formal {state['formalEpisodes']} "
+                    f"resume refused: checkpoint counter {counter} != consistent {record_kind} {state['episodeCount']} "
                     f"or inconsistent state {state['consistencyErrors']}"
                 )
             print(json.dumps({"event": "resumed", "checkpoint": resume_path, "counter": counter}), flush=True)
@@ -254,6 +265,8 @@ def main() -> int:
 
     if args.warm_start:
         # Recovery 臂：只继承外部 checkpoint 的模型权重（实验用途，formal 场景不用于 official）
+        if args.run_class != "replica":
+            raise RuntimeError("warm-start is restricted to replica experiments")
         if not os.path.exists(args.warm_start):
             raise RuntimeError(f"warm-start checkpoint not found: {args.warm_start}")
         warm = torch.load(args.warm_start, map_location="cpu", weights_only=False)
@@ -323,6 +336,20 @@ def main() -> int:
     wave = 0
     next_ckpt = counter + args.cp_every
     next_major = counter + args.major_every
+    next_metrics = counter + 100
+    metrics_metadata: list[dict[str, Any]] = []
+    metrics_samples: list[dict[str, Any]] = []
+    sentinel = CollapseSentinel(window=100)
+    if counter and Path(train.LEDGER).exists():
+        previous_records = [
+            json.loads(line)
+            for line in Path(train.LEDGER).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        for record in previous_records[-99:]:
+            if record.get("kind") == record_kind:
+                sentinel.observe({"searchDiagnostics": record.get("search_diagnostics", {})})
+    collapse_stop = False
     policy_loss = value_loss = loss = gradient_norm = policy_entropy = 0.0
     last_inference_metrics: dict[str, Any] = {}
     try:
@@ -333,6 +360,7 @@ def main() -> int:
             jobs = [(counter + index, seed, args.sims, cp_id) for index, seed in enumerate(seeds)]
             episode_results = pool.play(jobs)
             wave_samples: list[dict[str, Any]] = []
+            wave_metadata: list[dict[str, Any]] = []
             for samples, meta in episode_results:
                 if not samples:
                     raise RuntimeError(f"official game {meta.get('game_id')} produced no training samples")
@@ -344,6 +372,8 @@ def main() -> int:
                 total_moves += int(meta.get("moves", 0))
                 total_nodes += int(meta.get("mcts_nodes", 0))
                 record = train.make_ledger_record(meta, cp_id)
+                if record_kind == "experiment":
+                    record.update({"kind": "experiment", "formal": False, "experiment": True})
                 train.write_ledger(record)
                 last_game_id = meta["game_id"]
                 board_counts[str(meta["boardSize"])] = board_counts.get(str(meta["boardSize"]), 0) + 1
@@ -356,6 +386,10 @@ def main() -> int:
                 for key, value in meta.get("bridge_metrics", {}).items():
                     bridge_totals[key] = bridge_totals.get(key, 0) + value
                 wave_samples.extend(samples)
+                wave_metadata.append(meta)
+                metrics_metadata.append(meta)
+                metrics_samples.extend(samples)
+                collapse_stop = sentinel.observe(meta) or collapse_stop
 
             shards = replay.shards()[-32:]
             batch_samples = [sample for sample in replay.iter_samples(shards)]
@@ -383,17 +417,29 @@ def main() -> int:
 
             wave += 1
             gph = counter / max(1e-6, (time.monotonic() - t_start) / 3600)
+            wave_search = summarize_games(wave_metadata)
+            wave_targets = target_metrics(wave_samples, args.target_tau)
             print(
                 json.dumps({
                     "event": "wave",
                     "wave": wave,
-                    "formal": counter,
+                    "formal": counter if args.run_class == "official" else 0,
+                    "experimental": counter if args.run_class == "replica" else 0,
                     "target": args.episodes,
                     "gamesPerHour": round(gph, 1),
                     "loss": round(loss, 4),
                     "policyLoss": round(policy_loss, 4),
                     "valueLoss": round(value_loss, 4),
                     "policyEntropy": round(policy_entropy, 4),
+                    "targetEntropy": round(wave_targets["targetEntropy"], 4),
+                    "effectiveTargetSupport": round(wave_targets["effectiveTargetSupport"], 3),
+                    "networkPriorEntropy": round(wave_search["networkPriorEntropy"], 4),
+                    "rootPriorEntropy": round(wave_search["rootPriorEntropy"], 4),
+                    "visitEntropy": round(wave_search["visitEntropy"], 4),
+                    "maxPolicyProbability": round(wave_search["maxPolicyProbability"], 4),
+                    "visitedActionCount": round(wave_search["visitedActionCount"], 2),
+                    "legalActionCount": round(wave_search["legalActionCount"], 2),
+                    "collapseSentinel": sentinel.snapshot,
                     "gradientNorm": round(gradient_norm, 3),
                     "inferenceErrors": inference_metrics.get("errors", 0),
                     "bridgeFallbacks": bridge_totals.get("fallbacks", 0),
@@ -410,7 +456,42 @@ def main() -> int:
                 Path(train.DATA_ROOT), counter, "checkpoints/latest.pt", last_game_id,
                 optimizer, scheduler, board_counts, seat_counts, len(replay.shards()),
                 git_sha, channels, blocks, args.sims, run_id,
+                args.run_class,
             )
+
+            if counter >= next_metrics:
+                hundred = summarize_games(metrics_metadata)
+                hundred.update(target_metrics(metrics_samples, args.target_tau))
+                hundred.update(
+                    {
+                        "event": "metrics_100",
+                        "episode": counter,
+                        "runId": run_id,
+                        "runClass": args.run_class,
+                        "policyLoss": policy_loss,
+                        "valueLoss": value_loss,
+                        "totalLoss": loss,
+                        "gradNorm": gradient_norm,
+                        "policyEntropy": policy_entropy,
+                        "gamesPerHour": gph,
+                        "resources": sampler.summary() if sampler is not None else {},
+                        "collapseSentinel": sentinel.snapshot,
+                    }
+                )
+                append_jsonl(Path(train.DATA_ROOT) / "metrics" / "training_metrics.jsonl", hundred)
+                print(json.dumps(hundred, ensure_ascii=False), flush=True)
+                metrics_metadata.clear()
+                metrics_samples.clear()
+                next_metrics = counter + 100
+
+            if collapse_stop:
+                print(
+                    json.dumps(
+                        {"event": "collapse_sentinel_triggered", "episode": counter, **sentinel.snapshot}
+                    ),
+                    flush=True,
+                )
+                break
 
             disk = train.disk_space_snapshot()
             if disk["status"] == "warning":
@@ -428,18 +509,21 @@ def main() -> int:
                     checkpoint_path, net, optimizer, scheduler, counter,
                     random.getstate(), vars(args), {"games_per_hour": round(gph, 1), "run_id": run_id},
                 )
-                state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha)
+                state = audit_training_state(
+                    Path(train.DATA_ROOT), git_sha=git_sha, record_kind=record_kind
+                )
                 print(
                     json.dumps({
                         "event": "checkpoint_audit",
                         "checkpoint": f"invitus_{counter:06d}.pt",
-                        "formalEpisodes": state["formalEpisodes"],
+                        "episodeCount": state["episodeCount"],
+                        "recordKind": record_kind,
                         "stateConsistent": state["stateConsistent"],
                         "consistencyErrors": state["consistencyErrors"],
                     }),
                     flush=True,
                 )
-                if not state["stateConsistent"] or state["formalEpisodes"] != counter:
+                if not state["stateConsistent"] or state["episodeCount"] != counter:
                     raise RuntimeError(f"per-500 audit failed: {state['consistencyErrors']}")
                 next_ckpt = counter + args.cp_every
 
@@ -481,12 +565,15 @@ def main() -> int:
         )
         staged = stage_major_backup(Path(train.DATA_ROOT), major_path, counter)
         print(json.dumps({"event": "segment_final_major", "counter": counter, "staged": staged}), flush=True)
-    state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha)
+    state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha, record_kind=record_kind)
     elapsed = time.monotonic() - t_start
     summary = {
         "runId": run_id,
-        "official": True,
-        "formal": counter,
+        "official": args.run_class == "official",
+        "runClass": args.run_class,
+        "recordKind": record_kind,
+        "formal": counter if args.run_class == "official" else 0,
+        "experimental": counter if args.run_class == "replica" else 0,
         "target": args.episodes,
         "stateConsistent": state["stateConsistent"],
         "network": args.network,
@@ -509,12 +596,13 @@ def main() -> int:
         "resources": sampler.summary() if sampler is not None else {},
         "inference": last_inference_metrics,
         "checkpointResumeVerified": state["stateConsistent"],
+        "collapseSentinel": sentinel.snapshot,
         "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     (Path(train.DATA_ROOT) / "manifests").mkdir(parents=True, exist_ok=True)
     _atomic_json(Path(train.DATA_ROOT) / "manifests" / f"summary-{run_id}.json", summary)
     print(json.dumps({"event": "done", **summary}, ensure_ascii=False, indent=2))
-    print(f"FORMAL {counter}/{args.episodes}")
+    print(f"{'FORMAL' if args.run_class == 'official' else 'EXPERIMENT'} {counter}/{args.episodes}")
     print(f"LATEST CHECKPOINT: {final_path}")
     print(f"STATE_CONSISTENT={str(state['stateConsistent']).lower()}")
     print("READY=NO")

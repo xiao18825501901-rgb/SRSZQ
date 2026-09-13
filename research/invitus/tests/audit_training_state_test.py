@@ -27,6 +27,12 @@ def formal_record(index: int, board_size: int = 13) -> dict:
     }
 
 
+def experiment_record(index: int, board_size: int = 13) -> dict:
+    record = formal_record(index, board_size)
+    record.update({"kind": "experiment", "formal": False, "experiment": True})
+    return record
+
+
 def write_checkpoint(path: Path, counter: int, optimizer_step: int = 7) -> None:
     torch.save(
         {
@@ -117,6 +123,30 @@ class TrainingStateAuditTest(unittest.TestCase):
         self.assertIsNone(state["latestCheckpoint"])
         self.assertIn("broken.pt", state["checkpointErrors"])
         self.assertFalse(state["stateConsistent"])
+
+    def test_audits_experiment_ledger_without_counting_formal_games(self) -> None:
+        root = self.make_root()
+        self.write_ledger(root, [experiment_record(1), experiment_record(2, 17)])
+        self.write_replay(root, ["game-2"])
+        write_checkpoint(root / "checkpoints" / "latest.pt", 2)
+        (root / "logs" / "progress.json").write_text(
+            json.dumps({"counter": 2, "path": "checkpoints/latest.pt"}), encoding="utf-8"
+        )
+
+        state = audit_training_state(
+            root,
+            git_sha="replica123",
+            write_manifest=False,
+            record_kind="experiment",
+        )
+
+        self.assertEqual(state["recordKind"], "experiment")
+        self.assertEqual(state["episodeCount"], 2)
+        self.assertEqual(state["ledgerEpisodeCount"], 2)
+        self.assertEqual(state["formalEpisodes"], 0)
+        self.assertEqual(state["ledgerFormalEpisodes"], 0)
+        self.assertEqual(state["boardCounts"], {"13": 1, "17": 1})
+        self.assertTrue(state["stateConsistent"])
 
 
 if __name__ == "__main__":

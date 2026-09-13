@@ -188,6 +188,8 @@ def make_ledger_record(meta: dict, checkpoint_id: str) -> dict:
         "duration_seconds": meta["seconds"],
         "bridge_metrics": meta.get("bridge_metrics", {}),
         "inference_metrics": meta.get("inference_metrics", {}),
+        "opening_moves": meta.get("openingMoves", []),
+        "search_diagnostics": meta.get("searchDiagnostics", {}),
     }
 
 

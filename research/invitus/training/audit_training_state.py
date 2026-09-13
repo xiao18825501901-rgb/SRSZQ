@@ -65,7 +65,7 @@ def _seat_counts(records: list[dict[str, Any]]) -> dict[str, int]:
     return {seat: counts[seat] for seat in "ABC"}
 
 
-def _read_ledger(path: Path) -> dict[str, Any]:
+def _read_ledger(path: Path, record_kind: str = "formal") -> dict[str, Any]:
     valid: list[dict[str, Any]] = []
     seen: set[str] = set()
     duplicates = invalid = excluded = rows = 0
@@ -90,7 +90,7 @@ def _read_ledger(path: Path) -> dict[str, Any]:
                 invalid += 1
                 parse_errors.append(f"line {line_number}: {error.msg}")
                 continue
-            if record.get("kind") != "formal":
+            if record.get("kind") != record_kind:
                 excluded += 1
                 continue
             game_id = record.get("game_id")
@@ -225,9 +225,16 @@ def _atomic_json(path: Path, value: dict[str, Any]) -> None:
             temp_path.unlink()
 
 
-def audit_training_state(root: str | Path, git_sha: str | None = None, write_manifest: bool = True) -> dict[str, Any]:
+def audit_training_state(
+    root: str | Path,
+    git_sha: str | None = None,
+    write_manifest: bool = True,
+    record_kind: str = "formal",
+) -> dict[str, Any]:
     root = Path(root).resolve()
-    ledger = _read_ledger(root / "logs" / "INVICTUS_TRAINING_LEDGER.jsonl")
+    if record_kind not in {"formal", "experiment"}:
+        raise ValueError(f"unsupported record kind: {record_kind}")
+    ledger = _read_ledger(root / "logs" / "INVICTUS_TRAINING_LEDGER.jsonl", record_kind)
     records = ledger["records"]
     episode_by_game = {record["game_id"]: index for index, record in enumerate(records, 1)}
     replay = _read_replay(root / "replay", episode_by_game)
@@ -247,7 +254,7 @@ def audit_training_state(root: str | Path, git_sha: str | None = None, write_man
     if ledger["duplicates"]:
         consistency_errors.append(f"ledger has {ledger['duplicates']} duplicate game_id records")
     if ledger["invalid"]:
-        consistency_errors.append(f"ledger has {ledger['invalid']} invalid formal rows")
+        consistency_errors.append(f"ledger has {ledger['invalid']} invalid {record_kind} rows")
     if ledger["parseErrors"]:
         consistency_errors.append("ledger contains JSON parse errors")
     if replay["invalid"] or replay["parseErrors"]:
@@ -276,8 +283,11 @@ def audit_training_state(root: str | Path, git_sha: str | None = None, write_man
     raw_latest_record = records[-1] if records else None
 
     state: dict[str, Any] = {
-        "formalEpisodes": formal_episodes,
-        "ledgerFormalEpisodes": len(records),
+        "recordKind": record_kind,
+        "episodeCount": formal_episodes,
+        "ledgerEpisodeCount": len(records),
+        "formalEpisodes": formal_episodes if record_kind == "formal" else 0,
+        "ledgerFormalEpisodes": len(records) if record_kind == "formal" else 0,
         "latestCheckpoint": latest_valid["relativePath"] if latest_valid else None,
         "latestConsistentCheckpoint": latest_supported["relativePath"] if latest_supported else None,
         "latestGameId": latest_record.get("game_id") if latest_record else None,
@@ -288,7 +298,12 @@ def audit_training_state(root: str | Path, git_sha: str | None = None, write_man
         "schedulerStep": latest_valid["schedulerStep"] if latest_valid else None,
         "replayChunkCount": len(replay["shards"]),
         "replaySampleCount": replay["samples"],
-        "replayFormalGameCount": len([game_id for game_id in replay["gameIds"] if game_id in episode_by_game]),
+        "replayGameCount": len([game_id for game_id in replay["gameIds"] if game_id in episode_by_game]),
+        "replayFormalGameCount": (
+            len([game_id for game_id in replay["gameIds"] if game_id in episode_by_game])
+            if record_kind == "formal"
+            else 0
+        ),
         "replayMinEpisode": min(replay["coveredEpisodes"], default=None),
         "replayMaxEpisode": max(replay["coveredEpisodes"], default=None),
         "boardCounts": {"13": board_counts["13"], "17": board_counts["17"]},
@@ -318,9 +333,17 @@ def main() -> int:
     parser.add_argument("--root", default=".")
     parser.add_argument("--git-sha", default=None)
     parser.add_argument("--no-write", action="store_true")
+    parser.add_argument("--record-kind", choices=("formal", "experiment"), default="formal")
     args = parser.parse_args()
-    state = audit_training_state(args.root, git_sha=args.git_sha, write_manifest=not args.no_write)
+    state = audit_training_state(
+        args.root,
+        git_sha=args.git_sha,
+        write_manifest=not args.no_write,
+        record_kind=args.record_kind,
+    )
     print(json.dumps(state, ensure_ascii=False, indent=2))
+    print(f"RECORD_KIND={state['recordKind']}")
+    print(f"LEDGER_EPISODE_COUNT={state['ledgerEpisodeCount']}")
     print(f"FORMAL_LEDGER_COUNT={state['ledgerFormalEpisodes']}")
     print(f"LATEST_VALID_CHECKPOINT={state['latestCheckpoint']}")
     print(f"CHECKPOINT_EPISODE_COUNT={state['checkpointEpisodeCount']}")

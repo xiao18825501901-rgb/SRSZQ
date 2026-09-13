@@ -54,6 +54,8 @@ class NNMCTS:
         self.c_puct = c_puct
         self.inference_service = inference_service
         self.root = None
+        self.root_network_prior = {}
+        self.root_network_value = ()
 
     def _net_eval(self, s):
         if self.inference_service is not None:
@@ -64,11 +66,11 @@ class NNMCTS:
             logits, logv = self.net(torch.from_numpy(planes).to(self.device))
         return logits[0], torch.exp(logv)[0].cpu().tolist()
 
-    def _prior(self, s):
+    def _prior_with_value(self, s):
         legal = srszq.legal_moves(s)
         if not legal:
-            return {}
-        logits, _ = self._net_eval(s)
+            return {}, ()
+        logits, value = self._net_eval(s)
         vals = []
         for (r, c) in legal:
             vals.append(float(logits[r * 17 + c]))
@@ -78,7 +80,10 @@ class NNMCTS:
         e = np.exp(vals)
         e = e / e.sum()
         P = {m: float(e[i]) for i, m in enumerate(legal)}
-        return P
+        return P, tuple(float(x) for x in value)
+
+    def _prior(self, s):
+        return self._prior_with_value(s)[0]
 
     def search(self, s0, dirichlet_eps: float = 0.25, dirichlet_alpha: float = 0.3):
         root = NNode()
@@ -86,12 +91,14 @@ class NNMCTS:
         legal = srszq.legal_moves(s0)
         if not legal:
             return root
+        p_net, root_value = self._prior_with_value(s0)
+        self.root_network_prior = dict(p_net)
+        self.root_network_value = root_value
         if self.train:
             # AlphaZero 式：根先验 = (1-eps)*网络策略 + eps*Dirichlet 噪声。
-            p_net = self._prior(s0)
             root.P = root_prior_mix(p_net, legal, eps=dirichlet_eps, alpha=dirichlet_alpha, rng=self.rng)
         else:
-            root.P = self._prior(s0)
+            root.P = p_net
         for _ in range(self.sims):
             st = copy.deepcopy(s0)
             node = root
