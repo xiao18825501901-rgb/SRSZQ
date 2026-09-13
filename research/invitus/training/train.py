@@ -229,7 +229,7 @@ def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_t
     logp = torch.log_softmax(logits, dim=1)
     policy_loss = -(P * logp).sum(dim=1).mean()
     value_loss = -(V * logv).sum(dim=1).mean()
-    entropy = 0.0
+    entropy = logits.new_zeros(())
     if entropy_weight > 0:
         # 合法步 mask 后 softmax 的策略熵（防 one-hot 坍塌正则项）
         # 注意：非法步 log_softmax = -inf，必须 mask 掉避免 0 * -inf = NaN。

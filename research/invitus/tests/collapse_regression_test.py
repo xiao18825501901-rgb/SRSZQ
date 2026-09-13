@@ -123,6 +123,25 @@ def test_policy_entropy_finite():
     print(f"PASS test_policy_entropy_finite (ent={ent:.3f})")
 
 
+def test_zero_entropy_weight_reports_zero():
+    """Benchmark defaults to no entropy regularization and must still return metrics."""
+    from training.train import train_batch
+    net = InvitusNet(16, 2)
+    opt = torch.optim.AdamW(net.parameters(), lr=1e-3)
+    samples = [_make_sample(srszq.create_state(13), seed) for seed in range(4)]
+    pl, vl, loss, gn, ent = train_batch(
+        net,
+        torch.device("cpu"),
+        opt,
+        samples,
+        entropy_weight=0.0,
+    )
+    for name, value in (("pl", pl), ("vl", vl), ("loss", loss), ("gn", gn), ("ent", ent)):
+        assert math.isfinite(value), f"{name} is not finite: {value}"
+    assert ent == 0.0, ent
+    print("PASS test_zero_entropy_weight_reports_zero")
+
+
 def test_search_actor_vector_backup():
     """向量备份守恒：每个节点 W 分量之和 == N；根也一样。"""
     net = InvitusNet(16, 2)
@@ -197,6 +216,7 @@ if __name__ == "__main__":
     test_target_distribution_sums_to_one()
     test_legal_mask_preserved()
     test_policy_entropy_finite()
+    test_zero_entropy_weight_reports_zero()
     test_search_actor_vector_backup()
     test_value_actor_mapping()
     test_inference_service_consistency()
