@@ -44,9 +44,14 @@ class MatchSanityTest(unittest.TestCase):
             UnusedBridge(),
             random.Random(1),
             initial_state=state,
+            collect_trace=True,
         )
         self.assertEqual(result, "A_WIN")
         self.assertEqual(meta["moves"], 1)
+        self.assertEqual(len(meta["trace"]), 1)
+        self.assertEqual(meta["trace"][0]["actor"], "A")
+        self.assertEqual(meta["trace"][0]["rootTacticalReason"], "immediate_win")
+        self.assertEqual(meta["trace"][0]["move"], [0, 3])
 
 
 if __name__ == "__main__":
