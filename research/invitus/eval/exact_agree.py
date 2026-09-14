@@ -27,6 +27,7 @@ from engine import srszq
 from eval.champion_gate import load_checkpoint_network
 from mcts.nn_mcts import NNMCTS
 from model import encode
+from model.value import output_to_absolute
 from training.audit_training_state import _atomic_json
 
 CANVAS = 17
@@ -81,7 +82,15 @@ def evaluate_checkpoint(
         policy_top1_agrees = (top1 // CANVAS, top1 % CANVAS) in best_moves
         policy_top5_agrees = any((idx // CANVAS, idx % CANVAS) in best_moves for idx in top5.tolist())
 
-        values = torch.softmax(log_values[0], dim=0).detach().float().cpu().numpy()
+        raw_values = torch.softmax(log_values[0], dim=0).detach().float().cpu().numpy()
+        values = np.asarray(
+            output_to_absolute(
+                raw_values,
+                actor,
+                getattr(net, "value_representation", "absolute"),
+            ),
+            dtype=np.float32,
+        )
         brier = float(np.mean((values - np.asarray(exact_vector, dtype=np.float32)) ** 2))
 
         mcts = NNMCTS(net, device, sims=sims, exact=None, rng=random.Random(rng.getrandbits(32)), train=False)
