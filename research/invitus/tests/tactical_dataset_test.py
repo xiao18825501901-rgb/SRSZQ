@@ -25,6 +25,7 @@ class TacticalDatasetTest(unittest.TestCase):
             {(size, category, stage) for size in (13, 17) for category in CATEGORIES for stage in STAGES},
         )
         self.assertEqual(set(counts.values()), {1})
+        self.assertEqual(Counter(row["actor"] for row in first), {"A": 8, "B": 8, "C": 8})
         self.assertTrue(all(verify_record(row) == [] for row in first))
 
     def test_train_split_excludes_frozen_eval_canonicals(self) -> None:

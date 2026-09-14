@@ -374,13 +374,13 @@ def generate_records(
     seen = set(excluded)
     rng = random.Random(seed)
     records: list[dict[str, Any]] = []
-    for size, category, stage in cells:
+    for cell_index, (size, category, stage) in enumerate(cells):
         accepted = 0
         attempts = 0
         attempt_budget = max(max_attempts_per_cell, target * 40)
         while accepted < target and attempts < attempt_budget:
             attempts += 1
-            actor = srszq.PLAYERS[accepted % 3]
+            actor = srszq.PLAYERS[(accepted + cell_index) % 3]
             record = _make_record(size, category, stage, actor, rng)
             if record is None or record["canonical"] in seen or verify_record(record):
                 continue
