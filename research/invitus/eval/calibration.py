@@ -22,7 +22,9 @@ import torch
 from engine import srszq
 from eval.champion_gate import load_checkpoint_network
 from model import encode
+from model.value import output_to_absolute
 from training.audit_training_state import _atomic_json
+from eval.value_target_rca import stage_for_sample
 
 CANVAS = 17
 BINS = 10
@@ -72,6 +74,62 @@ def ece_top_label(confidences: np.ndarray, correct: np.ndarray, bins: int = BINS
     return ece
 
 
+def _rounded_vector(values: np.ndarray) -> list[float]:
+    return [round(float(value), 6) for value in values.tolist()]
+
+
+def summarize_group(values: np.ndarray, outcomes: np.ndarray, bins: int = BINS) -> dict[str, Any]:
+    labels = np.argmax(outcomes, axis=1)
+    top = np.argmax(values, axis=1)
+    confidences = values[np.arange(len(values)), top]
+    correct = (top == labels).astype(np.float32)
+    true_probabilities = values[np.arange(len(values)), labels]
+    brier = np.mean((values - outcomes) ** 2, axis=1)
+    reliability: list[dict[str, Any]] = []
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    for index in range(bins):
+        low, high = float(edges[index]), float(edges[index + 1])
+        mask = (confidences >= low) & (
+            confidences < (high if index < bins - 1 else high + 1e-9)
+        )
+        count = int(mask.sum())
+        reliability.append({
+            "low": round(low, 3),
+            "high": round(high, 3),
+            "count": count,
+            "meanConfidence": round(float(confidences[mask].mean()), 6) if count else None,
+            "accuracy": round(float(correct[mask].mean()), 6) if count else None,
+            "predictedMean": _rounded_vector(values[mask].mean(axis=0)) if count else None,
+            "empiricalOutcome": _rounded_vector(outcomes[mask].mean(axis=0)) if count else None,
+        })
+    predicted = values.mean(axis=0)
+    empirical = outcomes.mean(axis=0)
+    return {
+        "samples": len(values),
+        "brierMean": round(float(brier.mean()), 6),
+        "logLossMean": round(float(np.mean(-np.log(np.maximum(true_probabilities, 1e-9)))), 6),
+        "ece": round(ece_top_label(confidences, correct, bins), 6),
+        "predictedMean": _rounded_vector(predicted),
+        "empiricalOutcome": _rounded_vector(empirical),
+        "calibrationResidual": _rounded_vector(predicted - empirical),
+        "meanAbsoluteResidual": round(float(np.mean(np.abs(predicted - empirical))), 6),
+        "reliabilityBins": reliability,
+    }
+
+
+def _group_summaries(rows: list[dict[str, Any]], fields: tuple[str, ...]) -> list[dict[str, Any]]:
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        groups.setdefault(tuple(row[field] for field in fields), []).append(row)
+    summaries: list[dict[str, Any]] = []
+    for key, group in sorted(groups.items()):
+        values = np.asarray([row["value"] for row in group], dtype=np.float32)
+        outcomes = np.asarray([row["outcome"] for row in group], dtype=np.float32)
+        identity = dict(zip(fields, key))
+        summaries.append({**identity, **summarize_group(values, outcomes)})
+    return summaries
+
+
 def calibrate(
     net: torch.nn.Module,
     device: torch.device,
@@ -79,41 +137,41 @@ def calibrate(
     batch_size: int = 512,
 ) -> dict[str, Any]:
     net.eval()
-    groups: dict[tuple[str, str], list[tuple[float, float, float, float]]] = {}
+    rows: list[dict[str, Any]] = []
+    representation = getattr(net, "value_representation", "absolute")
     for start in range(0, len(samples), batch_size):
         batch = samples[start:start + batch_size]
         planes = np.asarray([encode.encode_state(rebuild_state(sample)) for sample in batch], dtype=np.float32)
         with torch.inference_mode():
             logits, log_values = net(torch.from_numpy(planes).to(device))
-        values = torch.softmax(log_values, dim=1).detach().float().cpu().numpy()
-        for sample, value in zip(batch, values):
-            outcome = sample["outcome"]
-            label = int(np.argmax(outcome))
-            prob_true = float(value[label])
-            top = int(np.argmax(value))
-            conf_top = float(value[top])
-            correct = 1.0 if top == label else 0.0
-            brier = float(np.mean((value - np.asarray(outcome, dtype=np.float32)) ** 2))
-            key = (str(sample["size"]), str(sample.get("actor", "?")))
-            groups.setdefault(key, []).append((prob_true, brier, conf_top, correct))
+        raw_values = torch.softmax(log_values, dim=1).detach().float().cpu().numpy()
+        for sample, raw_value in zip(batch, raw_values):
+            actor = str(sample.get("actor", "?"))
+            value = output_to_absolute(raw_value, actor, representation)
+            rows.append({
+                "boardSize": int(sample["size"]),
+                "actor": actor,
+                "stage": stage_for_sample(sample),
+                "value": value,
+                "outcome": tuple(float(component) for component in sample["outcome"]),
+            })
 
-    summaries: list[dict[str, Any]] = []
-    for (board_size, actor), rows in sorted(groups.items()):
-        probabilities = np.asarray([row[0] for row in rows])
-        briers = [row[1] for row in rows]
-        confidences = np.asarray([row[2] for row in rows])
-        correct = np.asarray([row[3] for row in rows])
-        loglosses = [-math.log(max(p, 1e-9)) for p in probabilities]
-        ece = ece_top_label(confidences, correct)
-        summaries.append({
-            "boardSize": int(board_size),
-            "actor": actor,
-            "samples": len(rows),
-            "brierMean": round(float(np.mean(briers)), 6),
-            "logLossMean": round(float(np.mean(loglosses)), 6),
-            "ece": round(ece, 6),
-        })
-    return {"groups": summaries, "totalSamples": len(samples)}
+    values = np.asarray([row["value"] for row in rows], dtype=np.float32)
+    outcomes = np.asarray([row["outcome"] for row in rows], dtype=np.float32)
+    by_board_actor = _group_summaries(rows, ("boardSize", "actor"))
+    return {
+        "totalSamples": len(rows),
+        "valueRepresentation": representation,
+        "overall": summarize_group(values, outcomes),
+        "byBoard": _group_summaries(rows, ("boardSize",)),
+        "byActor": _group_summaries(rows, ("actor",)),
+        "byStage": _group_summaries(rows, ("stage",)),
+        "byBoardAndActor": by_board_actor,
+        "byBoardAndStage": _group_summaries(rows, ("boardSize", "stage")),
+        "byActorAndStage": _group_summaries(rows, ("actor", "stage")),
+        "byBoardActorStage": _group_summaries(rows, ("boardSize", "actor", "stage")),
+        "groups": by_board_actor,
+    }
 
 
 def parse_args() -> argparse.Namespace:
