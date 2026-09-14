@@ -15,6 +15,8 @@ from inference.process_service import ProcessInferenceBroker
 
 
 class DummyNet(torch.nn.Module):
+    value_representation = "actor_relative"
+
     def forward(self, inputs):
         batch = inputs.shape[0]
         logits = torch.zeros((batch, 289), device=inputs.device)
@@ -35,6 +37,7 @@ class ProcessInferenceTest(unittest.TestCase):
             DummyNet(), torch.device("cpu"), worker_count=4, max_batch_size=8,
             max_wait_ms=20, context=context,
         )
+        self.assertEqual(broker.client(0).value_representation, "actor_relative")
         ready = context.Event()
         results = context.Queue()
         processes = [

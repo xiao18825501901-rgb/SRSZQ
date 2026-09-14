@@ -43,10 +43,17 @@ def load_checkpoint_network(path: str, device: torch.device) -> tuple[Any, dict[
     cfg = checkpoint.get("cfg") if isinstance(checkpoint.get("cfg"), dict) else {}
     channels = int(cfg["channels"])
     blocks = int(cfg["blocks"])
-    network = InvitusNet(channels, blocks).to(device)
+    value_representation = str(cfg.get("value_representation", "absolute"))
+    network = InvitusNet(channels, blocks, value_representation=value_representation).to(device)
     network.load_state_dict(checkpoint["model"])
     network.eval()
-    return network, {"channels": channels, "blocks": blocks, "counter": int(checkpoint.get("counter", -1))}
+    return network, {
+        "channels": channels,
+        "blocks": blocks,
+        "counter": int(checkpoint.get("counter", -1)),
+        "valueRepresentation": value_representation,
+        "valueLoss": str(cfg.get("value_loss", "ce")),
+    }
 
 
 def wilson_interval(wins: int, total: int, z: float = 1.959963984540054) -> tuple[float, float]:

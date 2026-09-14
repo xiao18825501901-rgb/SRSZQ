@@ -269,7 +269,11 @@ def load_historical_networks(paths: list[str], device: Any) -> dict[str, Any]:
         path = Path(path_text).resolve()
         checkpoint = torch.load(path, map_location="cpu", weights_only=False)
         cfg = checkpoint.get("cfg") if isinstance(checkpoint.get("cfg"), dict) else {}
-        network = InvitusNet(int(cfg["channels"]), int(cfg["blocks"])).to(device)
+        network = InvitusNet(
+            int(cfg["channels"]),
+            int(cfg["blocks"]),
+            value_representation=str(cfg.get("value_representation", "absolute")),
+        ).to(device)
         network.load_state_dict(checkpoint["model"])
         network.eval()
         networks[str(path)] = network

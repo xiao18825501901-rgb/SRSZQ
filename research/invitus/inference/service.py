@@ -50,6 +50,7 @@ class InferenceService:
         self.max_wait_seconds = max_wait_ms / 1000.0
         self.request_timeout = request_timeout
         self.precision = precision
+        self.value_representation = getattr(model, "value_representation", "absolute")
         self.model = torch.compile(model) if compile_model else model
         self.model.eval()
         self.requests: queue.Queue[_Request | object] = queue.Queue(

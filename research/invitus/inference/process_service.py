@@ -25,11 +25,13 @@ class ProcessInferenceClient:
         request_queue: Any,
         response_connection: Connection,
         timeout: float,
+        value_representation: str = "absolute",
     ) -> None:
         self.worker_id = worker_id
         self.request_queue = request_queue
         self.response_connection = response_connection
         self.timeout = timeout
+        self.value_representation = value_representation
         self.sequence = 0
 
     def infer_encoded(self, planes: np.ndarray) -> tuple[np.ndarray, list[float]]:
@@ -79,6 +81,7 @@ class ProcessInferenceBroker:
         self.max_wait_seconds = max_wait_ms / 1000.0
         self.request_timeout = request_timeout
         self.precision = precision
+        self.value_representation = getattr(model, "value_representation", "absolute")
         self.model = torch.compile(model) if compile_model else model
         self.model.eval()
         self.context = context or mp.get_context("spawn")
@@ -113,6 +116,7 @@ class ProcessInferenceBroker:
             self.request_queue,
             self.client_connections[worker_id],
             self.request_timeout,
+            self.value_representation,
         )
 
     def _run(self) -> None:

@@ -141,6 +141,8 @@ def write_run_manifest(data_root: Path, args: argparse.Namespace, git_sha: str, 
         "leagueContract": LEAGUE_CONTRACT,
         "historyDir": args.history_dir,
         "seed": args.seed,
+        "valueRepresentation": args.value_representation,
+        "valueLoss": args.value_loss,
         "targetEpisodes": args.episodes,
         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
@@ -188,6 +190,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--entropy-weight", type=float, default=0.05, help="policy entropy regularization weight")
     parser.add_argument("--target-tau", type=float, default=1.0, help="soften visit targets: visits^(1/tau); >1 prevents one-hot targets")
     parser.add_argument("--value-smooth", type=float, default=0.0, help="value label smoothing 0..1")
+    parser.add_argument("--value-representation", choices=("absolute", "actor_relative"), default="absolute")
+    parser.add_argument("--value-loss", choices=("ce", "brier"), default="ce")
     parser.add_argument("--sample-interval", type=float, default=5.0)
     parser.add_argument("--cp-every", type=int, default=500)
     parser.add_argument("--major-every", type=int, default=5000)
@@ -231,7 +235,7 @@ def main() -> int:
     # Persist the resolved ints so saved checkpoint cfg stays historical-league compatible.
     args.channels = channels
     args.blocks = blocks
-    net, device = make_model(channels, blocks)
+    net, device = make_model(channels, blocks, value_representation=args.value_representation)
     optimizer = torch.optim.AdamW(net.parameters(), lr=2e-3, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20_000, gamma=0.5)
 
@@ -417,6 +421,8 @@ def main() -> int:
                         net, device, optimizer, [batch_samples[i] for i in idxs],
                         entropy_weight=args.entropy_weight, target_tau=args.target_tau,
                         value_smooth=args.value_smooth,
+                        value_representation=args.value_representation,
+                        value_loss_type=args.value_loss,
                     )
                     if not all(np.isfinite(v) for v in (policy_loss, value_loss, loss, gradient_norm, policy_entropy)):
                         raise FloatingPointError(
@@ -603,6 +609,8 @@ def main() -> int:
         "sims": args.sims,
         "precision": args.precision,
         "compile": args.compile_model,
+        "valueRepresentation": args.value_representation,
+        "valueLoss": args.value_loss,
         "compileAndWarmupSeconds": round(compile_and_warmup_seconds, 3),
         "samples": total_samples,
         "moves": total_moves,

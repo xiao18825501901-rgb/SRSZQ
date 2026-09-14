@@ -19,9 +19,10 @@ from mcts.nn_mcts import NNMCTS
 
 
 class CountingModel(torch.nn.Module):
-    def __init__(self, fail: bool = False) -> None:
+    def __init__(self, fail: bool = False, value_representation: str = "absolute") -> None:
         super().__init__()
         self.fail = fail
+        self.value_representation = value_representation
         self.batch_sizes: list[int] = []
         self.lock = threading.Lock()
 
@@ -97,6 +98,23 @@ class InferenceServiceTest(unittest.TestCase):
                 service.infer_encoded(planes)
             self.assertLess(time.monotonic() - started, 0.1)
             self.assertEqual(service.metrics_snapshot()["errors"], 1)
+        finally:
+            service.close()
+
+    def test_actor_relative_service_output_is_absolute_before_backup(self) -> None:
+        model = CountingModel(value_representation="actor_relative")
+        service = InferenceService(model, torch.device("cpu"), max_batch_size=2, max_wait_ms=1)
+        state = srszq.create_state(13)
+        state["turn"] = 1  # B to move
+        try:
+            search = NNMCTS(model, torch.device("cpu"), sims=1, inference_service=service)
+            _, value = search._net_eval(state)
+            raw = torch.softmax(torch.tensor([0.0, 1.0, 2.0, 3.0]), dim=0).tolist()
+            self.assertEqual(service.value_representation, "actor_relative")
+            self.assertAlmostEqual(value[0], raw[2])  # previous actor A
+            self.assertAlmostEqual(value[1], raw[0])  # current actor B
+            self.assertAlmostEqual(value[2], raw[1])  # next actor C
+            self.assertAlmostEqual(value[3], raw[3])
         finally:
             service.close()
 

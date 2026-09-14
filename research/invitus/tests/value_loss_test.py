@@ -4,6 +4,7 @@ from __future__ import annotations
 import pathlib
 import sys
 import unittest
+import tempfile
 
 import torch
 
@@ -11,6 +12,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from model.network import InvitusNet
+from eval.champion_gate import load_checkpoint_network
 from training.train import compute_value_loss, prepare_value_targets
 
 
@@ -51,6 +53,19 @@ class ValueLossTest(unittest.TestCase):
         _, log_values = network(torch.zeros((2, 16, 17, 17)))
         self.assertEqual(network.value_representation, "actor_relative")
         self.assertEqual(tuple(log_values.shape), (2, 4))
+
+    def test_checkpoint_loader_preserves_representation_and_legacy_default(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            for configured, expected in (("actor_relative", "actor_relative"), (None, "absolute")):
+                net = InvitusNet(channels=4, blocks=1)
+                cfg = {"channels": 4, "blocks": 1}
+                if configured is not None:
+                    cfg["value_representation"] = configured
+                path = pathlib.Path(directory) / f"{expected}.pt"
+                torch.save({"model": net.state_dict(), "cfg": cfg, "counter": 7}, path)
+                loaded, meta = load_checkpoint_network(str(path), torch.device("cpu"))
+                self.assertEqual(loaded.value_representation, expected)
+                self.assertEqual(meta["valueRepresentation"], expected)
 
 
 if __name__ == "__main__":
