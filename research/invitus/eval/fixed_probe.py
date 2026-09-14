@@ -16,6 +16,7 @@ import torch
 from engine import srszq
 from model import encode
 from model.network import InvitusNet
+from model.value import output_to_absolute
 
 STAGES = {"early": (0.08, 0.18), "mid": (0.38, 0.52), "late": (0.70, 0.82)}
 
@@ -104,7 +105,12 @@ def evaluate_records(records: list[dict[str, Any]], checkpoint_path: str) -> dic
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     cfg = checkpoint.get("cfg", {})
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    net = InvitusNet(int(cfg["channels"]), int(cfg["blocks"])).to(device)
+    value_representation = str(cfg.get("value_representation", "absolute"))
+    net = InvitusNet(
+        int(cfg["channels"]),
+        int(cfg["blocks"]),
+        value_representation=value_representation,
+    ).to(device)
     net.load_state_dict(checkpoint["model"])
     net.eval()
     rows: list[dict[str, Any]] = []
@@ -119,6 +125,11 @@ def evaluate_records(records: list[dict[str, Any]], checkpoint_path: str) -> dic
             policy = np.exp(values)
             policy /= policy.sum()
             entropy = -sum(float(p) * math.log(float(p)) for p in policy if p > 0)
+            absolute_value = output_to_absolute(
+                torch.exp(log_value[0]).cpu().tolist(),
+                record["actor"],
+                value_representation,
+            )
             rows.append(
                 {
                     "positionHash": record["positionHash"],
@@ -127,7 +138,7 @@ def evaluate_records(records: list[dict[str, Any]], checkpoint_path: str) -> dic
                     "actor": record["actor"],
                     "policyEntropy": entropy,
                     "top1Probability": float(policy.max()),
-                    "valuePrediction": torch.exp(log_value[0]).cpu().tolist(),
+                    "valuePrediction": list(absolute_value),
                 }
             )
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)

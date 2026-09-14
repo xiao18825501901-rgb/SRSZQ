@@ -9,6 +9,7 @@ INVICTUS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(INVICTUS_ROOT))
 
 from eval.fixed_probe import generate_records
+from model.value import output_to_absolute
 
 
 class FixedProbeTest(unittest.TestCase):
@@ -21,6 +22,13 @@ class FixedProbeTest(unittest.TestCase):
         self.assertEqual(len(counts), 18)
         self.assertTrue(all(count == 1 for count in counts.values()))
         self.assertTrue(all(record["legalMoves"] for record in first))
+
+    def test_relative_probe_values_are_reported_in_absolute_seat_order(self) -> None:
+        relative = [0.7, 0.2, 0.05, 0.05]
+        self.assertEqual(
+            tuple(output_to_absolute(relative, "B", "actor_relative")),
+            (0.05, 0.7, 0.2, 0.05),
+        )
 
 
 if __name__ == "__main__":
