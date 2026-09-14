@@ -44,6 +44,12 @@ class TacticalForensicsTest(unittest.TestCase):
         state["board"][6][0:3] = ["B", "B", "B"]
         self.assertEqual(classify_candidate_turn(trace(state, (12, 12))), "DOUBLE_THREAT_MISS")
 
+    def test_labels_missed_second_actor_threat(self) -> None:
+        state = srszq.create_state(13)
+        state["turn"] = state["moves"] = 15  # A, then B, then eligible C
+        state["board"][5][0:3] = ["C", "C", "C"]
+        self.assertEqual(classify_candidate_turn(trace(state, (12, 12))), "SHALLOW_2PLY_MISS")
+
 
 if __name__ == "__main__":
     unittest.main()

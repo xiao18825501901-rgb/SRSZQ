@@ -135,7 +135,7 @@ def _safe_against_next_actor(state: dict[str, Any]) -> list[tuple[int, int]]:
     return list(moves or []) if reason == "forced_defense" else []
 
 
-def _two_ply_safe_moves(state: dict[str, Any]) -> list[tuple[int, int]]:
+def two_ply_safe_moves(state: dict[str, Any]) -> list[tuple[int, int]]:
     """Block a unique win belonging to the actor two plies ahead.
 
     Placement is monotone: an intervening opponent stone cannot create a line
@@ -246,7 +246,7 @@ def _make_record(size: int, category: str, actor: str, rng: random.Random) -> di
         outcome, value_mask = None, 0
         proof = {"kind": "bounded_minimum_immediate_threats", "threatCells": [list(move) for move in threats]}
     else:
-        optimal = _two_ply_safe_moves(state)
+        optimal = two_ply_safe_moves(state)
         if set(optimal) != set(target_cells):
             return None
         outcome, value_mask = None, 0
@@ -306,7 +306,7 @@ def verify_record(record: dict[str, Any]) -> list[str]:
         threats = set(immediate_winning_moves(_advance_empty(state, 1)))
         if len(threats) != 2 or optimal != threats:
             errors.append("double-threat proof mismatch")
-    elif category == "two_ply_tactical" and optimal != set(_two_ply_safe_moves(state)):
+    elif category == "two_ply_tactical" and optimal != set(two_ply_safe_moves(state)):
         errors.append("two-ply proof mismatch")
     if category == "immediate_win":
         if record.get("valueLossMask") != 1 or record.get("outcome") is None:

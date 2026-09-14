@@ -15,6 +15,7 @@ import torch
 from engine import srszq
 from eval.champion_gate import load_checkpoint_network
 from eval.match import play_matchup
+from eval.tactical_dataset import two_ply_safe_moves
 from inference.service import InferenceService
 from mcts.tactical import immediate_winning_moves, root_tactical_moves
 from training.audit_training_state import _atomic_json
@@ -72,6 +73,9 @@ def classify_candidate_turn(record: dict[str, Any]) -> str | None:
         return "DOUBLE_THREAT_MISS"
     if len(threats) == 1:
         return "CREATED_OPPONENT_IMMEDIATE_WIN"
+    two_ply_defenses = two_ply_safe_moves(state)
+    if two_ply_defenses and move not in two_ply_defenses:
+        return "SHALLOW_2PLY_MISS"
     return None
 
 
