@@ -284,14 +284,15 @@ def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_t
     return float(policy_loss.item()), float(value_loss.item()), float(loss.item()), gn, float(entropy.item())
 
 
-def save_ckpt(path, net, opt, sched, counter, rng_state, cfg, extra):
+def save_ckpt(path, net, opt, sched, counter, rng_state, cfg, extra, aux_rng_states=None):
     checkpoint_path = Path(path).expanduser().resolve()
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint_tmp = checkpoint_path.with_name(checkpoint_path.name + ".tmp")
     with open(checkpoint_tmp, "wb") as f:
         torch.save({
             "model": net.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
-            "counter": counter, "rng": rng_state, "cfg": cfg, "extra": extra, "net": "Tiny",
+            "counter": counter, "rng": rng_state, "aux_rng_states": dict(aux_rng_states or {}),
+            "cfg": cfg, "extra": extra, "net": "Tiny",
         }, f)
         f.flush()
         os.fsync(f.fileno())
@@ -318,6 +319,11 @@ def load_ckpt(net, opt, sched, path):
     opt.load_state_dict(ck["opt"])
     sched.load_state_dict(ck["sched"])
     return ck["counter"], ck.get("rng")
+
+
+def load_aux_rng_states(path):
+    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    return dict(checkpoint.get("aux_rng_states") or {})
 
 
 def main():

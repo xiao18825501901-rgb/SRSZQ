@@ -78,6 +78,22 @@ def seed_everything(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def restore_tactical_rng(
+    rng: random.Random, auxiliary_states: dict[str, Any], tactical_ratio: float
+) -> bool:
+    if tactical_ratio <= 0:
+        return False
+    state = auxiliary_states.get("tactical")
+    if state is None:
+        raise RuntimeError("tactical resume checkpoint is missing the tactical RNG state")
+    rng.setstate(state)
+    return True
+
+
+def tactical_rng_states(rng: random.Random, tactical_ratio: float) -> dict[str, Any]:
+    return {"tactical": rng.getstate()} if tactical_ratio > 0 else {}
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -239,6 +255,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     seed_everything(args.seed)
+    tactical_rng = random.Random(args.seed + 1_000_003)
     run_id = args.run_id or time.strftime(f"invitus-{args.run_class}-%Y%m%d-%H%M", time.gmtime())
     record_kind = "formal" if args.run_class == "official" else "experiment"
     storage = train.configure_storage(args.data_root)
@@ -293,6 +310,9 @@ def main() -> int:
             counter, rng_state = train.load_ckpt(net, optimizer, scheduler, resume_path)
             if rng_state:
                 random.setstate(rng_state)
+            restore_tactical_rng(
+                tactical_rng, train.load_aux_rng_states(resume_path), args.tactical_ratio
+            )
             # Resume gate: the on-disk state must already be audit-consistent.
             state = audit_training_state(Path(train.DATA_ROOT), git_sha=git_sha, record_kind=record_kind)
             if not state["stateConsistent"] or state["episodeCount"] != counter:
@@ -374,8 +394,6 @@ def main() -> int:
     selfplay_per_batch, tactical_per_batch = curriculum_batch_counts(
         args.train_batch, args.tactical_ratio
     )
-    tactical_rng = random.Random(args.seed + 1_000_003)
-
     broker: ProcessInferenceBroker | None = None
     pool: ProcessSelfPlayPool | None = None
     sampler: ResourceSampler | None = None
@@ -533,6 +551,7 @@ def main() -> int:
                 os.path.join(train.CKPT_DIR, "latest.pt"),
                 net, optimizer, scheduler, counter, random.getstate(), vars(args),
                 {"games_per_hour": round(gph, 1), "wave": wave, "run_id": run_id},
+                aux_rng_states=tactical_rng_states(tactical_rng, args.tactical_ratio),
             )
             write_light_state(
                 Path(train.DATA_ROOT), counter, "checkpoints/latest.pt", last_game_id,
@@ -590,6 +609,7 @@ def main() -> int:
                 train.save_ckpt(
                     checkpoint_path, net, optimizer, scheduler, counter,
                     random.getstate(), vars(args), {"games_per_hour": round(gph, 1), "run_id": run_id},
+                    aux_rng_states=tactical_rng_states(tactical_rng, args.tactical_ratio),
                 )
                 state = audit_training_state(
                     Path(train.DATA_ROOT), git_sha=git_sha, record_kind=record_kind
@@ -614,6 +634,7 @@ def main() -> int:
                 train.save_ckpt(
                     str(major_path), net, optimizer, scheduler, counter,
                     random.getstate(), vars(args), {"games_per_hour": round(gph, 1), "major": True, "run_id": run_id},
+                    aux_rng_states=tactical_rng_states(tactical_rng, args.tactical_ratio),
                 )
                 staged = stage_major_backup(Path(train.DATA_ROOT), major_path, counter)
                 print(json.dumps({"event": "major_checkpoint", "counter": counter, "staged": staged}), flush=True)
@@ -634,7 +655,10 @@ def main() -> int:
             broker.close()
 
     final_path = os.path.join(train.CKPT_DIR, f"invitus_{counter:06d}_final.pt")
-    train.save_ckpt(final_path, net, optimizer, scheduler, counter, random.getstate(), vars(args), {"run_id": run_id})
+    train.save_ckpt(
+        final_path, net, optimizer, scheduler, counter, random.getstate(), vars(args), {"run_id": run_id},
+        aux_rng_states=tactical_rng_states(tactical_rng, args.tactical_ratio),
+    )
     # Segment finals that land on a major boundary (5000/10000/...) also get a
     # major checkpoint + backup staging (the in-loop major branch cannot fire
     # for the segment-final wave because the loop exits at counter == episodes).
@@ -644,6 +668,7 @@ def main() -> int:
             str(major_path), net, optimizer, scheduler, counter,
             random.getstate(), vars(args), {"games_per_hour": round(segment_games_per_hour(counter, segment_start_counter, time.monotonic() - t_start), 1),
                                             "major": True, "run_id": run_id},
+            aux_rng_states=tactical_rng_states(tactical_rng, args.tactical_ratio),
         )
         staged = stage_major_backup(Path(train.DATA_ROOT), major_path, counter)
         print(json.dumps({"event": "segment_final_major", "counter": counter, "staged": staged}), flush=True)
