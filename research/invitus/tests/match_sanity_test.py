@@ -12,6 +12,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from engine import srszq
+from eval.champion_gate import build_match_tasks
 from eval.match import play_matchup
 
 
@@ -31,6 +32,13 @@ class UnusedBridge:
 
 
 class MatchSanityTest(unittest.TestCase):
+    def test_parallel_match_schedule_has_deterministic_per_game_seeds(self) -> None:
+        first = build_match_tasks(30, 99, (13, 13, 17))
+        second = build_match_tasks(30, 99, (13, 13, 17))
+        self.assertEqual(first, second)
+        self.assertEqual({seat: sum(task[0] == seat for task in first) for seat in "ABC"}, {"A": 10, "B": 10, "C": 10})
+        self.assertEqual(len({task[2] for task in first}), 30)
+
     def test_forced_candidate_win_is_attributed_to_candidate_seat(self) -> None:
         state = srszq.create_state(13)
         state["turn"] = 21

@@ -76,6 +76,17 @@ def z_test_vs_third(wins: int, total: int) -> float:
     return 0.5 * math.erfc(z / math.sqrt(2))
 
 
+def build_match_tasks(games: int, seed: int, size_mix: tuple[int, ...]) -> list[tuple[str, int, int]]:
+    """Create a deterministic seat-balanced schedule with one RNG per game."""
+    rng = random.Random(seed)
+    per_seat = games // 3
+    return [
+        (seat, size_mix[rng.randrange(len(size_mix))], rng.getrandbits(64))
+        for seat in "ABC"
+        for _ in range(per_seat)
+    ]
+
+
 def run_matchup(
     candidate_service: InferenceService,
     champion_service: InferenceService | None,
@@ -89,16 +100,11 @@ def run_matchup(
     size_mix: tuple[int, ...] = (13, 13, 17),
 ) -> dict[str, Any]:
     """opponent_pair entries: int difficulty or str tactic id; champion pair uses "nn-champion"."""
-    per_seat = games // 3
     results: list[tuple[str, str, int]] = []  # (seat, result, size)
-    rng = random.Random(seed)
-    tasks: list[tuple[str, int]] = []
-    for seat in ("A", "B", "C"):
-        for _ in range(per_seat):
-            tasks.append((seat, size_mix[rng.randrange(len(size_mix))]))
+    tasks = build_match_tasks(games, seed, size_mix)
 
-    def play_one(task: tuple[str, int]) -> tuple[str, str, int]:
-        seat, size = task
+    def play_one(task: tuple[str, int, int]) -> tuple[str, str, int]:
+        seat, size, task_seed = task
         seats: dict[str, tuple[str, ...]] = {seat: ("nn",)}
         nn_agents: dict[str, tuple[Any, Any, Any, int]] = {
             seat: (None, torch.device("cuda"), candidate_service, sims)
@@ -113,7 +119,7 @@ def run_matchup(
                 nn_agents[other] = (None, torch.device("cuda"), champion_service, sims)
             else:
                 seats[other] = ("tactic", spec)
-        result, _ = play_matchup(size, seats, nn_agents, sims, bridge, rng)
+        result, _ = play_matchup(size, seats, nn_agents, sims, bridge, random.Random(task_seed))
         return seat, result, size
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
