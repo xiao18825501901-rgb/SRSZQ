@@ -1,6 +1,7 @@
 """Evaluation matchup game runner (no training samples, never counted as formal)."""
 from __future__ import annotations
 
+import copy
 import random
 import time
 from typing import Any
@@ -16,6 +17,7 @@ def play_matchup(
     sims: int,
     bridge: Any,
     rng: random.Random,
+    initial_state: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Play one complete SRSZQ game with fixed seat assignments.
 
@@ -23,7 +25,9 @@ def play_matchup(
     nn_agents: {seat: (net, device, inference_service, sims_override)}
     """
     started = time.monotonic()
-    state = srszq.create_state(state_size)
+    state = copy.deepcopy(initial_state) if initial_state is not None else srszq.create_state(state_size)
+    if int(state["n"]) != state_size:
+        raise ValueError("initial state board size does not match state_size")
     guard = 0
     move_no = 0
     nodes = 0
