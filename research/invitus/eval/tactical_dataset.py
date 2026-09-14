@@ -36,7 +36,7 @@ def _stage_bounds(size: int, stage: str) -> tuple[int, int]:
     if stage == "early":
         return 15, max(30, int(size * size * 0.22))
     if stage == "mid":
-        return int(size * size * 0.35), int(size * size * 0.55)
+        return int(size * size * 0.35), int(size * size * 0.45)
     raise ValueError(stage)
 
 
@@ -377,7 +377,8 @@ def generate_records(
     for size, category, stage in cells:
         accepted = 0
         attempts = 0
-        while accepted < target and attempts < max_attempts_per_cell:
+        attempt_budget = max(max_attempts_per_cell, target * 40)
+        while accepted < target and attempts < attempt_budget:
             attempts += 1
             actor = srszq.PLAYERS[accepted % 3]
             record = _make_record(size, category, stage, actor, rng)
