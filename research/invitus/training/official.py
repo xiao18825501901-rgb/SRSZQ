@@ -48,6 +48,11 @@ from training.diagnostics import CollapseSentinel, summarize_games, target_metri
 from training.league import discover_historical_checkpoints
 from training.process_selfplay import ProcessSelfPlayPool
 from training.replay import ReplayBuffer
+from training.tactical_curriculum import (
+    curriculum_batch_counts,
+    load_tactical_dataset,
+    tactical_record_to_sample,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 LEAGUE_CONTRACT = {"selfplay": 0.50, "historical": 0.20, "strong": 0.20, "diverse": 0.10}
@@ -153,6 +158,9 @@ def write_run_manifest(data_root: Path, args: argparse.Namespace, git_sha: str, 
         "valueRepresentation": args.value_representation,
         "valueLoss": args.value_loss,
         "rootTacticalShield": True,
+        "tacticalRatio": args.tactical_ratio,
+        "tacticalDataset": args.tactical_dataset or None,
+        "tacticalEvaluationDataset": args.tactical_evaluation_dataset or None,
         "targetEpisodes": args.episodes,
         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
@@ -202,6 +210,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--value-smooth", type=float, default=0.0, help="value label smoothing 0..1")
     parser.add_argument("--value-representation", choices=("absolute", "actor_relative"), default="absolute")
     parser.add_argument("--value-loss", choices=("ce", "brier"), default="ce")
+    parser.add_argument("--tactical-ratio", type=float, default=0.0)
+    parser.add_argument("--tactical-dataset", default="")
+    parser.add_argument("--tactical-evaluation-dataset", default="")
     parser.add_argument("--sample-interval", type=float, default=5.0)
     parser.add_argument("--cp-every", type=int, default=500)
     parser.add_argument("--major-every", type=int, default=5000)
@@ -216,6 +227,10 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.games_per_wave < 1 or args.workers < 1 or args.batch < 1:
         parser.error("games-per-wave, workers, and batch must be positive")
+    if not 0.0 <= args.tactical_ratio < 1.0:
+        parser.error("tactical-ratio must be in [0,1)")
+    if args.tactical_ratio > 0 and not (args.tactical_dataset and args.tactical_evaluation_dataset):
+        parser.error("positive tactical-ratio requires both tactical dataset paths")
     return args
 
 
@@ -334,6 +349,28 @@ def main() -> int:
 
     write_run_manifest(Path(train.DATA_ROOT), args, git_sha, run_id)
     replay = ReplayBuffer(train.REPLAY_DIR, max_shards=128, max_samples_per_shard=512)
+    tactical_samples: list[dict[str, Any]] = []
+    tactical_identity: dict[str, Any] = {}
+    if args.tactical_ratio > 0:
+        tactical_records, tactical_identity = load_tactical_dataset(
+            Path(args.tactical_dataset), Path(args.tactical_evaluation_dataset)
+        )
+        tactical_samples = [tactical_record_to_sample(record) for record in tactical_records]
+        print(
+            json.dumps(
+                {
+                    "event": "tactical_curriculum_loaded",
+                    "ratio": args.tactical_ratio,
+                    "positions": len(tactical_samples),
+                    **tactical_identity,
+                }
+            ),
+            flush=True,
+        )
+    selfplay_per_batch, tactical_per_batch = curriculum_batch_counts(
+        args.train_batch, args.tactical_ratio
+    )
+    tactical_rng = random.Random(args.seed + 1_000_003)
 
     broker: ProcessInferenceBroker | None = None
     pool: ProcessSelfPlayPool | None = None
@@ -427,9 +464,16 @@ def main() -> int:
             batch_samples = [sample for sample in replay.iter_samples(shards)]
             if batch_samples:
                 for _ in range(args.steps_per_wave):
-                    idxs = [random.randrange(len(batch_samples)) for _ in range(args.train_batch)]
+                    selected = [
+                        batch_samples[random.randrange(len(batch_samples))]
+                        for _ in range(selfplay_per_batch)
+                    ]
+                    selected.extend(
+                        tactical_samples[tactical_rng.randrange(len(tactical_samples))]
+                        for _ in range(tactical_per_batch)
+                    )
                     policy_loss, value_loss, loss, gradient_norm, policy_entropy = train.train_batch(
-                        net, device, optimizer, [batch_samples[i] for i in idxs],
+                        net, device, optimizer, selected,
                         entropy_weight=args.entropy_weight, target_tau=args.target_tau,
                         value_smooth=args.value_smooth,
                         value_representation=args.value_representation,

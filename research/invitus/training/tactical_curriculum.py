@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import numpy as np
 
 from model.network import InvitusNet
-from training.official import seed_everything
 from training.replay import ReplayBuffer
 from training.train import train_batch
 
@@ -63,6 +63,29 @@ def verify_dataset_file(path: Path, expected_split: str) -> dict[str, Any]:
     return manifest
 
 
+def load_tactical_dataset(training_path: Path, evaluation_path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    train_manifest = verify_dataset_file(training_path, "train")
+    eval_manifest = verify_dataset_file(evaluation_path, "eval")
+    evaluation_canonicals = {row["canonical"] for row in _load_jsonl(evaluation_path)}
+    training_records = _load_jsonl(training_path)
+    overlap = evaluation_canonicals & {row["canonical"] for row in training_records}
+    if overlap:
+        raise RuntimeError(f"tactical train/eval leakage: {len(overlap)} canonical positions")
+    return training_records, {
+        "trainingSha256": train_manifest["sha256"],
+        "evaluationSha256": eval_manifest["sha256"],
+        "canonicalOverlap": len(overlap),
+    }
+
+
+def _seed_everything(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def _load_replay(path: Path) -> list[dict[str, Any]]:
     replay = ReplayBuffer(path)
     return list(replay.iter_samples(replay.shards()))
@@ -81,14 +104,8 @@ def run_curriculum(
 ) -> dict[str, Any]:
     if not torch.cuda.is_available():
         raise RuntimeError("tactical curriculum requires CUDA")
-    train_manifest = verify_dataset_file(tactical_path, "train")
-    eval_manifest = verify_dataset_file(evaluation_path, "eval")
-    evaluation_canonicals = {row["canonical"] for row in _load_jsonl(evaluation_path)}
-    tactical_records = _load_jsonl(tactical_path)
-    overlap = evaluation_canonicals & {row["canonical"] for row in tactical_records}
-    if overlap:
-        raise RuntimeError(f"tactical train/eval leakage: {len(overlap)} canonical positions")
-    seed_everything(seed)
+    tactical_records, dataset_identity = load_tactical_dataset(tactical_path, evaluation_path)
+    _seed_everything(seed)
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     cfg = dict(checkpoint.get("cfg") or {})
     representation = str(cfg.get("value_representation", "absolute"))
@@ -144,10 +161,10 @@ def run_curriculum(
         "sourceCounter": int(checkpoint.get("counter", -1)),
         "selfplayReplay": str(replay_dir.resolve()),
         "tacticalDataset": str(tactical_path.resolve()),
-        "tacticalDatasetSha256": train_manifest["sha256"],
+        "tacticalDatasetSha256": dataset_identity["trainingSha256"],
         "evaluationDataset": str(evaluation_path.resolve()),
-        "evaluationDatasetSha256": eval_manifest["sha256"],
-        "canonicalOverlap": len(overlap),
+        "evaluationDatasetSha256": dataset_identity["evaluationSha256"],
+        "canonicalOverlap": dataset_identity["canonicalOverlap"],
         "ratio": ratio,
         "steps": steps,
         "batchSize": batch_size,
