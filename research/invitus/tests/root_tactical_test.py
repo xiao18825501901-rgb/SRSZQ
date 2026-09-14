@@ -27,6 +27,13 @@ class WrongPriorNet(torch.nn.Module):
         return policy, torch.log_softmax(values, dim=1)
 
 
+class UniformNet(torch.nn.Module):
+    value_representation = "absolute"
+
+    def forward(self, inputs):
+        return torch.zeros((inputs.shape[0], 289)), torch.log_softmax(torch.zeros((inputs.shape[0], 4)), dim=1)
+
+
 def state_at(turn: int) -> dict:
     state = srszq.create_state(13)
     state["turn"] = turn
@@ -61,6 +68,13 @@ class RootTacticalTest(unittest.TestCase):
         moves, reason = root_tactical_moves(state)
         self.assertIsNone(moves)
         self.assertIsNone(reason)
+
+    def test_neutral_values_do_not_lock_search_to_first_visited_child(self) -> None:
+        state = srszq.create_state(13)
+        search = NNMCTS(UniformNet(), torch.device("cpu"), sims=16, rng=random.Random(7), train=True)
+        search.search(state)
+        visited = sum(child.N > 0 for child in search.root.children.values())
+        self.assertGreaterEqual(visited, 8)
 
 
 if __name__ == "__main__":

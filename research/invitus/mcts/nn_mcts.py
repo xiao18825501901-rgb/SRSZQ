@@ -11,7 +11,7 @@ sys.path.insert(0, ".")
 import torch
 from engine import srszq
 from model import encode as enc
-from model.value import actor_utility, output_to_absolute
+from model.value import output_to_absolute, selection_utility
 from mcts.tactical import root_tactical_moves
 
 c_puct = 1.4
@@ -127,7 +127,11 @@ class NNMCTS:
                 nb = math.sqrt(max(1, node.N))
                 best_a, best_u = None, -1e18
                 for (m, child) in node.children.items():
-                    q = actor_utility(child.W, actor) / max(1, child.N)
+                    q = (
+                        selection_utility([component / child.N for component in child.W], actor)
+                        if child.N
+                        else 0.0
+                    )
                     u = self.c_puct * node.P.get(m, 1e-6) * nb / (1 + child.N)
                     val = q + u
                     if val > best_u:

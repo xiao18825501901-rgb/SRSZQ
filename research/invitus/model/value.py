@@ -77,3 +77,7 @@ def actor_utility(value: Sequence[float], actor: str) -> float:
     absolute = _value_tuple(value)
     return absolute[_actor_index(actor)] + absolute[3] / 3.0
 
+
+def selection_utility(value: Sequence[float], actor: str) -> float:
+    """Zero-centred PUCT value; chance-equivalent or draw is neutral."""
+    return actor_utility(value, actor) - 1.0 / 3.0

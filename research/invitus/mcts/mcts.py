@@ -11,7 +11,7 @@ import sys
 
 sys.path.insert(0, ".")
 from engine import srszq
-from model.value import actor_utility
+from model.value import selection_utility
 
 c_puct = 1.4
 
@@ -73,7 +73,11 @@ class MCTS:
                 nb = math.sqrt(max(1, node.N))
                 best_a, best_u = None, -1e18
                 for (m, child) in node.children.items():
-                    q = actor_utility(child.W, actor) / max(1, child.N)
+                    q = (
+                        selection_utility([component / child.N for component in child.W], actor)
+                        if child.N
+                        else 0.0
+                    )
                     u = c_puct * node.P.get(m, 1e-6) * nb / (1 + child.N)
                     val = q + u
                     if val > best_u:
