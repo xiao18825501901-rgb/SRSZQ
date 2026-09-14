@@ -24,6 +24,7 @@ import torch
 from engine import srszq
 from model import encode as enc
 from model.network import make_model
+from model.value import VALUE_LOSSES, VALUE_REPRESENTATIONS, target_from_absolute
 from mcts.nn_mcts import NNMCTS
 from exact.solver import ExactSolver
 from training.replay import ReplayBuffer
@@ -193,10 +194,46 @@ def make_ledger_record(meta: dict, checkpoint_id: str) -> dict:
     }
 
 
-def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_tau=1.0, value_smooth=0.0):
+def prepare_value_targets(samples, value_representation="absolute", value_smooth=0.0):
+    """Build network-space value targets and explicit per-sample loss masks."""
+    if value_representation not in VALUE_REPRESENTATIONS:
+        raise ValueError(f"unknown value representation: {value_representation!r}")
+    values, masks = [], []
+    for sample in samples:
+        outcome = sample.get("outcome")
+        mask = float(sample.get("value_loss_mask", outcome is not None))
+        if mask and outcome is None:
+            raise ValueError("value_loss_mask=1 requires an outcome target")
+        if outcome is None:
+            value = (0.0, 0.0, 0.0, 0.0)
+        else:
+            value = target_from_absolute(outcome, sample["actor"], value_representation)
+            if value_smooth > 0:
+                value = tuple((1.0 - value_smooth) * component + value_smooth / 4.0 for component in value)
+        values.append(value)
+        masks.append(mask)
+    return torch.tensor(values, dtype=torch.float32), torch.tensor(masks, dtype=torch.float32)
+
+
+def compute_value_loss(log_values, targets, masks, value_loss="ce"):
+    """Masked CE or four-class Brier score on softmax probabilities."""
+    if value_loss not in VALUE_LOSSES:
+        raise ValueError(f"unknown value loss: {value_loss!r}")
+    if value_loss == "ce":
+        per_sample = -(targets * log_values).sum(dim=1)
+    else:
+        per_sample = ((torch.exp(log_values) - targets) ** 2).mean(dim=1)
+    denominator = masks.sum()
+    if float(denominator.detach().cpu()) == 0.0:
+        return log_values.sum() * 0.0
+    return (per_sample * masks).sum() / denominator
+
+
+def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_tau=1.0,
+                value_smooth=0.0, value_representation="absolute", value_loss_type="ce"):
     net.train()
     import numpy as np
-    X, P, V, masks = [], [], [], []
+    X, P, legal_masks = [], [], []
     for smp in samples:
         n = smp["size"]
         # 重建 state
@@ -214,23 +251,21 @@ def train_batch(net, device, opt, samples, l2=1e-4, entropy_weight=0.0, target_t
         mask = np.full(289, -np.inf, dtype=np.float32)
         for (r, c) in legal:
             mask[r * 17 + c] = 0.0
-        masks.append(mask)
+        legal_masks.append(mask)
         target = enc.policy_target(
             legal, {tuple(map(int, k.split(","))): v for k, v in smp["visits"].items()}, tau=target_tau
         )
         P.append(target)
-        V.append(smp["outcome"])
-    if value_smooth > 0:
-        # 标签平滑：V' = (1-s)*V + s/4，防止 value 头多数类坍缩（如学成 P(C)=0.93）
-        V = [(1.0 - value_smooth) * np.asarray(v, dtype=np.float32) + value_smooth / 4.0 for v in V]
+    V, value_masks = prepare_value_targets(samples, value_representation, value_smooth)
     X = torch.from_numpy(np.asarray(X, dtype=np.float32)).to(device)
     P = torch.from_numpy(np.asarray(P, dtype=np.float32)).to(device)
-    V = torch.from_numpy(np.asarray(V, dtype=np.float32)).to(device)
-    mask_t = torch.from_numpy(np.asarray(masks, dtype=np.float32)).to(device)
+    V = V.to(device)
+    value_masks = value_masks.to(device)
+    mask_t = torch.from_numpy(np.asarray(legal_masks, dtype=np.float32)).to(device)
     logits, logv = net(X)
     logp = torch.log_softmax(logits, dim=1)
     policy_loss = -(P * logp).sum(dim=1).mean()
-    value_loss = -(V * logv).sum(dim=1).mean()
+    value_loss = compute_value_loss(logv, V, value_masks, value_loss_type)
     entropy = logits.new_zeros(())
     if entropy_weight > 0:
         # 合法步 mask 后 softmax 的策略熵（防 one-hot 坍塌正则项）
