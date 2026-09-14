@@ -1,5 +1,5 @@
 """Invitus Exact Endgame Solver（真·穷举，无启发剪枝）。
-MaxN 向量精确求解：每个节点 actor 选择最大化自己分量的动作；平局值 [1/3,1/3,1/3]。
+MaxN 向量精确求解：树内存储 [A,B,C,DRAW]；选择效用为本座胜率 + DRAW/3。
 - Zobrist-like TT：以 canonical 盘面串为键（含 turn），避免重复展开。
 - 对称规范化：D4（4 旋转 × 镜像）canonical，仅对 n=13/17 正方形盘。
 - 仅当 legal_moves <= max_branch 时启动（性能实验定 N）。
@@ -9,8 +9,9 @@ import sys
 
 sys.path.insert(0, ".")
 from engine import srszq
+from model.value import actor_utility
 
-DRAW = (1 / 3, 1 / 3, 1 / 3, 0.0)
+DRAW = (0.0, 0.0, 0.0, 1.0)
 
 
 def _rot90(board, k):
@@ -72,7 +73,7 @@ class ExactSolver:
         if key in self.tt:
             return self.tt[key]
         self.nodes += 1
-        actor = srszq.PLAYERS.index(srszq.current_player(s))
+        actor = srszq.current_player(s)
         legal = srszq.legal_moves(s)
         best = None
         for (r, c) in legal:
@@ -81,8 +82,10 @@ class ExactSolver:
             res = srszq.apply_move(child, r, c)
             assert res == "ok", res
             cv = self.solve(child)
-            if best is None or cv[actor] > best[0][actor] or (
-                cv[actor] == best[0][actor] and cv > best[0]
+            utility = actor_utility(cv, actor)
+            best_utility = actor_utility(best[0], actor) if best is not None else None
+            if best is None or utility > best_utility or (
+                utility == best_utility and cv > best[0]
             ):
                 best = (cv, (r, c))
         assert best is not None, "exact solve: no legal moves while playing"
@@ -91,7 +94,7 @@ class ExactSolver:
 
     def best_move(self, s):
         """精确最佳动作（actor 视角最大化；平局按向量字典序）。"""
-        actor = srszq.PLAYERS.index(srszq.current_player(s))
+        actor = srszq.current_player(s)
         legal = srszq.legal_moves(s)
         best, best_vec, bm = None, None, None
         for (r, c) in legal:
@@ -99,7 +102,7 @@ class ExactSolver:
             child = copy.deepcopy(s)
             srszq.apply_move(child, r, c)
             cv = self.solve(child)
-            val = cv[actor]
+            val = actor_utility(cv, actor)
             if best is None or val > best or (val == best and cv > best_vec):
                 best, best_vec, bm = val, cv, (r, c)
         return bm, best_vec

@@ -11,6 +11,7 @@ import sys
 
 sys.path.insert(0, ".")
 from engine import srszq
+from model.value import actor_utility
 
 c_puct = 1.4
 
@@ -68,11 +69,11 @@ class MCTS:
             path = [root]
             depth = 0
             while node.children and st["status"] == "playing":
-                actor = srszq.PLAYERS.index(srszq.current_player(st))
+                actor = srszq.current_player(st)
                 nb = math.sqrt(max(1, node.N))
                 best_a, best_u = None, -1e18
                 for (m, child) in node.children.items():
-                    q = child.W[actor] / max(1, child.N)
+                    q = actor_utility(child.W, actor) / max(1, child.N)
                     u = c_puct * node.P.get(m, 1e-6) * nb / (1 + child.N)
                     val = q + u
                     if val > best_u:
@@ -105,7 +106,7 @@ class MCTS:
             v[idx] = 1.0
             return tuple(v)
         if st["status"] == "draw":
-            return (1 / 3, 1 / 3, 1 / 3, 0.0)
+            return (0.0, 0.0, 0.0, 1.0)
         if self.exact and self.exact.in_exact_region(st):
             return self.exact.solve(st)
         # rollout：随机合法步直到终局（或步数上限，按 draw 计）

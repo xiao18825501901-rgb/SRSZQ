@@ -11,6 +11,7 @@ sys.path.insert(0, ".")
 import torch
 from engine import srszq
 from model import encode as enc
+from model.value import actor_utility, output_to_absolute
 
 c_puct = 1.4
 
@@ -43,7 +44,8 @@ def root_prior_mix(p_net, legal, eps=0.25, alpha=0.3, rng=None):
 
 
 class NNMCTS:
-    def __init__(self, net, device, sims=16, exact=None, rng=None, train=False, c_puct=1.4, inference_service=None):
+    def __init__(self, net, device, sims=16, exact=None, rng=None, train=False, c_puct=1.4, inference_service=None,
+                 value_representation=None):
         import random
         self.net = net
         self.device = device
@@ -53,18 +55,25 @@ class NNMCTS:
         self.train = train
         self.c_puct = c_puct
         self.inference_service = inference_service
+        self.value_representation = value_representation or getattr(
+            net, "value_representation", getattr(inference_service, "value_representation", "absolute")
+        )
         self.root = None
         self.root_network_prior = {}
         self.root_network_value = ()
 
     def _net_eval(self, s):
         if self.inference_service is not None:
-            return self.inference_service.evaluate_state(s)
-        import numpy as np
-        planes = np.asarray(enc.encode_state(s), dtype=np.float32)[None]
-        with torch.no_grad():
-            logits, logv = self.net(torch.from_numpy(planes).to(self.device))
-        return logits[0], torch.exp(logv)[0].cpu().tolist()
+            logits, raw_value = self.inference_service.evaluate_state(s)
+        else:
+            import numpy as np
+            planes = np.asarray(enc.encode_state(s), dtype=np.float32)[None]
+            with torch.no_grad():
+                logits_batch, logv = self.net(torch.from_numpy(planes).to(self.device))
+            logits = logits_batch[0]
+            raw_value = torch.exp(logv)[0].cpu().tolist()
+        absolute = output_to_absolute(raw_value, srszq.current_player(s), self.value_representation)
+        return logits, list(absolute)
 
     def _prior_with_value(self, s):
         legal = srszq.legal_moves(s)
@@ -105,11 +114,11 @@ class NNMCTS:
             path = [root]
             depth = 0
             while node.children and st["status"] == "playing":
-                actor = srszq.PLAYERS.index(srszq.current_player(st))
+                actor = srszq.current_player(st)
                 nb = math.sqrt(max(1, node.N))
                 best_a, best_u = None, -1e18
                 for (m, child) in node.children.items():
-                    q = child.W[actor] / max(1, child.N)
+                    q = actor_utility(child.W, actor) / max(1, child.N)
                     u = self.c_puct * node.P.get(m, 1e-6) * nb / (1 + child.N)
                     val = q + u
                     if val > best_u:
@@ -141,7 +150,7 @@ class NNMCTS:
             v[srszq.PLAYERS.index(st["winner"])] = 1.0
             return tuple(v)
         if st["status"] == "draw":
-            return (1 / 3, 1 / 3, 1 / 3, 0.0)
+            return (0.0, 0.0, 0.0, 1.0)
         if self.exact and self.exact.in_exact_region(st):
             return self.exact.solve(st)
         _, v = self._net_eval(st)
