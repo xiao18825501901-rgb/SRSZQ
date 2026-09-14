@@ -53,9 +53,10 @@ def evaluate(records: list[dict[str, Any]], checkpoint: str) -> dict[str, Any]:
             tensor = torch.from_numpy(np.asarray([encode.encode_state(state)], dtype=np.float32)).to(device)
             logits, _ = network(tensor)
             legal = [tuple(move) for move in record["legalMoves"]]
-            legal_logits = torch.tensor(
-                [float(logits[0, row * 17 + col]) for row, col in legal], device=device
+            legal_indices = torch.tensor(
+                [row * 17 + col for row, col in legal], dtype=torch.long, device=device
             )
+            legal_logits = logits[0].index_select(0, legal_indices)
             probabilities = torch.softmax(legal_logits, dim=0).cpu().tolist()
             top_move = legal[int(torch.argmax(legal_logits).item())]
             optimal = {tuple(move) for move in record["optimalMoves"]}

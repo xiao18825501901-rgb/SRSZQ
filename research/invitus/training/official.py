@@ -161,6 +161,8 @@ def write_run_manifest(data_root: Path, args: argparse.Namespace, git_sha: str, 
         "tacticalRatio": args.tactical_ratio,
         "tacticalDataset": args.tactical_dataset or None,
         "tacticalEvaluationDataset": args.tactical_evaluation_dataset or None,
+        "tacticalDatasetSha256": getattr(args, "tactical_dataset_sha256", None),
+        "tacticalEvaluationDatasetSha256": getattr(args, "tactical_evaluation_dataset_sha256", None),
         "targetEpisodes": args.episodes,
         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
@@ -347,7 +349,6 @@ def main() -> int:
     league_paths = list(dict.fromkeys(history_paths + official_history))
     print(json.dumps({"event": "league_pool", "size": len(league_paths)}), flush=True)
 
-    write_run_manifest(Path(train.DATA_ROOT), args, git_sha, run_id)
     replay = ReplayBuffer(train.REPLAY_DIR, max_shards=128, max_samples_per_shard=512)
     tactical_samples: list[dict[str, Any]] = []
     tactical_identity: dict[str, Any] = {}
@@ -356,6 +357,8 @@ def main() -> int:
             Path(args.tactical_dataset), Path(args.tactical_evaluation_dataset)
         )
         tactical_samples = [tactical_record_to_sample(record) for record in tactical_records]
+        args.tactical_dataset_sha256 = tactical_identity["trainingSha256"]
+        args.tactical_evaluation_dataset_sha256 = tactical_identity["evaluationSha256"]
         print(
             json.dumps(
                 {
@@ -367,6 +370,7 @@ def main() -> int:
             ),
             flush=True,
         )
+    write_run_manifest(Path(train.DATA_ROOT), args, git_sha, run_id)
     selfplay_per_batch, tactical_per_batch = curriculum_batch_counts(
         args.train_batch, args.tactical_ratio
     )
