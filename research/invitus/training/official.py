@@ -64,6 +64,15 @@ def segment_games_per_hour(counter: int, segment_start_counter: int, elapsed_sec
     return max(0, counter - segment_start_counter) / max(1e-9, elapsed_seconds) * 3600
 
 
+def seed_everything(seed: int) -> None:
+    """Seed model initialization and every parent-process sampler."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -143,6 +152,7 @@ def write_run_manifest(data_root: Path, args: argparse.Namespace, git_sha: str, 
         "seed": args.seed,
         "valueRepresentation": args.value_representation,
         "valueLoss": args.value_loss,
+        "rootTacticalShield": True,
         "targetEpisodes": args.episodes,
         "startedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
@@ -211,6 +221,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    seed_everything(args.seed)
     run_id = args.run_id or time.strftime(f"invitus-{args.run_class}-%Y%m%d-%H%M", time.gmtime())
     record_kind = "formal" if args.run_class == "official" else "experiment"
     storage = train.configure_storage(args.data_root)
