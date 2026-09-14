@@ -13,6 +13,7 @@ import hashlib
 import json
 import random
 from collections import Counter
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -28,12 +29,23 @@ CATEGORIES = (
     "avoid_helping_opponent",
     "two_ply_tactical",
 )
+STAGES = ("early", "mid")
 
 
-def _turn_for(actor: str, eligible_offset: int) -> int:
-    """Find a turn where actor acts and the actor `offset` plies later is eligible."""
-    for turn in range(15, 60):
-        state = srszq.create_state(13)
+def _stage_bounds(size: int, stage: str) -> tuple[int, int]:
+    if stage == "early":
+        return 15, max(30, int(size * size * 0.22))
+    if stage == "mid":
+        return int(size * size * 0.35), int(size * size * 0.55)
+    raise ValueError(stage)
+
+
+@cache
+def _eligible_turns(actor: str, eligible_offset: int, size: int, stage: str) -> tuple[int, ...]:
+    low, high = _stage_bounds(size, stage)
+    candidates: list[int] = []
+    for turn in range(low, high + 1):
+        state = srszq.create_state(size)
         state["turn"] = state["moves"] = turn
         if srszq.current_player(state) != actor:
             continue
@@ -41,8 +53,16 @@ def _turn_for(actor: str, eligible_offset: int) -> int:
         future["turn"] += eligible_offset
         future["moves"] += eligible_offset
         if srszq.current_is_eligible(future):
-            return turn
-    raise AssertionError((actor, eligible_offset))
+            candidates.append(turn)
+    return tuple(candidates)
+
+
+def _turn_for(actor: str, eligible_offset: int, size: int, stage: str, rng: random.Random) -> int:
+    """Choose a turn where actor acts and the actor `offset` plies later is eligible."""
+    candidates = _eligible_turns(actor, eligible_offset, size, stage)
+    if not candidates:
+        raise AssertionError((actor, eligible_offset, size, stage))
+    return rng.choice(candidates)
 
 
 def _seat_counts(turn: int) -> dict[str, int]:
@@ -102,16 +122,17 @@ def _fill_counts(state: dict[str, Any], rng: random.Random, reserved: set[tuple[
         needed = target[player] - present[player]
         if needed < 0:
             return False
+        candidates = [
+            (row, col)
+            for row in range(state["n"])
+            for col in range(state["n"])
+            if state["board"][row][col] is None and (row, col) not in reserved
+        ]
+        rng.shuffle(candidates)
         for _ in range(needed):
-            candidates = [
-                (row, col)
-                for row in range(state["n"])
-                for col in range(state["n"])
-                if state["board"][row][col] is None and (row, col) not in reserved
-            ]
-            rng.shuffle(candidates)
             placed = False
-            for row, col in candidates:
+            while candidates:
+                row, col = candidates.pop()
                 state["board"][row][col] = player
                 if not srszq.creates_four_through(state["board"], row, col, player):
                     placed = True
@@ -157,9 +178,9 @@ def _rebuild(record: dict[str, Any]) -> dict[str, Any]:
     return state
 
 
-def _make_record(size: int, category: str, actor: str, rng: random.Random) -> dict[str, Any] | None:
+def _make_record(size: int, category: str, stage: str, actor: str, rng: random.Random) -> dict[str, Any] | None:
     offset = 0 if category == "immediate_win" else (2 if category == "two_ply_tactical" else 1)
-    turn = _turn_for(actor, offset)
+    turn = _turn_for(actor, offset, size, stage, rng)
     state = srszq.create_state(size)
     state["turn"] = state["moves"] = turn
     reserved: set[tuple[int, int]] = set()
@@ -259,6 +280,7 @@ def _make_record(size: int, category: str, actor: str, rng: random.Random) -> di
         "canonical": canonical,
         "positionHash": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
         "category": category,
+        "stage": stage,
         "state": {
             "board": ["".join("." if cell is None else cell for cell in row) for row in state["board"]],
             "turn": state["turn"],
@@ -280,6 +302,12 @@ def _make_record(size: int, category: str, actor: str, rng: random.Random) -> di
 def verify_record(record: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     state = _rebuild(record)
+    try:
+        stage_low, stage_high = _stage_bounds(state["n"], str(record.get("stage")))
+        if not stage_low <= state["turn"] <= stage_high:
+            errors.append("turn outside declared stage")
+    except ValueError:
+        errors.append("invalid stage")
     if canonical_key(state) != record.get("canonical"):
         errors.append("canonical mismatch")
     legal = set(srszq.legal_moves(state))
@@ -322,7 +350,7 @@ def generate_records(
     excluded_canonicals: set[str] | None = None,
     max_attempts_per_cell: int = 2000,
 ) -> list[dict[str, Any]]:
-    cells = [(size, category) for size in (13, 17) for category in CATEGORIES]
+    cells = [(size, category, stage) for size in (13, 17) for category in CATEGORIES for stage in STAGES]
     if count < len(cells) or count % len(cells):
         raise ValueError(f"count must be a multiple of {len(cells)}")
     target = count // len(cells)
@@ -330,20 +358,22 @@ def generate_records(
     seen = set(excluded)
     rng = random.Random(seed)
     records: list[dict[str, Any]] = []
-    for size, category in cells:
+    for size, category, stage in cells:
         accepted = 0
         attempts = 0
         while accepted < target and attempts < max_attempts_per_cell:
             attempts += 1
             actor = srszq.PLAYERS[accepted % 3]
-            record = _make_record(size, category, actor, rng)
+            record = _make_record(size, category, stage, actor, rng)
             if record is None or record["canonical"] in seen or verify_record(record):
                 continue
             seen.add(record["canonical"])
             records.append(record)
             accepted += 1
         if accepted != target:
-            raise RuntimeError(f"generated {accepted}/{target} for {size}:{category} after {attempts} attempts")
+            raise RuntimeError(
+                f"generated {accepted}/{target} for {size}:{category}:{stage} after {attempts} attempts"
+            )
     return records
 
 
@@ -352,9 +382,9 @@ def write_dataset(records: list[dict[str, Any]], output: Path, split: str, seed:
     output.parent.mkdir(parents=True, exist_ok=True)
     payload = "".join(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in records).encode("utf-8")
     output.write_bytes(payload)
-    counts = Counter(f"{row['boardSize']}:{row['category']}" for row in records)
+    counts = Counter(f"{row['boardSize']}:{row['category']}:{row['stage']}" for row in records)
     manifest = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "split": split,
         "seed": seed,
         "positions": len(records),

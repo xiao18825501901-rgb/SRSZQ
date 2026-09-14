@@ -10,7 +10,7 @@ from collections import Counter
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from eval.tactical_dataset import CATEGORIES, generate_records, verify_record, write_dataset
+from eval.tactical_dataset import CATEGORIES, STAGES, generate_records, verify_record, write_dataset
 
 
 class TacticalDatasetTest(unittest.TestCase):
@@ -19,9 +19,12 @@ class TacticalDatasetTest(unittest.TestCase):
         second = generate_records(24, seed=101)
         self.assertEqual(first, second)
         self.assertEqual(len({row["canonical"] for row in first}), 24)
-        counts = Counter((row["boardSize"], row["category"]) for row in first)
-        self.assertEqual(set(counts), {(size, category) for size in (13, 17) for category in CATEGORIES})
-        self.assertEqual(set(counts.values()), {2})
+        counts = Counter((row["boardSize"], row["category"], row["stage"]) for row in first)
+        self.assertEqual(
+            set(counts),
+            {(size, category, stage) for size in (13, 17) for category in CATEGORIES for stage in STAGES},
+        )
+        self.assertEqual(set(counts.values()), {1})
         self.assertTrue(all(verify_record(row) == [] for row in first))
 
     def test_train_split_excludes_frozen_eval_canonicals(self) -> None:
@@ -48,6 +51,7 @@ class TacticalDatasetTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             output = pathlib.Path(directory) / "eval.jsonl"
             manifest = write_dataset(rows, output, split="eval", seed=505)
+            self.assertEqual(manifest["schemaVersion"], 2)
             self.assertEqual(manifest["positions"], 24)
             self.assertEqual(manifest["sha256"], __import__("hashlib").sha256(output.read_bytes()).hexdigest())
 
