@@ -25,11 +25,22 @@ def aggregate_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         }
 
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    stages: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    board_sizes: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    category_stages: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         groups[row["category"]].append(row)
+        stages[row["stage"]].append(row)
+        board_sizes[str(row["boardSize"])].append(row)
+        category_stages[f"{row['category']}:{row['stage']}"].append(row)
     return {
         **summarize(rows),
         "byCategory": {category: summarize(group) for category, group in sorted(groups.items())},
+        "byStage": {stage: summarize(group) for stage, group in sorted(stages.items())},
+        "byBoardSize": {size: summarize(group) for size, group in sorted(board_sizes.items())},
+        "byCategoryAndStage": {
+            key: summarize(group) for key, group in sorted(category_stages.items())
+        },
     }
 
 
@@ -66,6 +77,7 @@ def evaluate(records: list[dict[str, Any]], checkpoint: str) -> dict[str, Any]:
                     "boardSize": record["boardSize"],
                     "actor": record["actor"],
                     "category": record["category"],
+                    "stage": record["stage"],
                     "correct": top_move in optimal,
                     "topMove": list(top_move),
                     "targetProbability": sum(
