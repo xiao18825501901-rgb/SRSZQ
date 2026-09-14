@@ -12,6 +12,7 @@ import torch
 from engine import srszq
 from model import encode as enc
 from model.value import actor_utility, output_to_absolute
+from mcts.tactical import root_tactical_moves
 
 c_puct = 1.4
 
@@ -61,6 +62,7 @@ class NNMCTS:
         self.root = None
         self.root_network_prior = {}
         self.root_network_value = ()
+        self.root_tactical_reason = None
 
     def _net_eval(self, s):
         if self.inference_service is not None:
@@ -103,11 +105,18 @@ class NNMCTS:
         p_net, root_value = self._prior_with_value(s0)
         self.root_network_prior = dict(p_net)
         self.root_network_value = root_value
+        tactical_moves, self.root_tactical_reason = root_tactical_moves(s0)
+        root_legal = tactical_moves or legal
+        root_total = sum(p_net[move] for move in root_legal)
+        root_net = {
+            move: (p_net[move] / root_total if root_total > 0 else 1.0 / len(root_legal))
+            for move in root_legal
+        }
         if self.train:
             # AlphaZero 式：根先验 = (1-eps)*网络策略 + eps*Dirichlet 噪声。
-            root.P = root_prior_mix(p_net, legal, eps=dirichlet_eps, alpha=dirichlet_alpha, rng=self.rng)
+            root.P = root_prior_mix(root_net, root_legal, eps=dirichlet_eps, alpha=dirichlet_alpha, rng=self.rng)
         else:
-            root.P = p_net
+            root.P = root_net
         for _ in range(self.sims):
             st = copy.deepcopy(s0)
             node = root
@@ -135,8 +144,10 @@ class NNMCTS:
             expand_s = copy.deepcopy(st)
             value = self.evaluate(st)
             if expand_s["status"] == "playing" and not node.children:
-                node.P = self._prior(expand_s)
-                for m in srszq.legal_moves(expand_s):
+                expansion_moves = root_legal if node is root else srszq.legal_moves(expand_s)
+                if node is not root:
+                    node.P = self._prior(expand_s)
+                for m in expansion_moves:
                     node.children[m] = NNode()
             for nd in reversed(path):
                 nd.N += 1
