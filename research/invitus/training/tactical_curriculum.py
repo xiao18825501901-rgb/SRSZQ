@@ -7,6 +7,7 @@ only the fraction replaced by policy-supervised tactical records changes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -17,6 +18,7 @@ from typing import Any
 import torch
 
 from model.network import InvitusNet
+from training.official import seed_everything
 from training.replay import ReplayBuffer
 from training.train import train_batch
 
@@ -50,6 +52,17 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def verify_dataset_file(path: Path, expected_split: str) -> dict[str, Any]:
+    manifest_path = path.with_suffix(path.suffix + ".manifest.json")
+    if not manifest_path.is_file():
+        raise RuntimeError(f"missing tactical dataset manifest: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if manifest.get("split") != expected_split or manifest.get("sha256") != digest:
+        raise RuntimeError(f"tactical dataset identity mismatch: {path}")
+    return manifest
+
+
 def _load_replay(path: Path) -> list[dict[str, Any]]:
     replay = ReplayBuffer(path)
     return list(replay.iter_samples(replay.shards()))
@@ -59,6 +72,7 @@ def run_curriculum(
     checkpoint_path: Path,
     replay_dir: Path,
     tactical_path: Path,
+    evaluation_path: Path,
     output_path: Path,
     ratio: float,
     steps: int,
@@ -67,6 +81,14 @@ def run_curriculum(
 ) -> dict[str, Any]:
     if not torch.cuda.is_available():
         raise RuntimeError("tactical curriculum requires CUDA")
+    train_manifest = verify_dataset_file(tactical_path, "train")
+    eval_manifest = verify_dataset_file(evaluation_path, "eval")
+    evaluation_canonicals = {row["canonical"] for row in _load_jsonl(evaluation_path)}
+    tactical_records = _load_jsonl(tactical_path)
+    overlap = evaluation_canonicals & {row["canonical"] for row in tactical_records}
+    if overlap:
+        raise RuntimeError(f"tactical train/eval leakage: {len(overlap)} canonical positions")
+    seed_everything(seed)
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     cfg = dict(checkpoint.get("cfg") or {})
     representation = str(cfg.get("value_representation", "absolute"))
@@ -81,7 +103,7 @@ def run_curriculum(
         optimizer.load_state_dict(checkpoint["opt"])
 
     selfplay = _load_replay(replay_dir)
-    tactical = [tactical_record_to_sample(row) for row in _load_jsonl(tactical_path)]
+    tactical = [tactical_record_to_sample(row) for row in tactical_records]
     if not selfplay or (ratio > 0 and not tactical):
         raise RuntimeError("curriculum inputs are empty")
     selfplay_count, tactical_count = curriculum_batch_counts(batch_size, ratio)
@@ -122,6 +144,10 @@ def run_curriculum(
         "sourceCounter": int(checkpoint.get("counter", -1)),
         "selfplayReplay": str(replay_dir.resolve()),
         "tacticalDataset": str(tactical_path.resolve()),
+        "tacticalDatasetSha256": train_manifest["sha256"],
+        "evaluationDataset": str(evaluation_path.resolve()),
+        "evaluationDatasetSha256": eval_manifest["sha256"],
+        "canonicalOverlap": len(overlap),
         "ratio": ratio,
         "steps": steps,
         "batchSize": batch_size,
@@ -159,6 +185,7 @@ def main() -> int:
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--replay-dir", required=True)
     parser.add_argument("--tactical-dataset", required=True)
+    parser.add_argument("--evaluation-dataset", required=True)
     parser.add_argument("--out", required=True)
     parser.add_argument("--ratio", type=float, required=True)
     parser.add_argument("--steps", type=int, default=200)
@@ -166,7 +193,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=20260960)
     args = parser.parse_args()
     result = run_curriculum(
-        Path(args.checkpoint), Path(args.replay_dir), Path(args.tactical_dataset),
+        Path(args.checkpoint), Path(args.replay_dir), Path(args.tactical_dataset), Path(args.evaluation_dataset),
         Path(args.out), args.ratio, args.steps, args.batch, args.seed,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
