@@ -115,6 +115,22 @@ def _place_triple(
     return targets
 
 
+def _creates_run_through(board: list[list[str | None]], row: int, col: int, player: str, length: int) -> bool:
+    size = len(board)
+    for delta_row, delta_col in srszq.DIRS:
+        run = 1
+        for sign in (1, -1):
+            scan_row = row + delta_row * sign
+            scan_col = col + delta_col * sign
+            while 0 <= scan_row < size and 0 <= scan_col < size and board[scan_row][scan_col] == player:
+                run += 1
+                scan_row += delta_row * sign
+                scan_col += delta_col * sign
+        if run >= length:
+            return True
+    return False
+
+
 def _fill_counts(state: dict[str, Any], rng: random.Random, reserved: set[tuple[int, int]]) -> bool:
     target = _seat_counts(state["turn"])
     present = Counter(cell for row in state["board"] for cell in row if cell is not None)
@@ -134,7 +150,7 @@ def _fill_counts(state: dict[str, Any], rng: random.Random, reserved: set[tuple[
             while candidates:
                 row, col = candidates.pop()
                 state["board"][row][col] = player
-                if not srszq.creates_four_through(state["board"], row, col, player):
+                if not _creates_run_through(state["board"], row, col, player, 3):
                     placed = True
                     break
                 state["board"][row][col] = None
