@@ -57,6 +57,19 @@ def load_replay_samples(replay_dir: str, cap: int, seed: int) -> list[dict[str, 
     return samples[:cap]
 
 
+def load_forensics_samples(path: str, cap: int, seed: int) -> list[dict[str, Any]]:
+    report = json.loads(Path(path).read_text(encoding="utf-8"))
+    samples = [
+        sample
+        for matchup in report.get("matchups", [])
+        for game in matchup.get("details", [])
+        for sample in game.get("calibrationSamples", [])
+    ]
+    rng = random.Random(seed)
+    rng.shuffle(samples)
+    return samples[:cap]
+
+
 def ece_top_label(confidences: np.ndarray, correct: np.ndarray, bins: int = BINS) -> float:
     """Standard top-label ECE: bin by the model's confidence in its predicted
     class, then compare per-bin mean confidence with empirical accuracy."""
@@ -178,6 +191,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--replay-dir", default="", help="replay shards (in-sample)")
+    parser.add_argument("--forensics-json", default="", help="fresh held-out matchup traces")
     parser.add_argument("--out", required=True)
     parser.add_argument("--max-samples", type=int, default=5000)
     parser.add_argument("--seed", type=int, default=20260908)
@@ -190,9 +204,13 @@ def main() -> int:
     if not torch.cuda.is_available():
         raise RuntimeError("calibration requires CUDA")
     device = torch.device("cuda")
-    if not args.replay_dir:
-        raise RuntimeError("--replay-dir is required (evaluation-games source planned for final acceptance)")
-    samples = load_replay_samples(args.replay_dir, args.max_samples, args.seed)
+    if bool(args.replay_dir) == bool(args.forensics_json):
+        raise RuntimeError("provide exactly one of --replay-dir or --forensics-json")
+    samples = (
+        load_replay_samples(args.replay_dir, args.max_samples, args.seed)
+        if args.replay_dir
+        else load_forensics_samples(args.forensics_json, args.max_samples, args.seed)
+    )
     if not samples:
         raise RuntimeError("no replay samples found")
     net, meta = load_checkpoint_network(args.checkpoint, device)
@@ -200,7 +218,8 @@ def main() -> int:
     result = calibrate(net, device, samples)
     result["checkpoint"] = str(Path(args.checkpoint).resolve())
     result["checkpointMeta"] = meta
-    result["inSample"] = True
+    result["inSample"] = bool(args.replay_dir)
+    result["source"] = "replay" if args.replay_dir else "fresh_tactical_matchups"
     result["elapsedSeconds"] = round(time.monotonic() - started, 3)
     result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     _atomic_json(Path(args.out), result)

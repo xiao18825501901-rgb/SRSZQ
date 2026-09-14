@@ -99,6 +99,21 @@ def analyze_game(candidate_seat: str, result: str, meta: dict[str, Any]) -> dict
                 break
         if first_error is None:
             first_error = "UNKNOWN"
+    outcome = [0.0, 0.0, 0.0, 0.0]
+    if result == "DRAW":
+        outcome[3] = 1.0
+    elif result.endswith("_WIN") and result[0] in "ABC":
+        outcome["ABC".index(result[0])] = 1.0
+    calibration_samples = [
+        {
+            "board": row["board"],
+            "turn": row["turn"],
+            "size": row["size"],
+            "actor": row["actor"],
+            "outcome": outcome,
+        }
+        for row in nn_turns
+    ]
     return {
         "result": result,
         "candidateWon": candidate_won,
@@ -107,6 +122,7 @@ def analyze_game(candidate_seat: str, result: str, meta: dict[str, Any]) -> dict
         "rootShield": shield,
         "firstError": first_error,
         "evidence": evidence,
+        "calibrationSamples": calibration_samples,
         "moves": meta.get("moves"),
     }
 

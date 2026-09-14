@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import json
+import tempfile
 import unittest
 
 import torch
@@ -10,7 +12,7 @@ import torch
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from eval.calibration import calibrate
+from eval.calibration import calibrate, load_forensics_samples
 
 
 class RelativeNet(torch.nn.Module):
@@ -49,6 +51,20 @@ class CalibrationTest(unittest.TestCase):
         self.assertEqual(stages["early"]["samples"], 1)
         self.assertEqual(stages["mid"]["samples"], 1)
         self.assertEqual(stages["late"]["samples"], 1)
+
+    def test_loads_fresh_samples_from_forensics_report(self) -> None:
+        payload = {
+            "matchups": [
+                {"details": [{"calibrationSamples": [sample("B", 2, 18)]}]},
+                {"details": [{"calibrationSamples": [sample("A", 0, 5)]}]},
+            ]
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "forensics.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            loaded = load_forensics_samples(str(path), cap=10, seed=7)
+        self.assertEqual(len(loaded), 2)
+        self.assertEqual({row["actor"] for row in loaded}, {"A", "B"})
 
 
 if __name__ == "__main__":
