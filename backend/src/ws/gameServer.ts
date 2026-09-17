@@ -58,6 +58,8 @@ export interface GameServerOptions {
   queueSweepMs?: number;
   /** Human placement deadline; Online only. */
   turnTimeoutMs?: number;
+  /** Protocol-level heartbeat interval; keeps tunnels alive through idle-killing middleboxes. */
+  heartbeatIntervalMs?: number;
 }
 
 interface Client {
@@ -66,6 +68,8 @@ interface Client {
   userId: string;
   username: string;
   gameId?: string;
+  /** WebSocket heartbeat state: false after a ping until its pong arrives. */
+  isAlive: boolean;
 }
 
 interface Room {
@@ -121,6 +125,7 @@ export class GameServer {
   private matchmaking: MatchmakingQueue;
   private queueWakeTimer: ReturnType<typeof setTimeout> | null = null;
   private queueSweepTimer: ReturnType<typeof setInterval> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private rooms = new Map<string, Room>();
   private userGame = new Map<string, string>(); // userId -> gameId
   private inviteSessions = new Map<string, InviteSession>();
@@ -136,6 +141,7 @@ export class GameServer {
       forfeitGraceMs: opts.forfeitGraceMs ?? 10_000,
       queueSweepMs: opts.queueSweepMs ?? 500,
       turnTimeoutMs: opts.turnTimeoutMs ?? 30_000,
+      heartbeatIntervalMs: opts.heartbeatIntervalMs ?? 25_000,
     };
     this.matchmaking = new MatchmakingQueue(this.opts.queueTimeoutMs);
     this.wss = new WebSocketServer({ noServer: true });
@@ -146,11 +152,18 @@ export class GameServer {
     if (!this.queueSweepTimer) {
       this.queueSweepTimer = setInterval(() => this.finalizeEligibleMatchmaking('sweeper'), this.opts.queueSweepMs);
       this.queueSweepTimer.unref?.();
+      // 协议级心跳：每 25s ping 一次。浏览器/客户端自动回 pong，隧道保持活跃，
+      // 避免中间盒/本地代理（如 127.0.0.1:7890）在 ~50s 空闲时切断 CONNECT 隧道
+      // 导致排队中的对局被重置；不回 pong 的死连接在下一轮被终止。
+      this.heartbeatTimer = setInterval(() => this.heartbeat(), this.opts.heartbeatIntervalMs);
+      this.heartbeatTimer.unref?.();
       httpServer.once('close', () => {
         if (this.queueSweepTimer) clearInterval(this.queueSweepTimer);
         this.queueSweepTimer = null;
         if (this.queueWakeTimer) clearTimeout(this.queueWakeTimer);
         this.queueWakeTimer = null;
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
       });
     }
     httpServer.on('upgrade', (req, socket, head) => {
@@ -173,8 +186,9 @@ export class GameServer {
       ws.close(4001, 'unauthorized');
       return;
     }
-    const client: Client = { ws, connectionId: randomUUID(), userId: user.id, username: user.username };
+    const client: Client = { ws, connectionId: randomUUID(), userId: user.id, username: user.username, isAlive: true };
     this.clients.set(user.id, client);
+    ws.on('pong', () => { client.isAlive = true; });
     this.db.touchOnline(user.id, 'online');
     ws.send(JSON.stringify({ type: 'hello', user: { id: user.id, username: user.username, tutorialCompleted: user.tutorialCompleted } }));
 
@@ -316,6 +330,18 @@ export class GameServer {
       Math.max(0, deadline - Date.now()),
     );
     this.queueWakeTimer.unref?.();
+  }
+
+  /** 心跳：ping 所有连接；上一轮未回 pong 的连接视为死连接并终止。 */
+  private heartbeat(): void {
+    for (const client of this.clients.values()) {
+      if (!client.isAlive) {
+        client.ws.terminate();
+        continue;
+      }
+      client.isAlive = false;
+      try { client.ws.ping(); } catch { /* socket is closing */ }
+    }
   }
 
   /** Timer, sweeper and third-human paths share one idempotent atomic claim. */
