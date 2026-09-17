@@ -12,6 +12,8 @@ dist/
 # Runtime databases
 data/
 backend/data/
+# Hero-game replay data shipped with the frontend source (imported by Platform.tsx)
+!frontend/src/data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
