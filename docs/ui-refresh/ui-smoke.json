@@ -1,0 +1,50 @@
+[
+  {
+    "name": "真实组件显示21步合法棋谱",
+    "pass": true
+  },
+  {
+    "name": "日志开关在棋子上显示手数",
+    "pass": true
+  },
+  {
+    "name": "复盘上一手20枚棋子",
+    "pass": true
+  },
+  {
+    "name": "返回恢复实时21枚而非覆盖对局",
+    "pass": true
+  },
+  {
+    "name": "本地悔棋生效",
+    "pass": true
+  },
+  {
+    "name": "没有导入导出按钮",
+    "pass": true
+  },
+  {
+    "name": "新游戏清空棋盘",
+    "pass": true
+  },
+  {
+    "name": "真人一手后两个原有Worker AI依次落子",
+    "pass": true
+  },
+  {
+    "name": "人机复盘不继续自动落子",
+    "pass": true
+  },
+  {
+    "name": "在线棋盘没有导航栏",
+    "pass": true
+  },
+  {
+    "name": "在线显示服务器时钟",
+    "pass": true
+  },
+  {
+    "name": "好友对弈没有30秒时钟",
+    "pass": true
+  }
+]

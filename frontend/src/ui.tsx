@@ -1,7 +1,7 @@
 /** SRSZQ Design System 基础组件（ui primitives）
  *  按钮/卡片/徽章/星级 —— 全站统一视觉（样式令牌见 styles/global.css :root 与 DesignSystem.md） */
 import type { ReactNode } from 'react';
-import { motion } from 'framer-motion';
+
 
 export type BtnVariant = 'primary' | 'default' | 'ghost' | 'danger';
 export type BtnSize = 'small' | 'default' | 'big';
@@ -54,9 +54,5 @@ export function Stars({ n, className = '' }: { n: number; className?: string }) 
 
 /** 页面进入过渡（克制） */
 export function PageMotion({ children }: { children: ReactNode }) {
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: 'easeOut' }}>
-      {children}
-    </motion.div>
-  );
+  return <div className="page-enter">{children}</div>;
 }

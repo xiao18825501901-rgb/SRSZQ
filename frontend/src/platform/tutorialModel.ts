@@ -43,7 +43,7 @@ export function tutorialRoleLines(seats: TutorialAssignment): RoleLine[] {
     if (s.kind === 'human') {
       return { seat: p, role: '你', detail: `玩家 ${p}（真人）` };
     }
-    return { seat: p, role: '对手', detail: `玩家 ${p} · AI · ${aiDisplayName(s.level ?? 'random')}` };
+    return { seat: p, role: '对手', detail: `玩家 ${p} · AI · ${aiDisplayName(s.level ?? 1)}` };
   });
 }
 

@@ -1,8 +1,9 @@
+import { colorName } from '../playerPresentation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameState, Player } from '../../../shared/src/game/types';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves';
 import { AI_LEVEL_STARS, type AIDecision, type AILevel, type MatchPolicyContext, type SeatConfigs } from '../../../shared/src/ai/types';
-import { LEVEL_CONFIG } from '../../../shared/src/ai/config/defaultWeights';
+import { TACTIC_CONFIG } from '../../../shared/src/ai/config/defaultWeights';
 import { isAISeat, seatLevel, seatsEqual } from '../../../shared/src/ai/seats';
 import { makeSeed } from '../../../shared/src/ai/rng';
 import { requestAIMove, type AIJobHandle } from '../../../shared/src/ai/worker/aiWorkerClient';
@@ -70,7 +71,7 @@ function seedForMove(base: number, turnIndex: number, movesLen: number): number 
  *  - 经引擎 applyMove 落子 —— 引擎仍是唯一规则来源。
  *
  * AI 回合串行：每个 AI 落子（含自动 Pass 链）后状态变化重新触发本控制器。
- * 最短展示时长：快速档（random/tactical）至少显示 THINKING 一小段时间，
+ * 最短展示时长按用户所选星级设置，至少显示 THINKING 一小段时间，
  * 避免“看起来没思考”的闪烁。
  */
 export function useAIController(args: UseAIControllerArgs): UseAIControllerResult {
@@ -178,13 +179,15 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
     const legal = getLegalMoves(state);
     // 当前 AI 无合法步：引擎未自动推进（undo 重放后）→ 自动跳过
     if (legal.length === 0) {
-      onAIPassNotice?.(`AI 玩家 ${player}（AI ${AI_LEVEL_STARS[seatLevel(seats, player)]}）无合法落子，自动 Pass。`);
+      onAIPassNotice?.(`AI ${colorName(player)}棋（AI ${AI_LEVEL_STARS[seatLevel(seats, player)]}）无合法落子，自动 Pass。`);
       passTurn();
       return;
     }
 
     const level = seatLevel(seats, player);
-    const cfg = LEVEL_CONFIG[level] ?? LEVEL_CONFIG.maxn;
+    // Every difficulty may draw MaxN, so all browser turns receive the same
+    // safe worker budget. Difficulty changes probabilities, not tactic power.
+    const cfg = TACTIC_CONFIG.maxn;
     const gen = ++genRef.current;
     const p: PendingTurn = {
       gen,
@@ -195,7 +198,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
       seatsSnapshot: { A: { ...seats.A }, B: { ...seats.B }, C: { ...seats.C } },
       worker: null as unknown as AIJobHandle,
       timer: null,
-      minDisplayMs: cfg.minDisplayMs ?? 250,
+      minDisplayMs: 220 + (level - 1) * 70,
       startedAt: Date.now(),
       seed: seedForMove(makeSeed(), state.turnIndex, state.moves.length),
     };
@@ -206,7 +209,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
       if (!cur || cur.gen !== p.gen) return; // 已取消
       if (r.error || !r.decision) {
         // Worker 失败：主线程同步兜底（小预算），避免 AI 回合卡死
-        onAIError?.(`AI 玩家 ${p.player}（AI ${AI_LEVEL_STARS[p.level]}）Worker 决策失败：${r.error ?? 'unknown'}，改用主线程兜底。`);
+        onAIError?.(`AI ${colorName(p.player)}棋（AI ${AI_LEVEL_STARS[p.level]}）Worker 决策失败：${r.error ?? 'unknown'}，改用主线程兜底。`);
         let fallback: AIDecision | null = null;
         try {
           fallback = chooseAIMove(stateRef.current, p.player, p.level, {

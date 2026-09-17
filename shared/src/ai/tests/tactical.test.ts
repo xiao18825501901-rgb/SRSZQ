@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Board, GameState, Player } from '../../game/types';
 import { createInitialState } from '../../game/rules';
 import { getLegalMoves } from '../../game/legalMoves';
-import { chooseAIMove } from '../chooseAIMove';
-import type { AILevel } from '../types';
+import { chooseTacticMove } from '../chooseAIMove';
+import type { TacticId } from '../types';
 
 function emptyBoard(n: number): Board {
   return Array.from({ length: n }, () => Array<Player | null>(n).fill(null));
@@ -45,7 +45,7 @@ describe('Tactical：立即胜 / 关键封堵 / Pass', () => {
     const wins = getLegalMoves(st).filter((m) => m.row === 5 && (m.col === 0 || m.col === 4));
     expect(wins.length).toBeGreaterThan(0);
     for (let i = 0; i < 10; i++) {
-      const d = chooseAIMove(st, 'A', 'tactical', { seed: i });
+      const d = chooseTacticMove(st, 'A', 'tactical', { seed: i });
       expect(d.row === 5 && (d.col === 0 || d.col === 4), `tactical didn't win: (${d.row},${d.col})`).toBe(true);
     }
   });
@@ -61,7 +61,7 @@ describe('Tactical：立即胜 / 关键封堵 / Pass', () => {
     board[9][9] = 'C';
     board[8][8] = 'A';
     const st = stateWith(board, 18);
-    const d = chooseAIMove(st, 'A', 'tactical', { seed: 3 });
+    const d = chooseTacticMove(st, 'A', 'tactical', { seed: 3 });
     expect(d.row === 7 && d.col === 0, `tactical should block B's only winning point, got (${d.row},${d.col})`).toBe(true);
   });
 
@@ -80,7 +80,7 @@ describe('Tactical：立即胜 / 关键封堵 / Pass', () => {
     }
     const st = stateWith(board, 0);
     expect(getLegalMoves(st).length).toBe(0);
-    const d = chooseAIMove(st, 'A', 'tactical', { seed: 1 });
+    const d = chooseTacticMove(st, 'A', 'tactical', { seed: 1 });
     expect(d.pass).toBe(true);
   });
 });
@@ -97,7 +97,7 @@ describe('Selfish：自利而非见威胁就防', () => {
     board[9][8] = 'A';
     board[8][7] = 'B';
     const st = stateWith(board, 17);
-    const d = chooseAIMove(st, 'C', 'selfish', { seed: 5 });
+    const d = chooseTacticMove(st, 'C', 'selfish', { seed: 5 });
     expect(d.row === 5 && (d.col === 0 || d.col === 4), `selfish didn't take win: (${d.row},${d.col})`).toBe(true);
   });
 
@@ -116,7 +116,7 @@ describe('Selfish：自利而非见威胁就防', () => {
     board[1][0] = 'B';
     const st = stateWith(board, 14); // C 行动
     for (let i = 0; i < 6; i++) {
-      const d = chooseAIMove(st, 'C', 'selfish', { seed: i });
+      const d = chooseTacticMove(st, 'C', 'selfish', { seed: i });
       const ownSetup = (d.row === 4 && d.col === 4) || (d.row === 1 && d.col === 1);
       expect(ownSetup, `selfish should prioritize own R6 setup, got (${d.row},${d.col}) reason=${d.reason}`).toBe(true);
     }
@@ -136,8 +136,8 @@ describe('3-Ply / MaxN：短陷阱识别', () => {
     board[8][8] = 'C';
     board[7][7] = 'C';
     const st = stateWith(board, 18);
-    for (const level of ['3ply', 'maxn'] as AILevel[]) {
-      const d = chooseAIMove(st, 'A', level, { timeBudgetMs: 400, seed: 1 });
+    for (const level of ['3ply', 'maxn'] as TacticId[]) {
+      const d = chooseTacticMove(st, 'A', level, { timeBudgetMs: 400, seed: 1 });
       expect(d.row === 0 && d.col === 3, `${level} failed to block B's only winning point: (${d.row},${d.col})`).toBe(true);
     }
   });
@@ -157,8 +157,8 @@ describe('3-Ply / MaxN：短陷阱识别', () => {
     board[9][2] = 'B';
     board[8][8] = 'C';
     const st = stateWith(board, 21);
-    for (const level of ['3ply', 'maxn'] as AILevel[]) {
-      const d = chooseAIMove(st, 'A', level, { timeBudgetMs: 400, seed: 2 });
+    for (const level of ['3ply', 'maxn'] as TacticId[]) {
+      const d = chooseTacticMove(st, 'A', level, { timeBudgetMs: 400, seed: 2 });
       expect(d.row === 0 && d.col === 0, `${level} should take immediate win: (${d.row},${d.col})`).toBe(true);
     }
   });

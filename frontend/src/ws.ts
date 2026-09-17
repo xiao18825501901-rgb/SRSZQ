@@ -1,5 +1,6 @@
 /** SRSZQ 前端 WebSocket 客户端（后端 ws://127.0.0.1:8081/ws） */
 import { WS_URL, getToken } from './api';
+import { colorName } from './playerPresentation';
 import type { GameState, Player } from '../../shared/src/game/types';
 import type { QualificationView } from '../../shared/src/game/qualification';
 
@@ -84,6 +85,8 @@ export interface GameSnapshot {
   state: GameState;
   /** BAC 资格时间线（服务器权威，随每次 game.state 广播更新） */
   qualification?: QualificationView | null;
+  turnDeadlineAt?: number | null;
+  serverNow?: number;
 }
 
 /** 终局详情（来自服务器 MATCH_ENDED / game.end —— 胜负由服务器权威裁决） */
@@ -107,7 +110,10 @@ class GameLink {
   phase: GamePhase = 'idle';
   waiting = 0;
   timeoutMs = 60_000;
-  queueStartAt = 0;
+  queueId = '';
+  enqueuedAt = 0;
+  deadlineAt = 0;
+  private serverOffsetMs = 0;
   error = '';
   game: GameSnapshot | null = null;
   result = '';
@@ -122,7 +128,9 @@ class GameLink {
     sock.onOpen = () => {
       if (this.phase === 'game' && this.game?.gameId) {
         sock.send({ type: 'resume', gameId: this.game.gameId });
-      } else if (this.wantsQueue || this.phase === 'queue') {
+      } else if (this.phase === 'queue') {
+        sock.send({ type: 'queue.sync' });
+      } else if (this.wantsQueue) {
         sock.send({ type: 'queue.join' });
       }
     };
@@ -148,7 +156,10 @@ class GameLink {
     this.result = '';
     this.endInfo = null;
     this.seatStatus = null;
-    this.queueStartAt = 0;
+    this.queueId = '';
+    this.enqueuedAt = 0;
+    this.deadlineAt = 0;
+    this.serverOffsetMs = 0;
     this.wantsQueue = false;
     this.emit();
   }
@@ -189,9 +200,9 @@ class GameLink {
     } else if (iWon) {
       this.result = '你赢了';
     } else if (iLost) {
-      this.result = winnerSeats.length > 0 ? `玩家 ${winnerSeats[0]} 获胜` : 'AI 获胜';
+      this.result = winnerSeats.length > 0 ? `${colorName(winnerSeats[0])}棋获胜` : 'AI 获胜';
     } else {
-      this.result = msg.winner ? `玩家 ${msg.winner} 获胜` : '和棋';
+      this.result = msg.winner ? `${colorName(msg.winner as Player)}棋获胜` : '和棋';
     }
   }
 
@@ -202,11 +213,30 @@ class GameLink {
         this.phase = 'queue';
         this.waiting = msg.waiting ?? 0;
         this.timeoutMs = msg.timeoutMs ?? this.timeoutMs;
-        this.queueStartAt = msg.queueStartAt ?? Date.now();
+        this.queueId = String(msg.queueId ?? '');
+        this.enqueuedAt = Number(msg.enqueuedAt ?? msg.queueStartAt ?? Date.now());
+        this.deadlineAt = Number(msg.deadlineAt ?? this.enqueuedAt + this.timeoutMs);
+        this.serverOffsetMs = Number(msg.serverNow ?? Date.now()) - Date.now();
         this.error = '';
+        break;
+      case 'queue.state':
+        if (msg.state === 'QUEUED') {
+          this.phase = 'queue';
+          this.waiting = msg.waiting ?? this.waiting;
+          this.timeoutMs = msg.timeoutMs ?? this.timeoutMs;
+          this.queueId = String(msg.queueId ?? this.queueId);
+          this.enqueuedAt = Number(msg.enqueuedAt ?? this.enqueuedAt);
+          this.deadlineAt = Number(msg.deadlineAt ?? this.deadlineAt);
+          this.serverOffsetMs = Number(msg.serverNow ?? Date.now()) - Date.now();
+          this.error = '';
+        } else if (msg.state === 'NOT_QUEUED' && this.wantsQueue) {
+          getSocket().send({ type: 'queue.join' });
+        }
         break;
       case 'error':
         this.error = String(msg.error ?? 'unknown');
+        // Rolling-deploy compatibility: an older server does not know queue.sync.
+        if (this.error === 'unknown message type' && this.wantsQueue) getSocket().send({ type: 'queue.join' });
         break;
       case 'game.start': {
         this.wantsQueue = false;
@@ -218,18 +248,24 @@ class GameLink {
           mySeat: msg.yourSeat as Player,
           state: msg.state as GameState,
           qualification: msg.qualification as QualificationView | undefined,
+          turnDeadlineAt: msg.turnDeadlineAt ?? null,
+          serverNow: msg.serverNow ?? Date.now(),
         };
+        this.serverOffsetMs = Number(msg.serverNow ?? Date.now()) - Date.now();
         this.result = '';
         this.error = '';
         this.endInfo = null;
         break;
       }
       case 'game.state':
+        this.serverOffsetMs = Number(msg.serverNow ?? Date.now()) - Date.now();
         if (this.game)
           this.game = {
             ...this.game,
             state: msg.state as GameState,
             qualification: (msg.qualification as QualificationView | undefined) ?? this.game.qualification,
+            turnDeadlineAt: msg.turnDeadlineAt ?? null,
+            serverNow: msg.serverNow ?? Date.now(),
           };
         break;
       case 'game.end':
@@ -264,6 +300,11 @@ class GameLink {
     getSocket().send({ type: 'queue.leave' });
   }
 
+  syncQueue(): void {
+    if (!this.wantsQueue && this.phase !== 'queue') return;
+    getSocket().send({ type: 'queue.sync' });
+  }
+
   /** 主动离开 Online Match：服务器立即判负并终局（PLAYER_RESIGN） */
   resign(): void {
     getSocket().send({ type: 'PLAYER_RESIGN' });
@@ -273,9 +314,21 @@ class GameLink {
     getSocket().send({ type: 'move', row, col });
   }
 
+  turnRemainingMs(): number | null {
+    const deadline = this.game?.turnDeadlineAt;
+    return deadline ? Math.max(0, deadline - (Date.now() + this.serverOffsetMs)) : null;
+  }
+
+  leaveInvite(): void { getSocket().send({ type: 'invite.leave' }); }
+
   remainingMs(): number {
-    if (this.phase !== 'queue' || !this.queueStartAt) return this.timeoutMs;
-    return Math.max(0, this.queueStartAt + this.timeoutMs - Date.now());
+    if (this.phase !== 'queue' || !this.deadlineAt) return this.timeoutMs;
+    return Math.max(0, this.deadlineAt - (Date.now() + this.serverOffsetMs));
+  }
+
+  pastDeadlineMs(): number {
+    if (this.phase !== 'queue' || !this.deadlineAt) return 0;
+    return Math.max(0, Date.now() + this.serverOffsetMs - this.deadlineAt);
   }
 }
 

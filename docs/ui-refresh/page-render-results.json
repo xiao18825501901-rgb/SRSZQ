@@ -1,0 +1,402 @@
+[
+  {
+    "file": "01_home_desktop.png",
+    "title": "未登录首页",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 199,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "02_register_desktop.png",
+    "title": "注册",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 53,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "03_login_desktop.png",
+    "title": "登录",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 47,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "04_lobby_desktop.png",
+    "title": "游戏大厅",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 48,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "05_rules_desktop.png",
+    "title": "怎么玩",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 1192,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "06_ranking_desktop.png",
+    "title": "排行榜",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 719,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "07_friends_desktop.png",
+    "title": "好友与邀请",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 83,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "08_matching_desktop.png",
+    "title": "在线匹配等待",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 92,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "09_ai_setup_desktop.png",
+    "title": "人机对战设置",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 199,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "10_ai_game_desktop.png",
+    "title": "人机对战",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 239,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "11_ai_after_move_desktop.png",
+    "title": "人机对战·真人与AI轮流落子",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 240,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "12_ai_review_desktop.png",
+    "title": "人机对战·棋局复盘",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 350,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "13_local_setup_desktop.png",
+    "title": "离线模式设置",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 190,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "14_local_game_desktop.png",
+    "title": "离线模式·十三路",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 217,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "15_local_review_desktop.png",
+    "title": "离线模式·逐手复盘",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 322,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "16_board_settings_desktop.png",
+    "title": "棋盘设置",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 258,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "17_local_17_desktop.png",
+    "title": "离线模式·十七路",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 241,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "18_friend_game_desktop.png",
+    "title": "好友对弈·无落子倒计时",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 184,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "19_online_game_desktop.png",
+    "title": "在线对局·服务器30秒倒计时",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 198,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "20_online_review_desktop.png",
+    "title": "在线复盘·计时继续",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 299,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "21_leave_confirm_desktop.png",
+    "title": "退出对局确认",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 232,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "22_online_result_desktop.png",
+    "title": "在线对局结算",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 203,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "23_tutorial_desktop.png",
+    "title": "新手教学",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 389,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "24_tutorial_game_desktop.png",
+    "title": "教学练习棋盘",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 247,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "25_local_result_desktop.png",
+    "title": "白棋获胜·MaxN第27手实谱",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 252,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "01_home_mobile.png",
+    "title": "未登录首页",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 199,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "02_register_mobile.png",
+    "title": "注册",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 53,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "03_login_mobile.png",
+    "title": "登录",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 47,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "04_lobby_mobile.png",
+    "title": "游戏大厅",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 48,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "05_rules_mobile.png",
+    "title": "怎么玩",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 1192,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "06_ranking_mobile.png",
+    "title": "排行榜",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 719,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "07_friends_mobile.png",
+    "title": "好友与邀请",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 83,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "08_matching_mobile.png",
+    "title": "在线匹配等待",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 92,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "09_ai_setup_mobile.png",
+    "title": "人机对战设置",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 199,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "10_ai_game_mobile.png",
+    "title": "人机对战",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 239,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "11_ai_after_move_mobile.png",
+    "title": "人机对战·真人与AI轮流落子",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 240,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "12_ai_review_mobile.png",
+    "title": "人机对战·棋局复盘",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 350,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "13_local_setup_mobile.png",
+    "title": "离线模式设置",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 190,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "14_local_game_mobile.png",
+    "title": "离线模式·十三路",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 217,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "15_local_review_mobile.png",
+    "title": "离线模式·逐手复盘",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 322,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "16_board_settings_mobile.png",
+    "title": "棋盘设置",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 258,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "17_local_17_mobile.png",
+    "title": "离线模式·十七路",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 241,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "18_friend_game_mobile.png",
+    "title": "好友对弈·无落子倒计时",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 184,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "19_online_game_mobile.png",
+    "title": "在线对局·服务器30秒倒计时",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 198,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "20_online_review_mobile.png",
+    "title": "在线复盘·计时继续",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 299,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "21_leave_confirm_mobile.png",
+    "title": "退出对局确认",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 232,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "22_online_result_mobile.png",
+    "title": "在线对局结算",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 203,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "23_tutorial_mobile.png",
+    "title": "新手教学",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 389,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "24_tutorial_game_mobile.png",
+    "title": "教学练习棋盘",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 245,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  },
+  {
+    "file": "25_local_result_mobile.png",
+    "title": "白棋获胜·MaxN第27手实谱",
+    "errors": [],
+    "horizontalOverflow": false,
+    "textLength": 252,
+    "renderMethod": "actual compiled React UI; offline API/WS fixture transport; engine-replayed game states"
+  }
+]

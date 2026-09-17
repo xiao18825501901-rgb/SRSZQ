@@ -1,0 +1,6 @@
+Frontend: PASS (global TypeScript, noEmit, frontend/tsconfig.json)
+Backend: PASS (global TypeScript, noEmit, backend/tsconfig.json)
+Frontend preview bundle: PASS (56 modules)
+AI Worker preview bundle: PASS (20 modules)
+Backend/shared preview runtime: transpiled and used by real HTTP/WebSocket checks
+Standard npm run build / full npm test: NOT RUN in this Linux environment; bundled dependencies were Windows-oriented and package registry DNS was unavailable.

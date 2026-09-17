@@ -29,7 +29,7 @@ export interface Db {
   findSession(token: string): { token: string; userId: string; expiresAt: number } | null;
   deleteSession(token: string): void;
   setTutorialCompleted(userId: string, done: boolean): void;
-  ranking(limit: number): RankingRow[];
+  ranking(limit: number, offset?: number): RankingRow[];
   recordMatchResult(userId: string, delta: number): void;
   saveGame(input: { id: string; boardSize: number; mode: string; winner: string | null; movesJson: string; createdAt: number }): void;
   saveMatch(input: {
@@ -187,15 +187,15 @@ export function openDb(path: string): Db {
     setTutorialCompleted(userId, done) {
       raw.prepare('UPDATE users SET tutorial_completed = ? WHERE id = ?').run(done ? 1 : 0, userId);
     },
-    ranking(limit) {
+    ranking(limit, offset = 0) {
       const rows = raw
         .prepare(
           `SELECT u.id,u.username,u.avatar,u.online_status,u.rating,
                   COALESCE(r.wins,0) AS wins, COALESCE(r.games,0) AS games
            FROM users u LEFT JOIN ranking r ON r.user_id = u.id
-           ORDER BY u.rating DESC LIMIT ?`,
+           ORDER BY u.rating DESC, u.created_at ASC, u.id ASC LIMIT ? OFFSET ?`,
         )
-        .all(limit) as Array<Record<string, unknown>>;
+        .all(limit, offset) as Array<Record<string, unknown>>;
       return rows.map((x) => ({
         id: String(x.id),
         username: String(x.username),

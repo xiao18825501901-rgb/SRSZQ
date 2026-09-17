@@ -6,7 +6,7 @@ import { openDb } from './db.js';
 import { createApi } from './api.js';
 import { GameServer } from './ws/gameServer.js';
 
-const dataDir = join(process.cwd(), 'data');
+const dataDir = process.env.SRSZQ_DATA_DIR || join(process.cwd(), 'data');
 mkdirSync(dataDir, { recursive: true });
 const db = openDb(join(dataDir, 'srszq.sqlite'));
 
@@ -17,6 +17,7 @@ const gameServer = new GameServer(db, {
   disconnectSkipMs: Number(process.env.SRSZQ_DISCONNECT_SKIP_MS ?? 30_000),
   inviteGatherMs: Number(process.env.SRSZQ_INVITE_GATHER_MS ?? 30_000),
   forfeitGraceMs: Number(process.env.SRSZQ_FORFEIT_GRACE_MS ?? 10_000),
+  turnTimeoutMs: Number(process.env.SRSZQ_TURN_TIMEOUT_MS ?? 30_000),
 });
 const wsPort = Number(process.env.SRSZQ_WS_PORT ?? 8081);
 const wsHttp = createServer();

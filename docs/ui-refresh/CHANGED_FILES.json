@@ -1,0 +1,90 @@
+{
+  "note": "仅记录相对原包内容发生改变的已有文件；新增源码、预览产物、docs/ui-refresh和ui-demos另列在交付目录。第三方依赖以原zip字节重新打包，非当前平台安装尝试产物。",
+  "changedExistingFiles": [
+    {
+      "path": "backend/src/api.ts",
+      "originalSHA256": "4e230b847e0e2f5749c91b2133485aef1b38b82218711478b95ce2f542ce3378",
+      "updatedSHA256": "f0118b4c0ffdb3018161e3802a4f88ac8a1d33510dee88bbbe03b14b71b80f68"
+    },
+    {
+      "path": "backend/src/db.ts",
+      "originalSHA256": "ac6225df1659d454e8b613785492dda1778e0b974ae7b9a4b98b52d45590e8f0",
+      "updatedSHA256": "acea0fbec762f7a27bc96787ad1c031ba088b74dd95688566fb41de37b6ab20a"
+    },
+    {
+      "path": "backend/src/server.ts",
+      "originalSHA256": "73b3bb7bc66d77b7ba65fba2045ee7b01c6f439ff41e0470d2f1d34588937e51",
+      "updatedSHA256": "00c5ad2de7d3ea4c9efc27d3e6b3959831fbe0f297ec0ad90509fe4d3c1879a1"
+    },
+    {
+      "path": "backend/src/ws/gameServer.ts",
+      "originalSHA256": "fbcc597d8429664428adb0fc18b054de4d9d9d335690f3ecd90df9251f0c7635",
+      "updatedSHA256": "fe66e7029f5376a30a7c224ece3cd2a75768f99ea8be9dbab82ae3bc4241e5c9"
+    },
+    {
+      "path": "frontend/dist/index.html",
+      "originalSHA256": "62fcbab092098777fc6fa85edf43aa4cc01df8b78d166b2b9151afd5e1cdbfbc",
+      "updatedSHA256": "78787deb33b257be1db6c7de5d383b1d74cf40d38027a85ebd67f81247bd26e1"
+    },
+    {
+      "path": "frontend/index.html",
+      "originalSHA256": "6904f62f23806b64724f581f89628af58316b64106d6579695c44eaeb5d02a24",
+      "updatedSHA256": "cc2068e73d126275cf5686ed4b848b1c5c68558e0a2593ce48388762f733df4b"
+    },
+    {
+      "path": "frontend/src/api.ts",
+      "originalSHA256": "919898843c1d58557c580f8a6dc05f3bbe6140352a391253a3a05e7623069d17",
+      "updatedSHA256": "977e21537b2de3a74dcb8bdd7ff4f3a0ee59776fee75b061d3d0104717852837"
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "originalSHA256": "0b90cd8d35b0da13e73451b334ecc6417ba0a1dc61e52ab4ae532275f72e9566",
+      "updatedSHA256": "3c718d59bf163897e06484aad41ee8f615c04d4a18aeae4eb914ff828dc487dd"
+    },
+    {
+      "path": "frontend/src/components/Board.tsx",
+      "originalSHA256": "4384bf0c45b4d466e270ec360af5f713b7f6046f49710a4051e1f0cec6ad64ec",
+      "updatedSHA256": "5616155cb7f02540a4363c3d1b8548e14b721eba9ff8eaa790dca3357f008a50"
+    },
+    {
+      "path": "frontend/src/components/HowToPlay.tsx",
+      "originalSHA256": "cabc62234fe057c9fde8b42b94af43a694661c04efccbde74f70744e211a4e04",
+      "updatedSHA256": "3bcff8a7bb28ccc32e0c7aea10910f8aa1ba23992684889572e15294f3d1f316"
+    },
+    {
+      "path": "frontend/src/hooks/useAIController.ts",
+      "originalSHA256": "112ecf9b99adafbbb9b0ee7526a6a4915101962253bfa6981b6814c1284afd32",
+      "updatedSHA256": "554ebb8051d38644a29278e7d53dd96ba8fae5c3107e1adb49f5ca0d3154b693"
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "originalSHA256": "f86f9d9a6743df702e95fbe659333294496ceceff640e6fafa1ecb48b60a5a46",
+      "updatedSHA256": "c540b8fe1635363e6a647b1f1ae2e6aea401d398cc017304caafe22d6dae240a"
+    },
+    {
+      "path": "frontend/src/platform/OnlinePage.tsx",
+      "originalSHA256": "0f311ac31423f00f8ceea20e1a79a81339bc15819cf282be3bde89c558b9c123",
+      "updatedSHA256": "a95b21b136c19cae694d12b761d51369feba6f2d6611ed7588ba48690ac1d7f3"
+    },
+    {
+      "path": "frontend/src/platform/Platform.tsx",
+      "originalSHA256": "cbd95aad517a04d2f38ed9e82b6c19a09cc9499b3cede9d99eb1188032b97d21",
+      "updatedSHA256": "0cfae679f52645e53b8212a1c05bbfa28ab2de12008076ab027227f3b5cee45b"
+    },
+    {
+      "path": "frontend/src/playerPresentation.ts",
+      "originalSHA256": "4959ec007abf2965a4b6b056b8f144ad613db4a2f2ccf101081516d7fb15e2da",
+      "updatedSHA256": "ea802647eaf5f6edbabc1c4c2d3d6d1386d6fb8ad258169a4f3cd683e32b60ef"
+    },
+    {
+      "path": "frontend/src/ui.tsx",
+      "originalSHA256": "e8608b52a4d112e297691c81603ad42f982d0bf87488ce74c1e15997b582aa2b",
+      "updatedSHA256": "1ba4d5e7c6e9bad1a13d43e2971106022b7eb15b35d8e66f7031dba6a30ca709"
+    },
+    {
+      "path": "frontend/src/ws.ts",
+      "originalSHA256": "27c7cd78ba87d455f4253ed3c5118e34c8ba62a6ca81110b0ac804d7d340a93e",
+      "updatedSHA256": "69621927dfb6ceebf8cf92f47b18df8493b43499400c98ae5070a3a1f8981bfd"
+    }
+  ]
+}

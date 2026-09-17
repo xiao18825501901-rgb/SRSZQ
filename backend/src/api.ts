@@ -168,8 +168,12 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           return send(res, 200, { user: { ...toPublic(updated), email: updated.email } });
         }
         case 'GET /api/ranking': {
-          const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') ?? 20)));
-          return send(res, 200, { ranking: db.ranking(limit) });
+          const l = Number(url.searchParams.get('limit') ?? 50);
+          const o = Number(url.searchParams.get('offset') ?? 0);
+          const limit = Number.isFinite(l) ? Math.min(100, Math.max(1, Math.floor(l))) : 50;
+          const offset = Number.isFinite(o) ? Math.max(0, Math.floor(o)) : 0;
+          const total = Number((db.raw.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n);
+          return send(res, 200, { ranking: db.ranking(limit, offset), total, offset, limit });
         }
         case 'GET /api/invitations': {
           const user = ctx.authUser(req);

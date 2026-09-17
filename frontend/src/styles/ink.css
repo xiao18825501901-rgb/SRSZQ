@@ -1,0 +1,164 @@
+/* 三人四子棋 · 墨山听棋
+ * Presentation-only enhancement. No rule, account, AI, network or timer changes.
+ * Background illustrations are local SVG assets; no external service or fonts.
+ */
+html { background: #f5efe2; }
+body {
+  background: #f5efe2;
+  min-height: 100vh;
+  min-height: 100svh;
+  isolation: isolate;
+}
+/* Both decorative layers stay BEHIND the document and never receive input. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: url('/ink/landscape-wide.svg') center bottom / cover no-repeat;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url('/ink/paper-fiber.svg') repeat;
+  opacity: .24;
+}
+/* Quiet paper surfaces retain icon and text contrast against the scenery. */
+.site-nav {
+  background: linear-gradient(90deg, rgba(250,246,235,.52), rgba(255,251,241,.92) 25%, rgba(255,251,241,.92) 76%, rgba(250,246,235,.52));
+}
+.panel, .ds-card, .mode-card, .compact-seat, .victory-track {
+  background-color: rgba(255,250,240,.97);
+}
+.compact-seat.active { background-color: #f4e7cb; }
+.modal { background-color: #fffaf0; }
+.welcome-copy {
+  position: relative;
+  background: radial-gradient(ellipse at 45% 48%, rgba(251,246,234,.92), rgba(251,246,234,.52) 64%, transparent 82%);
+}
+/* The unboxed long rules page needs a calm reading surface, too. */
+.howto {
+  background: rgba(255,250,240,.94);
+  padding: clamp(20px, 3vw, 38px);
+  border: 1px solid rgba(204,184,150,.72);
+  border-radius: 21px;
+  box-shadow: 0 14px 38px rgba(72,73,55,.05);
+}
+.game-topline, .side-title {
+  text-shadow: 0 1px 8px #fffaf0, 0 0 14px #fffaf0;
+}
+.position-hints {
+  background: rgba(255,250,240,.93);
+  border-radius: 10px;
+  padding: 9px 11px;
+}
+.board-note {
+  background: rgba(255,250,240,.92);
+  border-radius: 8px;
+  padding: 7px 9px;
+  margin-top: 16px;
+}
+.turn-clock {
+  background: rgba(255,250,240,.90);
+  border-radius: 0 9px 9px 0;
+  padding-block: 5px;
+  padding-right: 8px;
+}
+/* Keep existing desktop board-left / status-right layout unchanged. */
+@media (max-width: 900px) {
+  body::before {
+    background-image: url('/ink/landscape-portrait.svg');
+    background-position: center bottom;
+    background-size: cover;
+  }
+  .site-page.immersive {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-bottom: max(26px, env(safe-area-inset-bottom));
+  }
+  /* Flatten the VISUAL sidebar only. React state & event handlers stay intact.
+   * Order: title, seats, timeline, board, hints, actions, replay, notices.
+   * There is exactly ONE board and ONE set of controls for all breakpoints.
+   */
+  .match-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    max-width: 640px;
+    margin-inline: auto;
+  }
+  .match-sidebar { display: contents; }
+  .match-sidebar > .side-title { order: 0; }
+  .match-sidebar > .seat-strip { order: 1; }
+  .match-sidebar > .victory-track { order: 2; }
+  .match-layout > .match-board-column {
+    order: 3;
+    width: 100%;
+    max-width: 640px;
+    min-width: 0;
+    align-self: center;
+    margin: 3px auto 12px;
+    padding: 0;
+  }
+  .match-board-column .go-board-wrap {
+    width: 100%;
+    margin-inline: auto;
+    max-width: 100%;
+  }
+  .match-sidebar > .position-hints { order: 4; }
+  .match-sidebar > .game-actions,
+  .match-sidebar > .online-controls,
+  .match-sidebar > .result-card { order: 5; }
+  .match-sidebar > .replay-control { order: 6; }
+  .match-sidebar > .notice,
+  .match-sidebar > .error-text,
+  .match-sidebar > [role='alert'] { order: 7; }
+  .match-sidebar > .coach-note,
+  .match-sidebar > .subtle { order: 8; }
+  .match-sidebar > .online-controls {
+    margin: 0;
+    padding-top: 0;
+    gap: 12px;
+  }
+  .match-sidebar > .replay-control { width: 100%; }
+  .replay-control > .btn { background: #fffaf0; }
+  .replay-tools { background: rgba(255,250,240,.98); }
+  .position-hints {
+    margin: 0;
+    padding: 11px 13px;
+    border: 1px solid rgba(218,198,165,.8);
+    flex-wrap: wrap;
+    min-height: 42px;
+  }
+  .game-shell.online-game { padding-top: 16px; }
+  .side-title { min-height: 28px; }
+}
+@media (max-width: 600px) {
+  .match-layout { gap: 10px; }
+  .match-layout > .match-board-column { margin-top: 2px; margin-bottom: 12px; }
+  .howto { padding: 20px 16px; border-radius: 16px; }
+  .match-sidebar .victory-track { padding: 11px 13px; }
+  .match-sidebar .seat-strip { gap: 8px; }
+  .match-sidebar .compact-seat { min-height: 55px; padding: 8px 9px; }
+  .match-sidebar .replay-control > .btn { min-height: 42px; }
+  .match-sidebar .online-controls > .btn,
+  .match-sidebar .game-actions > .btn { min-height: 44px; }
+  .replay-tools .icon-btn { min-width: 40px; min-height: 40px; }
+  .replay-tools .btn:last-child { min-height: 40px; }
+}
+@media (max-width: 360px) {
+  .turn-clock { min-width: 116px; padding-left: 10px; }
+  .turn-clock b { font-size: 27px; }
+  .match-sidebar .track-foot { flex-wrap: wrap; gap: 3px 9px; }
+  .position-hints { gap: 11px; padding-inline: 10px; }
+}
+@media print {
+  body::before, body::after { display: none; }
+  body, html { background: white; }
+}

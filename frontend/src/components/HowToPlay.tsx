@@ -8,6 +8,7 @@ import type { Player } from '../../../shared/src/game/types';
 import { ELIGIBLE_ORDER, ELIGIBLE_START_ROUND, PLAYER_COLORS } from '../../../shared/src/game/types';
 import { getEligiblePlayer } from '../../../shared/src/game/eligibility';
 import { Btn } from '../ui';
+import { colorName } from '../playerPresentation';
 
 /* ---------------- 引擎同源时间线 ---------------- */
 
@@ -41,7 +42,7 @@ export function VictoryTimelineTable({ from = 1, to = 14 }: { from?: number; to?
         {rows.map((r) =>
           r.player ? (
             <span key={r.round} className={`vline-chip ${r.isStart ? 'start' : ''}`} style={{ color: PLAYER_COLORS[r.player] }}>
-              {r.player}
+              {colorName(r.player)}
             </span>
           ) : (
             <span key={r.round} className="vline-chip none">无</span>
@@ -59,7 +60,7 @@ const QUICK_ITEMS: Array<{ t: string; d: ReactNode }> = [
     t: '三名玩家',
     d: (
       <>
-        A（珊瑚）· B（薄荷）· C（天空蓝），按 A → B → C 轮流各落一子；一个 Round = 三人各下一手。
+        红、绿、白，按 红 → 绿 → 白 轮流各落一子；一个 Round = 三人各下一手。
       </>
     ),
   },
@@ -87,8 +88,8 @@ const QUICK_ITEMS: Array<{ t: string; d: ReactNode }> = [
     t: '胜权怎么给',
     d: (
       <>
-        Round 1–5 无人拥有胜权；Round {ELIGIBLE_START_ROUND} 起按 {ELIGIBLE_ORDER.join(' → ')} 循环：
-        R{ELIGIBLE_START_ROUND}=C、R{ELIGIBLE_START_ROUND + 1}=B、R{ELIGIBLE_START_ROUND + 2}=A，之后一直循环。
+        Round 1–5 无人拥有胜权；Round {ELIGIBLE_START_ROUND} 起按 {ELIGIBLE_ORDER.map(colorName).join(' → ')} 循环：
+        第 {ELIGIBLE_START_ROUND} 回合白棋、第 {ELIGIBLE_START_ROUND + 1} 回合绿棋、第 {ELIGIBLE_START_ROUND + 2} 回合红棋，之后一直循环。
       </>
     ),
   },
@@ -116,7 +117,7 @@ export function RulesQuickView() {
 export function VictoryRightSection() {
   return (
     <section className="howto-block" aria-labelledby="vr-heading">
-      <h3 id="vr-heading">什么是「胜权」？SRSZQ 最关键的一条规则</h3>
+      <h3 id="vr-heading">什么是「胜权」？三人四子棋最关键的一条规则</h3>
       <ol className="howto-qa">
         <li>
           <b>① 什么是胜权？</b>
@@ -128,8 +129,8 @@ export function VictoryRightSection() {
         <li>
           <b>② 谁拥有胜权？</b>
           <p>
-            Round 1–5：无人拥有。Round 6 起按 C → B → A 循环，一人一轮：R6 是 C、R7 是 B、R8 是 A、
-            R9 又回到 C……（{ELIGIBLE_ORDER.join(' → ')} 循环）。
+            Round 1–5：无人拥有。Round 6 起按 白 → 绿 → 红 循环，一人一轮：第 6 回合白棋、第 7 回合绿棋、第 8 回合红棋、
+            第 9 回合又回到白棋……（{ELIGIBLE_ORDER.map(colorName).join(' → ')} 循环）。
           </p>
         </li>
         <li>
@@ -161,13 +162,13 @@ export function VictoryRightSection() {
         <li>
           <b>⑦ 对局中怎么知道当前谁有胜权？</b>
           <p>
-            看对局上方的状态栏“本回合胜权”：显示 C / B / A 或“暂无”；右侧 BAC 时间线面板会标出
+            看对局上方的状态栏“本回合胜权”：显示白 / 绿 / 红 或“暂无”；胜权时间线面板会标出
             当前轮与未来 8 轮的胜权安排。轮到谁、谁有胜权是两条独立信息，分开显示。
           </p>
         </li>
       </ol>
       <div className="howto-vline-wrap">
-        <p className="howto-note">胜权时间线（Round 1–14，{ELIGIBLE_START_ROUND} 起进入循环；R 后面的彩色字母 = 该轮胜权玩家）：</p>
+        <p className="howto-note">胜权时间线（Round 1–14，{ELIGIBLE_START_ROUND} 起进入循环；回合数下面的颜色 = 该轮胜权玩家）：</p>
         <VictoryTimelineTable from={1} to={14} />
       </div>
     </section>
@@ -201,28 +202,12 @@ export function HowToPlayContent({ onStartTutorial, onBack }: { onStartTutorial?
 
       <VictoryRightSection />
 
-      <section className="howto-block" aria-labelledby="detail-heading">
-        <h2 id="detail-heading">完整规则</h2>
-        <ol className="howto-full">
-          <li>玩家：A（珊瑚）、B（薄荷）、C（天空蓝），行动顺序固定 A → B → C → A → …</li>
-          <li>一个 Round = A、B、C 各行动一次。</li>
-          <li>Round 1–5：无人拥有胜权；任何会形成自己 ≥4 连的落子都非法（禁手）。</li>
-          <li>Round 6 起进入胜权循环；只有「本回合行动者 == 胜权玩家」才可能凭本手获胜。</li>
-          <li>胜权玩家落子后，若包含新子的线达到 ≥4（横、竖、＼、／ 都算），立即获胜。</li>
-          <li>非胜权玩家不能形成自己的 ≥4 连；这是禁手，点击会被拒绝。</li>
-          <li>不存在“提前储存四连”；胜利只能由当前合法落子即时触发。</li>
-          <li>轮到某玩家但没有任何合法落子 → 自动 Pass（回合照常消耗）。</li>
-          <li>棋盘填满且无人获胜 → 和棋。</li>
-          <li>棋盘可选 13×13 与 17×17；在线对局计分只发生在 Online Match。</li>
-        </ol>
-      </section>
-
       {onStartTutorial && (
         <div className="howto-cta">
           <Btn variant="primary" size="big" onClick={onStartTutorial}>
             开始新手教程（1 真人 + 2 AI 实战教学）
           </Btn>
-          <p className="muted">三局教学：你在 A 座执红先行，两名 AI 对手随机搭配，边打边学。</p>
+          <p className="muted">一盘教学：真人执棋颜色随机，两名 AI 对手随机搭配，边打边学。</p>
         </div>
       )}
     </div>

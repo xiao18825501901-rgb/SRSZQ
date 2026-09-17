@@ -170,6 +170,7 @@ async function main(): Promise<void> {
     aiTimeBudgetMs: 60,
     inviteGatherMs: 800,
     forfeitGraceMs: 350, // 判负宽限（生产默认 10s）
+    queueSweepMs: 25,
   });
   gs.attach(wsHttp, '/ws');
   await new Promise<void>((r) => wsHttp.listen(0, '127.0.0.1', r));
@@ -189,7 +190,10 @@ async function main(): Promise<void> {
   await api('POST', '/api/tutorial/complete', {}, a.token);
   await api('POST', '/api/tutorial/complete', {}, b.token);
 
-  const w9Users = await Promise.all(['W9Solo', 'W9DuoA', 'W9DuoB', 'W9TriA', 'W9TriB', 'W9TriC'].map(registerUser));
+  const w9Users = await Promise.all([
+    'W9Solo', 'W9DuoA', 'W9DuoB', 'W9TriA', 'W9TriB', 'W9TriC',
+    'W10Recover', 'W10Cancel', 'W10Disconnect', 'W10ReconnectRace',
+  ].map(registerUser));
   await Promise.all(w9Users.map((user) => api('POST', '/api/tutorial/complete', {}, user.token)));
 
   // W9：用 250ms 可注入 timeout 验证服务器权威的 AI 补位与开局 payload（生产默认仍为 60s）
@@ -220,6 +224,8 @@ async function main(): Promise<void> {
     const clients = await Promise.all([connect(w9Users[1].token), connect(w9Users[2].token)]);
     try {
       clients.forEach((client) => send(client, { type: 'queue.join' }));
+      const joined = await Promise.all(clients.map((client) => waitFor(client, 'queue.joined', 1000)));
+      assert.equal(joined[0].deadlineAt, joined[1].deadlineAt, 'all humans in one batch must see the oldest server deadline');
       const starts = await Promise.all(clients.map((client) => waitFor(client, 'game.start', 3000)));
       assert.equal(starts[0].gameId, starts[1].gameId);
       assert.deepEqual(starts[0].seats, starts[1].seats);
@@ -234,7 +240,7 @@ async function main(): Promise<void> {
   });
 
   await check('W9 3H → immediate normal match without AI', async () => {
-    const clients = await Promise.all(w9Users.slice(3).map((user) => connect(user.token)));
+    const clients = await Promise.all(w9Users.slice(3, 6).map((user) => connect(user.token)));
     try {
       const startedAt = Date.now();
       clients.forEach((client) => send(client, { type: 'queue.join' }));
@@ -245,6 +251,95 @@ async function main(): Promise<void> {
       assert.deepEqual(new Set(starts.map((start) => start.yourSeat)), new Set(['A', 'B', 'C']));
     } finally {
       clients.forEach(close);
+      await sleep(450);
+    }
+  });
+
+  await check('W10 dropped game.start → queue.sync MATCHED replays authoritative room', async () => {
+    const client = await connect(w9Users[6].token);
+    try {
+      send(client, { type: 'queue.join' });
+      await waitFor(client, 'queue.joined');
+      const dropped = await waitFor(client, 'game.start', 3000);
+      send(client, { type: 'queue.sync' });
+      const state = await waitFor(client, 'queue.state', 3000);
+      const replay = await waitFor(client, 'game.start', 3000);
+      assert.equal(state.state, 'MATCHED');
+      assert.equal(state.gameId, dropped.gameId);
+      assert.equal(replay.gameId, dropped.gameId);
+      // The replay carries the latest authoritative room snapshot. An AI seat may
+      // already have moved between the missed game.start and queue.sync, so the
+      // replay must be at-or-after the original start snapshot, never behind it.
+      assert.equal(replay.state.boardSize, dropped.state.boardSize);
+      assert.ok(
+        replay.state.moves.length >= dropped.state.moves.length,
+        'replayed room must not be behind the original start snapshot',
+      );
+      assert.deepEqual(replay.seats, dropped.seats);
+    } finally {
+      close(client);
+      await sleep(450);
+    }
+  });
+
+  await check('W10 cancel before deadline → NOT_QUEUED and no ghost room', async () => {
+    const client = await connect(w9Users[7].token);
+    try {
+      send(client, { type: 'queue.join' });
+      await waitFor(client, 'queue.joined');
+      send(client, { type: 'queue.leave' });
+      await waitFor(client, 'queue.left');
+      await sleep(350);
+      assert.equal(client.msgs.some((message) => message.type === 'game.start'), false);
+      send(client, { type: 'queue.sync' });
+      const state = await waitFor(client, 'queue.state');
+      assert.equal(state.state, 'NOT_QUEUED');
+    } finally {
+      close(client);
+    }
+  });
+
+  await check('W10 disconnect before deadline → no ghost user or room', async () => {
+    const first = await connect(w9Users[8].token);
+    send(first, { type: 'queue.join' });
+    await waitFor(first, 'queue.joined');
+    close(first);
+    await sleep(350);
+    const reconnected = await connect(w9Users[8].token);
+    try {
+      send(reconnected, { type: 'queue.sync' });
+      const state = await waitFor(reconnected, 'queue.state');
+      assert.equal(state.state, 'NOT_QUEUED');
+      assert.equal(reconnected.msgs.some((message) => message.type === 'game.start'), false);
+    } finally {
+      close(reconnected);
+    }
+  });
+
+  await check('W10 stale socket close cannot evict a newer queued connection', async () => {
+    const oldConnection = await connect(w9Users[9].token);
+    let newConnection: TestClient | null = null;
+    try {
+      send(oldConnection, { type: 'queue.join' });
+      const firstJoin = await waitFor(oldConnection, 'queue.joined');
+      newConnection = await connect(w9Users[9].token);
+      send(newConnection, { type: 'queue.join' });
+      const resumedJoin = await waitFor(newConnection, 'queue.joined');
+      assert.equal(resumedJoin.queueId, firstJoin.queueId);
+      assert.equal(resumedJoin.deadlineAt, firstJoin.deadlineAt, 'reconnect must keep the original deadline');
+      const oldClosed = new Promise<void>((resolve) => oldConnection.ws.once('close', () => resolve()));
+      oldConnection.ws.terminate();
+      await oldClosed;
+      await sleep(50);
+      send(newConnection, { type: 'queue.sync' });
+      const state = await waitFor(newConnection, 'queue.state');
+      assert.equal(state.state, 'QUEUED');
+      assert.equal(state.queueId, firstJoin.queueId);
+      const start = await waitFor(newConnection, 'game.start', 3000);
+      assert.equal(Object.values(start.seats).filter((seat: any) => seat.kind === 'human').length, 1);
+    } finally {
+      close(oldConnection);
+      if (newConnection) close(newConnection);
       await sleep(450);
     }
   });

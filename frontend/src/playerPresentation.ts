@@ -1,8 +1,5 @@
 import type { Player } from '../../shared/src/game/types';
-
-/** W7 visual names; game identity remains the canonical A/B/C labels. */
-export const PLAYER_COLOR_NAMES: Record<Player, string> = {
-  A: '珊瑚色',
-  B: '薄荷色',
-  C: '天空蓝',
-};
+/** Display-only mapping. Canonical engine and network seat ids stay unchanged. */
+export const PLAYER_COLOR_NAMES: Record<Player, string> = { A: '红', B: '绿', C: '白' };
+export const colorName = (p: Player | null | undefined): string => p ? PLAYER_COLOR_NAMES[p] : '无';
+export const playerName = (p: Player): string => `${PLAYER_COLOR_NAMES[p]}棋`;

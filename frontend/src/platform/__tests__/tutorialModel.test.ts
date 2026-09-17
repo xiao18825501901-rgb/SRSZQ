@@ -46,8 +46,8 @@ describe('AI difficulty 初始化随机（T7/T8/T9/T10）', () => {
       const levels = PLAYERS.filter((p) => seats[p].kind === 'ai').map((p) => seats[p].level!);
       expect(levels).toHaveLength(2);
       levels.forEach((l) => {
-        expect(['random', 'tactical', 'selfish']).toContain(l);
-        expect(['3ply', 'maxn']).not.toContain(l);
+        expect([1, 2, 3]).toContain(l);
+        expect([4, 5]).not.toContain(l);
       });
       seen.add(levels.join('|'));
       if (levels[0] === levels[1]) anyEqual = true;
@@ -125,8 +125,8 @@ describe('教程身份行：按 A/B/C 真实顺序、不把用户挪第一行', 
   });
 
   it('非法座位组合被拒绝', () => {
-    expect(isValidTutorialSeats({ A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'ai', level: 'random' } })).toBe(false);
-    expect(isValidTutorialSeats({ A: { kind: 'human' }, B: { kind: 'ai', level: 'random' }, C: { kind: 'ai', level: 'random' } })).toBe(true);
-    expect(isValidTutorialSeats({ A: { kind: 'ai', level: 'random' }, B: { kind: 'ai', level: 'random' }, C: { kind: 'ai', level: 'random' } })).toBe(false);
+    expect(isValidTutorialSeats({ A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'ai', level: 1 } })).toBe(false);
+    expect(isValidTutorialSeats({ A: { kind: 'human' }, B: { kind: 'ai', level: 1 }, C: { kind: 'ai', level: 1 } })).toBe(true);
+    expect(isValidTutorialSeats({ A: { kind: 'ai', level: 1 }, B: { kind: 'ai', level: 1 }, C: { kind: 'ai', level: 1 } })).toBe(false);
   });
 });

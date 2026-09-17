@@ -3,7 +3,7 @@
  * 决策耗时 / 节点数 / 迭代深度 / TT 命中 / 候选数，并验证 100% 合法。
  *
  * 用法：
- *   npm run ai:benchmark                # 默认：每档 120 局面（11+13 混合）
+ *   npm run ai:benchmark                # 默认：每种计策 120 局面（13+17 混合）
  *   npm run ai:benchmark -- --states 40 # 快速冒烟
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -11,9 +11,9 @@ import { join } from 'node:path';
 import type { BoardSize, GameState } from '../shared/src/game/types';
 import { createInitialState, applyMove } from '../shared/src/game/rules';
 import { currentPlayerOf, getLegalMoves } from '../shared/src/game/legalMoves';
-import { chooseAIMove } from '../shared/src/ai/chooseAIMove';
-import { AI_LEVELS, AI_LEVEL_LABELS } from '../shared/src/ai/types';
-import { OFFLINE_LEVEL_CONFIG } from '../shared/src/ai/config/defaultWeights';
+import { chooseTacticMove } from '../shared/src/ai/chooseAIMove';
+import { TACTIC_IDS, TACTIC_LABELS } from '../shared/src/ai/types';
+import { OFFLINE_TACTIC_CONFIG } from '../shared/src/ai/config/defaultWeights';
 import { mulberry32 } from '../shared/src/ai/rng';
 
 /** 与测试 helpers 等价的确定性随机中盘生成器（不依赖测试目录） */
@@ -59,16 +59,16 @@ function main(): void {
     origError(...a);
   };
 
-  console.log(`[benchmark] 每档 ${states} 个随机局面（13/17 交替），离线预算见 OFFLINE_LEVEL_CONFIG`);
-  console.log(`            3ply: ${OFFLINE_LEVEL_CONFIG['3ply'].timeBudgetMs}ms k${OFFLINE_LEVEL_CONFIG['3ply'].candidateK} · maxn: ${OFFLINE_LEVEL_CONFIG.maxn.timeBudgetMs}ms k${OFFLINE_LEVEL_CONFIG.maxn.candidateK}`);
+  console.log(`[benchmark] 每种计策 ${states} 个随机局面（13/17 交替），离线预算见 OFFLINE_TACTIC_CONFIG`);
+  console.log(`            3ply: ${OFFLINE_TACTIC_CONFIG['3ply'].timeBudgetMs}ms k${OFFLINE_TACTIC_CONFIG['3ply'].candidateK} · maxn: ${OFFLINE_TACTIC_CONFIG.maxn.timeBudgetMs}ms k${OFFLINE_TACTIC_CONFIG.maxn.candidateK}`);
   console.log('');
 
   const out: Array<Record<string, number | string | boolean>> = [];
   let illegalTotal = 0;
   let passTotal = 0;
 
-  for (const level of AI_LEVELS) {
-    const cfg = OFFLINE_LEVEL_CONFIG[level];
+  for (const tactic of TACTIC_IDS) {
+    const cfg = OFFLINE_TACTIC_CONFIG[tactic];
     const times: number[] = [];
     const nodes: number[] = [];
     const depths: number[] = [];
@@ -83,7 +83,7 @@ function main(): void {
       if (s.status !== 'playing') continue;
       const player = currentPlayerOf(s);
       const t0 = Date.now();
-      const d = chooseAIMove(s, player, level, {
+      const d = chooseTacticMove(s, player, tactic, {
         seed: 1000 + i,
         timeBudgetMs: cfg.timeBudgetMs,
         maxDepth: cfg.maxDepth,
@@ -109,19 +109,21 @@ function main(): void {
     const avgMs = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0;
     const p50Ms = pct(times, 50);
     const p95Ms = pct(times, 95);
+    const p99Ms = pct(times, 99);
     const maxMs = times.length ? Math.max(...times) : 0;
     const avgNodes = nodes.length ? nodes.reduce((a, b) => a + b, 0) / nodes.length : 0;
     const avgDepth = depths.length ? depths.reduce((a, b) => a + b, 0) / depths.length : 0;
     const avgCandidates = cands.length ? cands.reduce((a, b) => a + b, 0) / cands.length : 0;
     const row = {
-      level,
-      label: AI_LEVEL_LABELS[level],
+      tactic,
+      label: TACTIC_LABELS[tactic],
       budgetMs: cfg.timeBudgetMs,
       states,
       wallMs,
       avgMs,
       p50Ms,
       p95Ms,
+      p99Ms,
       maxMs,
       avgNodes,
       avgDepth,
@@ -133,7 +135,7 @@ function main(): void {
     };
     out.push(row);
     console.log(
-      `[benchmark] ${AI_LEVEL_LABELS[level].padEnd(9)} avg=${avgMs.toFixed(1)}ms  p50=${p50Ms}ms  p95=${p95Ms}ms  max=${maxMs}ms  ` +
+      `[benchmark] ${TACTIC_LABELS[tactic].padEnd(9)} avg=${avgMs.toFixed(1)}ms  p50=${p50Ms}ms  p95=${p95Ms}ms  p99=${p99Ms}ms  max=${maxMs}ms  ` +
         `nodes=${avgNodes.toFixed(0)}  depth=${avgDepth.toFixed(2)}  ttHits=${row.ttHits}  cand=${avgCandidates.toFixed(0)}  ` +
         `pass=${passes}  ILLEGAL=${illegal}`,
     );

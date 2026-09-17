@@ -1,908 +1,146 @@
-/** SRSZQ.com 平台外壳：Landing / Auth / Lobby / 排行 / 好友 / 教学 / 各对局模式入口 */
+/** Incremental product shell; uses the existing auth, WebSocket, tutorial and AI services. */
 import { useCallback, useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import type { Player } from '../../../shared/src/game/types';
+import type { ReactNode } from 'react';
+import type { BoardSize } from '../../../shared/src/game/types';
 import { PLAYERS } from '../../../shared/src/game/types';
-import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type MatchPolicyContext, type SeatConfigs } from '../../../shared/src/ai/types';
+import type { AILevel, SeatConfigs, MatchPolicyContext } from '../../../shared/src/ai/types';
 import { countAI, countHuman } from '../../../shared/src/ai/seats';
-import App from '../App';
-import type { CoachContext } from '../App';
-import { HowToPlayContent, RulesQuickView } from '../components/HowToPlay';
-import { aiDisplayName, createTutorialAssignment, humanSeatOf, tutorialRoleLines, type TutorialAssignment } from './tutorialModel';
-import { localHumanCount, resolveLocalSeats, type LocalDraft } from './localGameModel';
+import { createTutorialAssignment, humanSeatOf } from './tutorialModel';
 import { authApi, clearAuth, getCachedUser, getToken, setAuth, type PublicUser } from '../api';
 import { gameLink, resetSocket } from '../ws';
 import { useRoute } from '../router';
-import { Btn, Card, PageMotion } from '../ui';
+import App from '../App';
+import { Board } from '../components/Board';
+import { HowToPlayContent, RulesQuickView } from '../components/HowToPlay';
+import { ColorChip } from '../components/MatchPanel';
+import { ModeArtwork } from '../components/ModeArtwork';
 import { OnlinePage } from './OnlinePage';
+import { HERO_GAME } from '../data/heroGame';
+import { colorName, playerName } from '../playerPresentation';
 
-/** 星级 → 内部档位（用户只与 ★ 交互） */
-export const STAR_LEVELS: AILevel[] = ['random', 'tactical', 'selfish', '3ply', 'maxn'];
-const STARS = ['★', '★★', '★★★', '★★★★', '★★★★★'];
-
-export function useSession(): { user: PublicUser | null; applyAuth: (token: string, user: PublicUser) => void; refresh: () => Promise<void> } {
-  const [user, setUser] = useState<PublicUser | null>(() => getCachedUser());
-  const applyAuth = useCallback((token: string, u: PublicUser) => {
-    setAuth(token, u);
-    setUser(u);
-  }, []);
-  const refresh = useCallback(async () => {
-    if (!getToken()) return;
-    try {
-      const { data } = await authApi.me();
-      setAuth(getToken() ?? '', data.user);
-      setUser(data.user);
-    } catch {
-      /* token 失效 → 保持现状 */
-    }
-  }, []);
-  return { user, applyAuth, refresh };
+export const STAR_LEVELS: AILevel[]=[1,2,3,4,5];
+export function useSession(){
+ const [user,setUser]=useState<PublicUser|null>(()=>getCachedUser());
+ const applyAuth=useCallback((token:string,u:PublicUser)=>{setAuth(token,u);setUser(u)},[]);
+ const refresh=useCallback(async()=>{if(!getToken())return;try{const {data}=await authApi.me();applyAuth(getToken()??'',data.user)}catch{}},[applyAuth]);
+ return {user,applyAuth,refresh,clear:()=>setUser(null)};
 }
-
-export function Platform() {
-  const route = useRoute();
-  const { user, applyAuth, refresh } = useSession();
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  // 全局 GameLink：登录后连接 WS；任何页面收到 game.start（含好友接受开局）→ 自动进入对局页
-  const navPath = route.path;
-  useEffect(() => {
-    if (!user) return;
-    gameLink.attach();
-    const off = gameLink.subscribe(() => {
-      if (gameLink.phase === 'game' && gameLink.game && navPath !== '/online') {
-        route.navigate('/online');
-      }
-    });
-    return () => off();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, navPath]);
-
-  const doAuth = async (mode: 'login' | 'register', email: string, username: string, password: string) => {
-    setBusy(true);
-    setErr('');
-    try {
-      const { data } = mode === 'register' ? await authApi.register(email, username, password) : await authApi.login(username || email, password);
-      applyAuth(data.token, data.user);
-      route.navigate(data.user.tutorialCompleted ? '/lobby' : '/tutorial');
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      /* ignore */
-    }
-    clearAuth();
-    resetSocket();
-    route.navigate('/');
-  };
-
-  // 页头导航（登录态）—— glass nav
-  const nav = (
-    <div className="glass-nav">
-      <span className="pf-brand" style={{ cursor: 'pointer' }} onClick={() => route.navigate('/')}>
-        SRSZQ
-      </span>
-      <div className="pf-nav-links">
-        {user ? (
-          <>
-            <button className="ds-btn ghost small" onClick={() => route.navigate('/lobby')}>大厅</button>
-            <button className="ds-btn ghost small" onClick={() => route.navigate('/rules')}>怎么玩</button>
-            <button className="ds-btn ghost small" onClick={() => route.navigate('/ranking')}>排行榜</button>
-            <button className="ds-btn ghost small" onClick={() => route.navigate('/friends')}>好友</button>
-            <span className="pf-user" title={user.username}>
-              <Avatar src={user.avatar} name={user.username} />
-              {user.username}
-              <b>{user.rating}</b>
-              <span className={`pf-dot ${user.onlineStatus}`} />
-            </span>
-            <button className="ds-btn small" onClick={logout}>退出</button>
-          </>
-        ) : (
-          <>
-            <button className="ds-btn ghost small" onClick={() => route.navigate('/rules')}>怎么玩</button>
-            <button className="ds-btn ghost small" onClick={() => route.navigate('/ranking')}>排行榜</button>
-            <button className="ds-btn primary small" onClick={() => route.navigate('/auth')}>登录 / 注册</button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-
-  const { path } = route;
-  if (path === '/auth') {
-    return (
-      <div className="pf-page">
-        {nav}
-        <AuthCard busy={busy} err={err} onAuth={doAuth} />
-      </div>
-    );
-  }
-  if (path === '/ranking') {
-    return (
-      <div className="pf-page">
-        {nav}
-        <RankingPage onBack={() => (user ? route.navigate('/lobby') : route.navigate('/'))} />
-      </div>
-    );
-  }
-  if (path === '/rules') {
-    return (
-      <div className="pf-page rules-page">
-        {nav}
-        <HowToPlayContent
-          onBack={() => route.navigate(user ? '/lobby' : '/')}
-          onStartTutorial={user && !user.tutorialCompleted ? () => route.navigate('/tutorial') : undefined}
-        />
-      </div>
-    );
-  }
-  if (path === '/friends') {
-    if (!user) return <RedirectTo to="/auth" />;
-    return (
-      <div className="pf-page">
-        {nav}
-        <FriendsPage />
-      </div>
-    );
-  }
-  if (path === '/lobby') {
-    if (!user) return <RedirectTo to="/auth" />;
-    if (!user.tutorialCompleted) return <RedirectTo to="/tutorial" />;
-    return (
-      <div className="pf-page">
-        {nav}
-        <Lobby user={user} />
-      </div>
-    );
-  }
-  if (path === '/tutorial') {
-    if (!user) return <RedirectTo to="/auth" />;
-    return (
-      <TutorialPage
-        user={user}
-        applyAuth={applyAuth}
-        onDone={() => route.navigate('/lobby')}
-        onExit={() => route.navigate('/lobby')}
-      />
-    );
-  }
-  if (path === '/online') {
-    if (!user) return <RedirectTo to="/auth" />;
-    // 教学门禁适用于在线匹配/人机；好友邀请开局的进行中对局不受限
-    const inInviteGame = gameLink.phase === 'game' || gameLink.phase === 'end';
-    if (!user.tutorialCompleted && !inInviteGame) return <RedirectTo to="/tutorial" />;
-    return (
-      <div className="pf-page pf-full">
-        {nav}
-        <OnlinePage user={user} onExit={() => route.navigate('/lobby')} />
-      </div>
-    );
-  }
-  if (path === '/local' || path === '/vsai' || path === '/tutgame') {
-    // 本地对局 / 人机模式复用本地引擎视图（在线模式走 OnlinePage）
-    return <LocalHost mode={path === '/local' ? 'local' : 'vsai'} user={user} onExit={() => route.navigate(user ? '/lobby' : '/')} />;
-  }
-  // 默认：Landing
-  return (
-    <div className="pf-page">
-      {nav}
-      <Landing user={user} />
-    </div>
-  );
+export function Platform(){
+ const route=useRoute(),{user,applyAuth,refresh,clear}=useSession();
+ const [busy,setBusy]=useState(false),[err,setErr]=useState(''),[,render]=useState(0);
+ useEffect(()=>{void refresh()},[refresh]);
+ useEffect(()=>gameLink.subscribe(()=>render(x=>x+1)),[]);
+ useEffect(()=>{if(!user)return;gameLink.attach();const off=gameLink.subscribe(()=>{
+   if(gameLink.phase==='game'&&gameLink.game&&route.path!=='/online')route.navigate('/online');
+ });return off;},[user?.id,route.path]);
+ const auth=async(mode:'login'|'register',email:string,name:string,pwd:string)=>{setBusy(true);setErr('');try{
+  const {data}=mode==='register'?await authApi.register(email,name,pwd):await authApi.login(name||email,pwd);
+  applyAuth(data.token,data.user);route.navigate(data.user.tutorialCompleted?'/lobby':'/tutorial');
+ }catch(e){setErr(e instanceof Error?e.message:String(e))}finally{setBusy(false)}};
+ const logout=async()=>{try{await authApi.logout()}catch{}clearAuth();resetSocket();clear();route.navigate('/')};
+ const nav=<header className="site-nav"><button className="brand" onClick={()=>route.navigate(user?'/lobby':'/')}>三人四子棋</button><nav aria-label="网站导航">
+  {user&&<button className={route.path==='/lobby'?'nav-active':''} onClick={()=>route.navigate('/lobby')}>大厅</button>}
+  <button className={route.path==='/rules'?'nav-active':''} onClick={()=>route.navigate('/rules')}>怎么玩</button>
+  <button className={route.path==='/ranking'?'nav-active':''} onClick={()=>route.navigate('/ranking')}>排行榜</button>
+  {user?<><button className={route.path==='/friends'?'nav-active':''} onClick={()=>route.navigate('/friends')}>好友</button><span className="nav-rating" aria-label={`积分 ${user.rating}`}>{user.rating}<small>分</small></span><button className="nav-auth" onClick={logout}>退出</button></>:<button className="nav-auth" onClick={()=>route.navigate('/auth')}>登录 / 注册</button>}
+ </nav></header>;
+ const wrap=(child:ReactNode,noNav=false)=><div className={`site-page ${noNav?'immersive':''}`}>{!noNav&&nav}{child}</div>;
+ const {path}=route;
+ if(path==='/auth')return wrap(<AuthCard busy={busy} err={err} onAuth={auth}/>);
+ if(path==='/rules')return wrap(<HowToPlayContent onBack={()=>route.navigate(user?'/lobby':'/')} onStartTutorial={user&&!user.tutorialCompleted?()=>route.navigate('/tutorial'):undefined}/>);
+ if(path==='/ranking')return wrap(<RankingPage onBack={()=>route.navigate(user?'/lobby':'/')}/>);
+ if(path==='/friends')return user?wrap(<FriendsPage/>):<RedirectTo to="/auth"/>;
+ if(path==='/lobby')return !user?<RedirectTo to="/auth"/>:!user.tutorialCompleted?<RedirectTo to="/tutorial"/>:wrap(<Lobby/>);
+ if(path==='/tutorial')return user?wrap(<TutorialPage user={user} applyAuth={applyAuth} onDone={()=>route.navigate('/lobby')}/>):<RedirectTo to="/auth"/>;
+ if(path==='/online'){
+  if(!user)return <RedirectTo to="/auth"/>;
+  if(!user.tutorialCompleted&&gameLink.phase!=='game'&&gameLink.phase!=='end')return <RedirectTo to="/tutorial"/>;
+  return wrap(<OnlinePage user={user} onExit={()=>route.navigate('/lobby')}/>,gameLink.game?.mode==='online'&&(gameLink.phase==='game'||gameLink.phase==='end'));
+ }
+ if(path==='/local'||path==='/vsai'||path==='/tutgame')return wrap(<LocalHost mode={path==='/local'?'local':'vsai'} user={user} onExit={()=>route.navigate(user?'/lobby':'/')}/>);
+ return wrap(<Landing/>);
 }
-
-function RedirectTo({ to }: { to: string }) {
-  useEffect(() => {
-    window.location.hash = `#${to}`;
-  }, [to]);
-  return <div className="pf-page pf-center">跳转中…</div>;
-}
-
-function Avatar({ src, name, big = false }: { src?: string; name: string; big?: boolean }) {
-  const className = `pf-avatar${big ? ' big' : ''}`;
-  return src ? (
-    <img className={className} src={src} alt="" />
-  ) : (
-    <span className={`${className} avatar-fallback`} aria-hidden="true">
-      {name.trim().slice(0, 1).toUpperCase() || 'S'}
-    </span>
-  );
-}
-
-/* ---------------- Landing ---------------- */
-const MINI_A = [[2, 4], [5, 7], [9, 3], [7, 8], [4, 9], [8, 2], [6, 5], [3, 10], [10, 4]];
-const MINI_B = [[1, 6], [4, 3], [8, 7], [5, 10], [9, 6], [3, 4], [7, 2], [2, 9], [10, 7]];
-const MINI_C = [[6, 8], [2, 3], [9, 9], [4, 6], [7, 4], [3, 7], [8, 5], [1, 2], [5, 5]];
-
-function MiniBoardPreview() {
-  const n = 13;
-  const cells: string[] = [];
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      const key = `${r}-${c}`;
-      const cls = MINI_A.some(([rr, cc]) => `${rr}-${cc}` === key) ? 'a' : MINI_B.some(([rr, cc]) => `${rr}-${cc}` === key) ? 'b' : MINI_C.some(([rr, cc]) => `${rr}-${cc}` === key) ? 'c' : '';
-      cells.push(`<i class="${cls}"></i>`);
-    }
-  }
-  return (
-    <div className="mini-board" dangerouslySetInnerHTML={{ __html: cells.join('') }} />
-  );
-}
-
-/** 棋盘右下角的行/列身份小图例 */
-function PlayerKey() {
-  return (
-    <div className="land-key">
-      <span><i className="k-a" />A 珊瑚</span>
-      <span><i className="k-b" />B 薄荷</span>
-      <span><i className="k-c" />C 天空蓝</span>
-    </div>
-  );
-}
-
-function Landing({ user }: { user: PublicUser | null }) {
-  const route = useRoute();
-  const go = (to: string) => route.navigate(to);
-  return (
-    <PageMotion>
-      <section className="land-hero">
-        <div className="land-copy">
-          <h1 className="land-h1">三人四子棋</h1>
-          <p className="land-sub">Three-Player Connect Four · 一张棋盘，三人轮流落子</p>
-          <p className="land-desc">
-            连成四子就能赢？这里不是。Round 6 起，胜权按 C → B → A 轮流授予；只有持胜权的人，
-            才能凭自己的本手连成 ≥4 获胜；没有胜权时，连成四子的位置是禁手。
-          </p>
-          <div className="hero-actions">
-            {user ? (
-              <>
-                <Btn variant="primary" size="big" onClick={() => go('/online')}>Play Online</Btn>
-                <Btn size="big" onClick={() => go('/vsai')}>Play With AI</Btn>
-                <Btn size="big" onClick={() => go('/local')}>Local Match</Btn>
-              </>
-            ) : (
-              <>
-                <Btn variant="primary" size="big" onClick={() => go('/auth')}>注册并开始</Btn>
-                <Btn size="big" onClick={() => go('/local')}>先试试本地对局</Btn>
-                <Btn size="big" onClick={() => go('/ranking')}>排行榜</Btn>
-              </>
-            )}
-          </div>
-          {!user && (
-            <ol className="guest-quick" aria-label="三步上手">
-              <li><b>1</b>三人轮流下</li>
-              <li><b>2</b>先下出四颗连子的人获胜</li>
-              <li><b>3</b>每人每三轮有一次胜权，有胜权时才可连成四颗子</li>
-            </ol>
-          )}
-          <p className="land-more">
-            {user ? (
-              <>
-                第一次玩？<button className="linklike" onClick={() => go('/rules')}>先看「三人四子棋怎么玩」</button>
-                ，一分钟讲清胜权规则。
-              </>
-            ) : (
-              <>
-                如果还没看懂，可以前往<button className="linklike" onClick={() => go('/rules')}>「怎么玩」查看详细规则</button>。
-              </>
-            )}
-          </p>
-        </div>
-        <figure className="land-board">
-          <MiniBoardPreview />
-          <PlayerKey />
-          <figcaption>示意图 · 13×13 正式棋盘（完整规则见「怎么玩」）</figcaption>
-        </figure>
-      </section>
-
-      {/* 第一层规则：above the fold 速览（登录后的大厅同样提供该入口） */}
-      <section className="land-rules" aria-labelledby="howto-heading">
-        <div className="land-rules-head">
-          <h2 id="howto-heading">三人四子棋怎么玩 · 规则速览</h2>
-          <Btn variant="ghost" size="small" onClick={() => go('/rules')}>查看完整规则</Btn>
-        </div>
-        <RulesQuickView />
-        {!user && (
-          <div className="land-rules-cta">
-            <Btn variant="primary" onClick={() => go('/auth')}>注册并开始新手教程</Btn>
-            <span className="muted">一盘教学：你会随机坐入 A/B/C，一起迎战两名随机 1★–3★ AI。</span>
-          </div>
-        )}
-      </section>
-
-      <section className="land-modes" aria-label="对局模式">
-        <div className="mode-line">
-          <span className="m-icon">在线</span>
-          <div>
-            <h3>Online Match</h3>
-            <p>匹配 3 名真人同台竞技；60 秒不足三人自动 AI 补位，结果计入排行榜。</p>
-          </div>
-          <Btn variant={user ? 'primary' : 'default'} size="small" onClick={() => go(user ? '/online' : '/auth')}>开始</Btn>
-        </div>
-        <div className="mode-line">
-          <span className="m-icon">AI</span>
-          <div>
-            <h3>Human vs AI</h3>
-            <p>1–2 个 AI 对手，难度 ★–★★★★★，用同一套正式规则练手。</p>
-          </div>
-          <Btn size="small" onClick={() => go('/vsai')}>选择对手</Btn>
-        </div>
-        <div className="mode-line">
-          <span className="m-icon">本地</span>
-          <div>
-            <h3>Local Match</h3>
-            <p>同一设备三人轮流落子，无需账号，随开随玩。</p>
-          </div>
-          <Btn size="small" onClick={() => go('/local')}>开始对局</Btn>
-        </div>
-      </section>
-    </PageMotion>
-  );
-}
-
-/* ---------------- Auth ---------------- */
-function AuthCard(props: { busy: boolean; err: string; onAuth: (mode: 'login' | 'register', email: string, username: string, password: string) => void }) {
-  const [mode, setMode] = useState<'login' | 'register'>('register');
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const route = useRoute();
-  return (
-    <div className="auth-shell">
-      <Card className="auth-card2 fade-in">
-        <h2>{mode === 'register' ? '注册 SRSZQ' : '登录 SRSZQ'}</h2>
-        <p className="sub">{mode === 'register' ? '注册后完成 1 局教学即可进入在线对战。' : '登录继续你的 SRSZQ 征程。'}</p>
-        <div className="auth-tabs">
-          <Btn variant={mode === 'register' ? 'primary' : 'ghost'} onClick={() => setMode('register')}>注册</Btn>
-          <Btn variant={mode === 'login' ? 'primary' : 'ghost'} onClick={() => setMode('login')}>登录</Btn>
-        </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            props.onAuth(mode, email, username, password);
-          }}
-        >
-          {mode === 'register' && (
-            <label className="field">
-              <span>邮箱</span>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-            </label>
-          )}
-          <label className="field">
-            <span>{mode === 'register' ? '用户名' : '账号（用户名或邮箱）'}</span>
-            <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="2-16 位字母/数字/下划线/中文" />
-          </label>
-          <label className="field">
-            <span>密码</span>
-            <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="至少 6 位" />
-          </label>
-          {props.err && <p className="error-text">{props.err}</p>}
-          <Btn variant="primary" size="big" disabled={props.busy} className="ds-block" style={{ width: '100%' }} type="submit">
-            {props.busy ? '处理中…' : mode === 'register' ? '注册并开始' : '登录'}
-          </Btn>
-        </form>
-        <div style={{ textAlign: 'center', marginTop: 14 }}>
-          <Btn variant="ghost" size="small" onClick={() => route.navigate('/')}>← 返回首页</Btn>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-/* ---------------- Lobby（大型 Feature Cards） ---------------- */
-const LOBBIES = [
-  {
-    key: 'online',
-    icon: '3P',
-    title: 'Online Match',
-    desc: '匹配 3 名真人同台竞技；等待超过 60 秒自动 AI 补位（1 人 → 2 AI，2 人 → 1 AI），绝不让你空等。结果计入全球排行榜。',
-    meta: '真人在线 · 计分',
-    accent: true,
-    cta: '开始匹配',
-  },
-  {
-    key: 'vsai',
-    icon: 'AI',
-    title: 'Human vs AI',
-    desc: '选择 1–2 个 AI 座位，难度从 ★ 到 ★★★★★ 自由调整。适合练手、研究 BAC 资格博弈与新战术。',
-    meta: '本地引擎 · ★难度 · 不计分',
-    accent: false,
-    cta: '选择对手',
-  },
-  {
-    key: 'local',
-    icon: '同桌',
-    title: 'Local Match',
-    desc: '同一设备三名玩家轮流对弈：完整规则引擎、悔棋、自动 Pass、导入导出，随开随玩。',
-    meta: '离线 · 无需账号',
-    accent: false,
-    cta: '开始对局',
-  },
-  {
-    key: 'friends',
-    icon: '邀请',
-    title: '好友邀请',
-    desc: '邀请 1 位好友立即成局（真人+真人+AI）；邀请 2 位好友并全部接受，组成纯真人三人局。',
-    meta: '实时状态 · 在线好友',
-    accent: false,
-    cta: '邀请好友',
-  },
-];
-
-function Lobby({ user }: { user: PublicUser }) {
-  const route = useRoute();
-  return (
-    <PageMotion>
-      <div className="lobby-rules-link">
-        <span>
-          <b>三人四子棋怎么玩？</b>
-          <span className="muted"> · 胜权规则一分钟讲清</span>
-        </span>
-        <Btn variant="ghost" size="small" onClick={() => route.navigate('/rules')}>规则速览与胜权说明</Btn>
-      </div>
-      <div className="lobby-user">
-        <Avatar src={user.avatar} name={user.username} big />
-        <div>
-          <h2 style={{ margin: 0 }}>{user.username}</h2>
-          <div className="pf-user" style={{ marginTop: 4 }}>
-            <span className="ds-badge">Rating {user.rating}</span>
-            <StatusBadgeView status={user.onlineStatus as any} />
-          </div>
-        </div>
-      </div>
-      <div className="lobby2">
-        {LOBBIES.map((m, i) => (
-          <motion.button
-            key={m.key}
-            className={`ds-card hoverable fcard ${m.accent ? 'accent' : ''}`}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05 * i, duration: 0.3, ease: 'easeOut' }}
-            whileHover={{ y: -5 }}
-            onClick={() => route.navigate(`/${m.key === 'friends' ? 'friends' : m.key}`)}
-          >
-            <span className="fc-icon">{m.icon}</span>
-            <h3>{m.title}</h3>
-            <p className="fc-desc">{m.desc}</p>
-            <span className="fc-meta">{m.meta}</span>
-            <span className={`ds-btn ${m.accent ? 'primary' : ''} fc-btn`}>{m.cta}</span>
-          </motion.button>
-        ))}
-      </div>
-    </PageMotion>
-  );
-}
-
-function StatusBadgeView({ status }: { status: 'online' | 'offline' | 'playing' | 'matching' }) {
-  const map = { online: '在线', offline: '离线', playing: '对局中', matching: '匹配中' } as const;
-  return (
-    <span className={`ds-badge ${status}`}>
-      <span className="pf-dot" />
-      {map[status] ?? status}
-    </span>
-  );
-}
-
-/* ---------------- Ranking ---------------- */
-function RankingPage({ onBack }: { onBack: () => void }) {
-  const [rows, setRows] = useState<Array<any>>([]);
-  const [err, setErr] = useState('');
-  useEffect(() => {
-    authApi
-      .ranking(20)
-      .then(({ data }) => setRows(data.ranking))
-      .catch((e) => setErr(e instanceof Error ? e.message : String(e)));
-  }, []);
-  return (
-    <div className="ds-card ds-panel fade-in">
-      <div className="head">
-        <span className="ds-title">排行榜 · 仅 Online Match 计分</span>
-        <Btn variant="ghost" size="small" onClick={onBack}>← 返回</Btn>
-      </div>
-      {err && <p className="error-text">{err}</p>}
-      <table className="pf-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>玩家</th>
-            <th>Rating</th>
-            <th>胜/场</th>
-            <th>胜率</th>
-            <th>状态</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.id}>
-              <td><span className="rank-no">{i + 1}</span></td>
-              <td>
-                <Avatar src={r.avatar} name={r.username} /> {r.username}
-              </td>
-              <td data-label="积分"><b>{r.rating}</b></td>
-              <td data-label="胜/场">
-                {r.wins}/{r.games}
-              </td>
-              <td data-label="胜率">{r.games > 0 ? `${Math.round(r.winRate * 100)}%` : '暂无'}</td>
-              <td data-label="状态">
-                <StatusBadgeView status={r.onlineStatus} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/* ---------------- Friends & Invitations ---------------- */
-function FriendsPage() {
-  const [friends, setFriends] = useState<Array<any>>([]);
-  const [invs, setInvs] = useState<Array<any>>([]);
-  const [toUser, setToUser] = useState('');
-  const [msg, setMsg] = useState('');
-  const load = () => {
-    void authApi.friends().then(({ data }) => setFriends(data.friends));
-    void authApi.invitations().then(({ data }) => setInvs(data.invitations));
-  };
-  useEffect(load, []);
-  const invite = async () => {
-    setMsg('');
-    try {
-      await authApi.invite(toUser.trim());
-      setMsg(`已向 ${toUser.trim()} 发送邀请（接受后自动开局）。`);
-      setToUser('');
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
-    }
-  };
-  const act = async (id: string, accept: boolean) => {
-    try {
-      if (accept) await authApi.acceptInvite(id);
-      else await authApi.rejectInvite(id);
-      setMsg(accept ? '已接受：对局即将开始…' : '已拒绝');
-      load();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
-    }
-  };
-  return (
-    <div className="pf-panel-wrap">
-      <div className="ds-card ds-panel fade-in">
-        <div className="head">
-          <span className="ds-title">好友与邀请 · Friends & Invites</span>
-        </div>
-        <div className="friend-invite">
-          <input aria-label="受邀好友用户名" value={toUser} onChange={(e) => setToUser(e.target.value)} placeholder="输入对方用户名邀请对战" />
-          <Btn variant="primary" onClick={invite}>Invite</Btn>
-        </div>
-        {msg && <p className="muted">{msg}</p>}
-        <h4>待处理邀请</h4>
-        {invs.length === 0 && <p className="muted">暂无邀请</p>}
-        {invs.map((iv) => (
-          <div key={iv.id} className="friend-row">
-            <span>{iv.senderName} 邀请你对战</span>
-            <Btn variant="primary" size="small" onClick={() => act(iv.id, true)}>接受</Btn>
-            <Btn size="small" onClick={() => act(iv.id, false)}>拒绝</Btn>
-          </div>
-        ))}
-        <h4>好友（{friends.length}）</h4>
-        {friends.map((f) => (
-          <div key={f.id} className="friend-row">
-            <Avatar src={f.avatar} name={f.username} />
-            <span>{f.username}</span>
-            <StatusBadgeView status={f.onlineStatus} />
-            <span className="muted">{f.onlineStatus}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ---------------- Tutorial ---------------- */
-const SEAT_COLOR_NAME: Record<Player, string> = { A: '珊瑚色', B: '薄荷色', C: '天空蓝' };
-
-/** 教程教练：根据对局上下文给一行轻量教学提示（progressive/contextual，不弹窗轰炸） */
-function makeTutorialCoach(seats: TutorialAssignment) {
-  const names: Partial<Record<Player, string>> = {};
-  for (const p of PLAYERS) {
-    const s = seats[p];
-    if (s.kind === 'ai') names[p] = aiDisplayName(s.level ?? 'random');
-  }
-  return (ctx: CoachContext): string => {
-    const { state, round, current, eligible, currentIsAI, thinking } = ctx;
-    if (state.status !== 'playing') return '';
-    if (currentIsAI) {
-      return thinking
-        ? `对手 ${current}（AI · ${names[current] ?? ''}）正在思考……`
-        : `对手 ${current}（AI · ${names[current] ?? ''}）行动中。`;
-    }
-    if (round <= 5) {
-      const extra =
-        round === 5
-          ? '下一轮（Round 6）起 C 将获得胜权。'
-          : round <= 2
-            ? '先落子开阔地带，多留自己的棋型空间。'
-            : '留意对手的活三，并提前为自己的胜权轮布局。';
-      return `轮到你了（玩家 ${current}）。Round ${round} 暂无胜权；谁都不能靠这一手获胜，会连成 ≥4 的位置是禁手 ✕。${extra}`;
-    }
-    if (eligible === current) {
-      return `轮到你了（玩家 ${current}）。本回合胜权就是你：这一手若能连成 ≥4（横/竖/斜），立即获胜！`;
-    }
-    return `轮到你了（玩家 ${current}）。本回合胜权：${eligible}；留意 ${eligible} 的连线威胁，也为自己后面的胜权轮布局。`;
-  };
-}
-
-function TutorialPage({
-  user,
-  applyAuth,
-  onDone,
-  onExit,
-}: {
-  user: PublicUser;
-  applyAuth: (token: string, user: PublicUser) => void;
-  onDone: () => void;
-  onExit: () => void;
-}) {
-  const route = useRoute();
-  const [lastResult, setLastResult] = useState('');
-  const [finished, setFinished] = useState(false);
-  // 教程 session 初始化：一次确定真人座位 + 两名 AI 难度（immutable；重渲染不改变）
-  const [assignment] = useState<TutorialAssignment>(() => createTutorialAssignment());
-  const roles = tutorialRoleLines(assignment);
-  const humanSeat = humanSeatOf(assignment);
-  const coach = makeTutorialCoach(assignment);
-  const assignmentKey = `${assignment.A.kind}:${assignment.B.kind === 'ai' ? assignment.B.level : 'h'}:${assignment.C.kind === 'ai' ? assignment.C.level : 'h'}`;
-
-  if (user.tutorialCompleted) {
-    return (
-      <div className="pf-page pf-center">
-        <h2>教学已完成 ✓</h2>
-        <div className="btn-row" style={{ justifyContent: 'center' }}>
-          <button className="btn primary" onClick={onDone}>进入大厅</button>
-          <button className="btn" onClick={() => route.navigate('/rules')}>规则速览与胜权说明</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (finished) {
-    const opponents = roles.filter((r) => r.role === '对手').map((r) => r.detail).join('、');
-    return (
-      <div className="pf-page pf-center">
-        <h2>教学完成！</h2>
-        <p className="muted">一盘 1 真人 + 2 AI 已下到终局（输赢都算通过，不影响积分）。本局你在 {humanSeat} 座，对手：{opponents}。</p>
-        <div className="btn-row" style={{ justifyContent: 'center' }}>
-          <button className="btn primary big" onClick={onDone}>进入大厅</button>
-          <button className="btn" onClick={() => route.navigate('/rules')}>规则速览</button>
-        </div>
-      </div>
-    );
-  }
-
-  const handleEnd = (winner: Player | null) => {
-    // 合法终局即通过（Human win / loss / draw 均可）；中途退出/刷新不算
-    setLastResult(winner ? `本局结束：玩家 ${winner} 获胜` : '本局结束：和棋');
-    setTimeout(async () => {
-      try {
-        const { data } = await authApi.completeTutorial();
-        applyAuth(getToken() ?? '', data.user);
-      } catch {
-        /* 后端异常时仍放行到大厅（本地已完成教学） */
-      }
-      setFinished(true);
-    }, 1500);
-  };
-
-  return (
-    <div className="pf-page tutorial-page">
-      <div className="pf-nav">
-        <span className="pf-brand">新手教学 · 三人四子棋</span>
-        <span className="muted">
-          一盘制 · 下到终局即通过（输赢都算） · 你在 {humanSeat} 座（执{SEAT_COLOR_NAME[humanSeat]}）
-        </span>
-        <button className="btn ghost" onClick={() => route.navigate('/rules')}>规则速览</button>
-        <button className="btn ghost" onClick={onExit}>返回</button>
-      </div>
-
-      <section className="tut-identity" aria-label="本局身份">
-        {roles.map((r) => (
-          <div key={r.seat} className={`tut-role seat-${r.seat.toLowerCase()} ${r.role === '你' ? 'you' : 'ai'}`}>
-            <span className="tut-role-tag">
-              {r.role === '你' ? '你' : `对手`} · 玩家 {r.seat}
-            </span>
-            <b>{r.detail}</b>
-            <span className="muted">{r.role === '你' ? `执${SEAT_COLOR_NAME[r.seat]} · 每次轮到你时由你落子` : '自动行动，与你使用同一套正式规则'}</span>
-          </div>
-        ))}
-        <div className="tut-identity-note">真人座位与两名 AI 难度都在本局开始时随机确定；重开教程会重新随机。</div>
-      </section>
-
-      <details className="tut-rules" open>
-        <summary>规则速览 · 一分钟看懂胜权（可收起）</summary>
-        <RulesQuickView />
-        <div style={{ marginTop: 10 }}>
-          <button className="btn ghost tiny" onClick={() => route.navigate('/rules')}>查看完整规则与胜权详解 →</button>
-        </div>
-      </details>
-
-      {lastResult && <div className="notice info">{lastResult}</div>}
-      <App
-        key={`tut-${assignmentKey}`}
-        presetSeats={assignment}
-        hostTitle="新手教学 · 1 真人 + 2 AI · 一盘制"
-        coach={coach}
-        onGameEnd={handleEnd}
-        onExit={onExit}
-        embedded
-      />
-    </div>
-  );
-}
-
-/* ---------------- 本地 / 人机宿主 ---------------- */
-function LocalHost({ mode, user, onExit }: { mode: 'local' | 'vsai'; user: PublicUser | null; onExit: () => void }) {
-  const route = useRoute();
-  const [cfg, setCfg] = useState<SeatConfigs | null>(null);
-
-  if (mode === 'vsai' && user && !user.tutorialCompleted) {
-    return (
-      <div className="pf-page pf-center">
-        <p>请先完成新手教学再开始 AI 对战。</p>
-        <button className="btn primary" onClick={() => route.navigate('/tutorial')}>去教学</button>
-      </div>
-    );
-  }
-
-  if (mode === 'vsai' && !cfg) {
-    return <VsAiPicker onStart={setCfg} onBack={onExit} />;
-  }
-
-  if (mode === 'local' && !cfg) {
-    return <LocalSetup onStart={setCfg} onBack={onExit} />;
-  }
-
-  const seats: SeatConfigs =
-    cfg ?? { A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'human' } };
-  const title = mode === 'local' ? '本地对局 Local Match' : 'Human vs AI · 人机对局';
-  // 内部策略（NOT PLAYER-FACING）：HvAI 1H+2AI → 无自胜时优先封堵预计最快获胜的对手（身份无关）
-  const aiPolicy: MatchPolicyContext | undefined =
-    mode === 'vsai' && countHuman(seats) === 1 && countAI(seats) === 2 ? { defenseFastestThreat: true } : undefined;
-  return (
-    <App
-      key={mode === 'local' ? `local-${JSON.stringify(cfg)}` : `vsai-${JSON.stringify(cfg)}`}
-      presetSeats={seats}
-      hostTitle={title}
-      onExit={onExit}
-      aiPolicy={aiPolicy}
-    />
-  );
-}
-
-/* ---------------- 本地对局设置（Guest 可用：A/B/C 每座选 真人/AI + AI 难度） ---------------- */
-function LocalSetup({ onStart, onBack }: { onStart: (s: SeatConfigs) => void; onBack: () => void }) {
-  const [draft, setDraft] = useState<LocalDraft>({
-    A: { kind: 'human' },
-    B: { kind: 'human' },
-    C: { kind: 'human' },
-  });
-  const humanCount = localHumanCount(draft);
-
-  const setKind = (p: Player, kind: 'human' | 'ai') => {
-    setDraft((d) => ({ ...d, [p]: kind === 'ai' ? { kind: 'ai', level: 'auto' } : { kind: 'human' } }));
-  };
-  const setLevel = (p: Player, level: AILevel | 'auto') => {
-    setDraft((d) => ({ ...d, [p]: { kind: 'ai', level } }));
-  };
-
-  const start = () => {
-    // 随机难度在 game initialization 时解析一次（此后稳定）
-    onStart(resolveLocalSeats(draft));
-  };
-
-  return (
-    <div className="pf-panel-wrap">
-      <div className="panel pf-panel local-setup">
-        <div className="panel-title">本地对局 · 座位与 AI 设置</div>
-        <p className="muted">无需账号即可开玩。为 A/B/C 三个座位选择真人或 AI；AI 难度可选随机或 1★–5★（随机在开局时确定）。</p>
-        {PLAYERS.map((p) => {
-          const d = draft[p];
-          const isAI = d.kind === 'ai';
-          return (
-            <div key={p} className={`seat-row seat-${p.toLowerCase()} ${isAI ? 'is-ai' : ''}`}>
-              <span className="seat-badge">
-                {p}
-              </span>
-              <span className="seat-name">玩家 {p}</span>
-              <select className="seat-select" aria-label={`玩家 ${p} 的座位类型`} value={d.kind} onChange={(e) => setKind(p, e.target.value as 'human' | 'ai')}>
-                <option value="human">真人</option>
-                <option value="ai">AI</option>
-              </select>
-              {isAI && (
-                <select className="seat-select" aria-label={`玩家 ${p} 的 AI 难度`} value={d.level} onChange={(e) => setLevel(p, e.target.value as AILevel | 'auto')}>
-                  <option value="auto">随机</option>
-                  {AI_LEVELS.map((l) => (
-                    <option key={l} value={l}>AI {AI_LEVEL_STARS[l]}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          );
-        })}
-        <p className="muted">{humanCount === 0 ? '注意：至少保留一名真人玩家。' : `${humanCount} 名真人 + ${3 - humanCount} 个 AI。`}</p>
-        <div className="btn-row">
-          <button className="btn ghost" onClick={onBack}>返回</button>
-          <button className="btn primary" disabled={humanCount === 0} onClick={start}>开始对局</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function VsAiPicker({ onStart, onBack }: { onStart: (s: SeatConfigs) => void; onBack: () => void }) {
-  const [humans, setHumans] = useState<Player[]>(['A']);
-  const [starsMap, setStarsMap] = useState<Partial<Record<Player, number>>>({ B: 3 });
-  const toggleHuman = (p: Player) => {
-    setHumans((prev) => {
-      const next = prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p];
-      // 至少 1 人类
-      return next.length === 0 ? prev : next;
-    });
-  };
-  const start = () => {
-    const seats = {} as SeatConfigs;
-    for (const p of PLAYERS) {
-      seats[p] = humans.includes(p) ? { kind: 'human' } : { kind: 'ai', level: STAR_LEVELS[(starsMap[p] ?? 3) - 1] };
-    }
-    onStart(seats);
-  };
-  return (
-    <div className="pf-panel-wrap">
-      <div className="panel pf-panel">
-        <div className="panel-title">Human vs AI · 座位与难度</div>
-        <p className="muted">每局 0–2 个 AI、至少 1 名人类。AI 难度只以 ★ 显示。</p>
-        {PLAYERS.map((p) => {
-          const isHuman = humans.includes(p);
-          return (
-            <div key={p} className="friend-row">
-              <label>
-                <input type="checkbox" checked={isHuman} onChange={() => toggleHuman(p)} /> 玩家 {p} = 人类
-              </label>
-              {!isHuman && (
-                <select
-                  aria-label={`玩家 ${p} 的 AI 难度`}
-                  value={starsMap[p] ?? 3}
-                  onChange={(e) => setStarsMap((m) => ({ ...m, [p]: Number(e.target.value) }))}
-                >
-                  {STARS.map((s, i) => (
-                    <option key={i + 1} value={i + 1}>
-                      AI {s}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          );
-        })}
-        <div className="btn-row">
-          <button className="btn ghost" onClick={onBack}>返回</button>
-          <button className="btn primary" onClick={start}>开始对局</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default Platform;
+function RedirectTo({to}:{to:string}){useEffect(()=>{window.location.hash='#'+to},[to]);return <div className="loading-page">正在打开…</div>}
+function Landing(){
+ const route=useRoute();
+ return <main className="welcome-layout">
+  <section className="welcome-copy"><h1>三人四子棋</h1>
+   <div className="welcome-columns"><div className="welcome-actions">
+    <button className="btn primary" onClick={()=>route.navigate('/auth')}>注册并开始 <span>↗</span></button>
+    <button className="btn" onClick={()=>route.navigate('/local')}>本地对局 <span>↗</span></button>
+    <button className="btn" onClick={()=>route.navigate('/ranking')}>排行榜 <span>↗</span></button>
+   </div><ol className="welcome-rules">
+    <li><span>01</span><p>最先连成四颗子的玩家赢得游戏</p></li>
+    <li><span>02</span><p>三人轮流下完一子为一回合</p></li>
+    <li><span>03</span><p>每回合只有一个玩家拥有连成四颗子的资格，称为胜权</p></li>
+   </ol></div>
+   <p className="welcome-more">胜权怎么来的？前往 <button className="linklike" onClick={()=>route.navigate('/rules')}>怎么玩</button> 查看详细规则。</p>
+  </section>
+  <figure className="welcome-board"><Board state={HERO_GAME} disabled decorative showLegal={false} showWinning={false} onCellClick={()=>{}}/></figure>
+ </main>;
+}
+function AuthCard({busy,err,onAuth}:{busy:boolean;err:string;onAuth:(m:'login'|'register',e:string,n:string,p:string)=>void}){
+ const [mode,setMode]=useState<'login'|'register'>('register'),[email,setEmail]=useState(''),[name,setName]=useState(''),[pwd,setPwd]=useState('');
+ return <main className="auth-layout"><div className="auth-ornament"><ColorChip player="A"/><ColorChip player="B"/><ColorChip player="C"/></div><section className="auth-card panel"><h1>{mode==='register'?'初次见面，来下一盘':'欢迎回到棋盘'}</h1>
+ <div className="tabs"><button className={mode==='register'?'active':''} onClick={()=>setMode('register')}>注册</button><button className={mode==='login'?'active':''} onClick={()=>setMode('login')}>登录</button></div>
+ <form onSubmit={e=>{e.preventDefault();onAuth(mode,email,name,pwd)}}>
+ {mode==='register'&&<label className="field"><span>邮箱</span><input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/></label>}
+ <label className="field"><span>{mode==='register'?'用户名':'用户名或邮箱'}</span><input required value={name} onChange={e=>setName(e.target.value)} autoComplete="username" placeholder="你的名字"/></label>
+ <label className="field"><span>密码</span><input type="password" minLength={6} required value={pwd} onChange={e=>setPwd(e.target.value)} autoComplete={mode==='register'?'new-password':'current-password'} placeholder="至少 6 位"/></label>
+ {err&&<p className="error-text" role="alert">{err}</p>}
+ <button className="btn primary wide" disabled={busy}>{busy?'处理中…':mode==='register'?'注册并开始':'登录'}</button>
+ </form></section></main>;
+}
+const MODES=[{key:'online',title:'在线匹配'},{key:'vsai',title:'人机对战'},{key:'local',title:'离线模式'},{key:'friends',title:'好友对弈'}] as const;
+function Lobby(){const route=useRoute();return <main className="lobby-grid" aria-label="游戏大厅">{MODES.map(m=><button key={m.key} className="mode-card" onClick={()=>route.navigate('/'+m.key)}><ModeArtwork mode={m.key}/><h1>{m.title}</h1></button>)}</main>}
+function Status({value}:{value:string}){const names:Record<string,string>={online:'在线',offline:'离线',playing:'对局中',matching:'匹配中'};return <span className={`status-badge ${value}`}><i/>{names[value]??'离线'}</span>}
+function RankingPage({onBack}:{onBack:()=>void}){
+ const [rows,setRows]=useState<Array<PublicUser&{wins:number;games:number;winRate:number}>>([]),[page,setPage]=useState(0),[total,setTotal]=useState(0),[err,setErr]=useState('');
+ useEffect(()=>{let alive=true;authApi.ranking(50,page*50).then(({data})=>{if(alive){setRows(data.ranking);setTotal(data.total??data.ranking.length)}}).catch(e=>setErr(String(e)));return()=>{alive=false}},[page]);
+ return <main className="data-card panel"><div className="page-heading"><h1>排行榜 <small>仅在线匹配计分</small></h1><button className="text-back" onClick={onBack}>返回</button></div>
+ {err&&<p role="alert">{err}</p>}<div className="table-scroll"><table className="ranking-table"><thead><tr><th>排名</th><th>玩家</th><th>积分</th><th>胜 / 场</th><th>胜率</th><th>状态</th></tr></thead>
+ <tbody>{rows.map((p,i)=><tr key={p.id}><td><span className={`rank-index rank-${page*50+i+1}`}>{page*50+i+1}</span></td><td><span className="avatar-mark">●</span>{p.username}</td><td><b>{p.rating}</b></td><td>{p.wins} / {p.games}</td><td>{Math.round(p.winRate*100)}%</td><td><Status value={p.onlineStatus}/></td></tr>)}</tbody></table></div>
+ {!rows.length&&!err&&<p className="empty-state">还没有比赛记录。</p>}
+ <div className="pagination"><span>全部 {total} 位玩家</span><button className="btn" disabled={!page} onClick={()=>setPage(page-1)}>上一页</button><span>{page+1} / {Math.max(1,Math.ceil(total/50))}</span><button className="btn" disabled={(page+1)*50>=total} onClick={()=>setPage(page+1)}>下一页</button></div>
+ </main>;
+}
+function FriendsPage(){
+ const [name,setName]=useState(''),[message,setMessage]=useState(''),[friends,setFriends]=useState<PublicUser[]>([]),[invs,setInvs]=useState<Array<{id:string;senderName:string;status:string}>>([]);
+ const load=useCallback(async()=>{try{const [f,i]=await Promise.all([authApi.friends(),authApi.invitations()]);setFriends(f.data.friends);setInvs(i.data.invitations.filter(x=>x.status==='pending'))}catch{}},[]);
+ useEffect(()=>{void load();const t=setInterval(()=>void load(),3000);return()=>clearInterval(t)},[load]);
+ async function invite(){try{await authApi.invite(name.trim());setMessage('邀请已发送，等待好友接受。');setName('');await load()}catch(e){setMessage(e instanceof Error?e.message:String(e))}}
+ async function answer(id:string,yes:boolean){try{yes?await authApi.acceptInvite(id):await authApi.rejectInvite(id);await load()}catch(e){setMessage(e instanceof Error?e.message:String(e))}}
+ return <main className="friends-card panel"><div className="page-heading"><h1>好友与邀请</h1><span>{friends.length} 位好友</span></div>
+ <form className="invite-form" onSubmit={e=>{e.preventDefault();void invite()}}><input aria-label="受邀好友用户名" placeholder="输入好友用户名" value={name} onChange={e=>setName(e.target.value)}/><button className="btn primary" disabled={!name.trim()}>邀请对弈</button></form>
+ {message&&<p className="notice" role="status">{message}</p>}<h2>待处理邀请</h2>{!invs.length&&<p className="empty-state">暂无新邀请</p>}
+ {invs.map(iv=><div className="friend-row" key={iv.id}><span className="avatar-mark">●</span><span>{iv.senderName} 邀请你对弈</span><button className="btn primary small" onClick={()=>answer(iv.id,true)}>接受</button><button className="btn small" onClick={()=>answer(iv.id,false)}>拒绝</button></div>)}
+ <h2>好友</h2>{!friends.length&&<p className="empty-state">邀请朋友，一起落子。</p>}{friends.map(f=><div className="friend-row" key={f.id}><span className="avatar-mark">●</span><strong>{f.username}</strong><Status value={f.onlineStatus}/><button className="btn small" onClick={()=>{setName(f.username)}}>邀请</button></div>)}
+ </main>;
+}
+function TutorialPage({user,applyAuth,onDone}:{user:PublicUser;applyAuth:(t:string,u:PublicUser)=>void;onDone:()=>void}){
+ const [assignment]=useState(()=>createTutorialAssignment());const [started,setStarted]=useState(false),[finished,setFinished]=useState(false),[error,setError]=useState('');
+ const human=humanSeatOf(assignment);
+ async function finish(){try{const {data}=await authApi.completeTutorial();applyAuth(getToken()??'',data.user);setFinished(true)}catch(e){setError(String(e))}}
+ if(finished||user.tutorialCompleted)return <main className="simple-state panel"><div className="result-stones"><ColorChip player="A"/><ColorChip player="B"/><ColorChip player="C"/></div><h1>准备好正式对弈了</h1><p>新手教学已完成。</p><button className="btn primary" onClick={onDone}>进入大厅</button></main>;
+ if(!started)return <main className="tutorial-intro panel"><div className="page-heading"><h1>新手教学</h1><span>一盘练习</span></div><RulesQuickView/><p className="muted">你执{colorName(human)}棋，与两位 AI 练习。完整下完一局即可完成教学，输赢都不影响积分。</p><button className="btn primary" onClick={()=>setStarted(true)}>开始练习</button></main>;
+ return <>{error&&<p role="alert">{error}</p>}<App hostTitle="新手教学" presetSeats={assignment} onGameEnd={()=>void finish()} onExit={()=>setStarted(false)} coach={c=>c.thinking?'对手正在思考…':c.round<=5?'前五回合无人拥有胜权，先布局。':c.eligible===c.current?'你拥有胜权，本手成四即可获胜。':`本回合${colorName(c.eligible)}棋有胜权。`}/></>;
+}
+function LocalHost({mode,user,onExit}:{mode:'local'|'vsai';user:PublicUser|null;onExit:()=>void}){
+ const route=useRoute();const [config,setConfig]=useState<{seats:SeatConfigs;size:BoardSize}|null>(null);
+ if(mode==='vsai'&&user&&!user.tutorialCompleted)return <main className="simple-state panel"><h1>先来一盘新手教学</h1><button className="btn primary" onClick={()=>route.navigate('/tutorial')}>开始教学</button></main>;
+ if(!config)return <GameSetup mode={mode} onStart={(seats,size)=>setConfig({seats,size})} onBack={onExit}/>;
+ const policy:MatchPolicyContext|undefined=mode==='vsai'&&countHuman(config.seats)===1&&countAI(config.seats)===2?{defenseFastestThreat:true}:undefined;
+ return <App key={JSON.stringify(config)} hostTitle={mode==='local'?'离线模式':'人机对战'} initialSize={config.size} presetSeats={config.seats} aiPolicy={policy} onExit={()=>setConfig(null)}/>;
+}
+function GameSetup({mode,onStart,onBack}:{mode:'local'|'vsai';onStart:(s:SeatConfigs,n:BoardSize)=>void;onBack:()=>void}){
+ const [size,setSize]=useState<BoardSize>(13);const [seats,setSeats]=useState<SeatConfigs>(()=>mode==='local'?{A:{kind:'human'},B:{kind:'human'},C:{kind:'human'}}:{A:{kind:'human'},B:{kind:'ai',level:3},C:{kind:'ai',level:3}});
+ const humans=countHuman(seats),ais=countAI(seats);
+ return <main className="setup-card panel"><div className="page-heading"><h1>{mode==='local'?'离线模式':'人机对战'}</h1><button className="text-back" onClick={onBack}>返回</button></div>
+ <h2>棋盘</h2><div className="size-picker">{([13,17] as BoardSize[]).map(n=><button key={n} className={`size-tile ${n===size?'selected':''}`} onClick={()=>setSize(n)}><b>{n}</b><span>路棋盘</span></button>)}</div>
+ <h2>玩家</h2><div className="seat-config-list">{PLAYERS.map(p=><div className="seat-config" key={p}><ColorChip player={p}/><strong>{playerName(p)}</strong>
+ <select aria-label={`${colorName(p)}棋玩家类型`} value={seats[p].kind==='human'?'human':String(seats[p].level??3)} onChange={e=>setSeats(s=>({...s,[p]:e.target.value==='human'?{kind:'human'}:{kind:'ai',level:Number(e.target.value) as AILevel}}))}>
+ <option value="human">真人</option>{STAR_LEVELS.map(l=><option value={l} key={l}>AI {'★'.repeat(l)}</option>)}</select></div>)}</div>
+ <div className="setup-bottom"><span>{humans===0?'至少保留一名真人':mode==='vsai'&&ais===0?'请选择 1–2 位 AI 对手':`${humans} 位真人${ais?' · '+ais+' 位 AI':''}`}</span><button className="btn primary" disabled={humans===0||(mode==='vsai'&&ais===0)} onClick={()=>onStart(seats,size)}>开始对局</button></div>
+ </main>;
+}

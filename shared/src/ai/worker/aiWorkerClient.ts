@@ -1,5 +1,5 @@
 import type { GameState, Player } from '../../game/types';
-import type { AIDecision, AILevel, AIOptions } from '../types';
+import type { AIDecision, AiDifficulty, AIOptions } from '../types';
 import type { AIWorkerResponse } from './ai.worker';
 
 /**
@@ -18,7 +18,7 @@ let jobSeq = 1;
 export function requestAIMove(
   state: GameState,
   player: Player,
-  level: AILevel,
+  difficulty: AiDifficulty,
   options: AIOptions,
   onResult: (r: { decision: AIDecision | null; error?: string }) => void,
 ): AIJobHandle {
@@ -48,7 +48,7 @@ export function requestAIMove(
     onResult({ decision: null, error: ev.message || 'AI worker error' });
   };
 
-  worker.postMessage({ id, state, player, level, options });
+  worker.postMessage({ id, state, player, difficulty, options });
 
   return {
     cancel: () => {

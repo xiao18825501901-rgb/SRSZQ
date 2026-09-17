@@ -13,10 +13,9 @@ import type { GameState } from '../../../shared/src/game/types.js';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves.js';
 import { qualificationFromState } from '../../../shared/src/game/qualification.js';
 import { pickOnlineSingleHumanAiDifficulty, pickOnlineTwoHumanAiDifficulty, shuffled } from '../../../shared/src/ai/assignment.js';
-import type { MatchPolicyContext } from '../../../shared/src/ai/types.js';
+import type { AiDifficulty, MatchPolicyContext } from '../../../shared/src/ai/types.js';
 import { chooseAIMove } from '../../../shared/src/ai/chooseAIMove.js';
-import type { AILevel } from '../../../shared/src/ai/types.js';
-import { OFFLINE_LEVEL_CONFIG } from '../../../shared/src/ai/config/defaultWeights.js';
+import { MatchmakingQueue, type MatchmakingEntry } from './matchmaking.js';
 
 export type Seat = 'A' | 'B' | 'C';
 const SEATS: Seat[] = ['A', 'B', 'C'];
@@ -26,7 +25,7 @@ const SEATS: Seat[] = ['A', 'B', 'C'];
  * - NORMAL_WIN        正常终局：有人连成四（或满盘平局）
  * - PLAYER_FORFEIT    玩家主动 Leave（PLAYER_RESIGN）→ 立即判负
  * - PLAYER_DISCONNECT 掉线超过宽限期（DISCONNECTED_TEMPORARY → FORFEIT）
- * - TIMEOUT           保留：未来回合时钟超时
+ * - TIMEOUT           Online 真人落子超过服务器 30 秒截止时间
  */
 export type EndReason = 'NORMAL_WIN' | 'PLAYER_FORFEIT' | 'PLAYER_DISCONNECT' | 'TIMEOUT';
 
@@ -41,7 +40,7 @@ interface SeatInfo {
   username?: string;
   /** 客户端只见星级，不见真实档位 */
   stars?: number;
-  aiLevel?: AILevel;
+  aiLevel?: AiDifficulty;
   /** 真人座位连接状态（AI 座位无此字段） */
   conn?: SeatConn;
 }
@@ -55,10 +54,15 @@ export interface GameServerOptions {
   inviteGatherMs?: number;
   /** Online Match 掉线宽限期（默认 10s）：期内 resume 恢复，超时判负 */
   forfeitGraceMs?: number;
+  /** Deadline sweep interval; the one-shot timer is only an optimization. */
+  queueSweepMs?: number;
+  /** Human placement deadline; Online only. */
+  turnTimeoutMs?: number;
 }
 
 interface Client {
   ws: WebSocket;
+  connectionId: string;
   userId: string;
   username: string;
   gameId?: string;
@@ -74,29 +78,31 @@ interface Room {
   ended: boolean;
   running: boolean;
   phase: RoomPhase;
+  turnTimer?: ReturnType<typeof setTimeout>;
+  turnDeadlineAt?: number;
+  timedTurnIndex?: number;
   endReason?: EndReason;
   disconnectTimers: Map<Seat, ReturnType<typeof setTimeout>>; // online=判负宽限；invite=自动跳过
   /** 内部 AI 策略上下文（NOT PLAYER-FACING）：online 1H+2AI 保护偏好 */
   policy: MatchPolicyContext | null;
 }
 
-const AI_WEIGHTS: Array<{ level: AILevel; w: number }> = [
-  { level: 'random', w: 100 },
-  { level: 'tactical', w: 200 },
-  { level: 'selfish', w: 300 },
-  { level: '3ply', w: 400 },
-  { level: 'maxn', w: 500 },
+const AI_WEIGHTS: Array<{ difficulty: AiDifficulty; w: number }> = [
+  { difficulty: 1, w: 100 },
+  { difficulty: 2, w: 200 },
+  { difficulty: 3, w: 300 },
+  { difficulty: 4, w: 400 },
+  { difficulty: 5, w: 500 },
 ];
-const AI_STARS: Record<AILevel, number> = { random: 1, tactical: 2, selfish: 3, '3ply': 4, maxn: 5 };
 
-function pickAiLevel(): AILevel {
+function pickAiDifficulty(): AiDifficulty {
   const total = AI_WEIGHTS.reduce((s, x) => s + x.w, 0);
   let r = Math.random() * total;
-  for (const { level, w } of AI_WEIGHTS) {
+  for (const { difficulty, w } of AI_WEIGHTS) {
     r -= w;
-    if (r <= 0) return level;
+    if (r <= 0) return difficulty;
   }
-  return 'maxn';
+  return 5;
 }
 
 /** 邀请会话（好友开房状态机） */
@@ -112,9 +118,9 @@ export class GameServer {
   private opts: Required<GameServerOptions>;
   private wss: WebSocketServer;
   private clients = new Map<string, Client>();
-  private queue: Client[] = [];
-  private queueTimer: ReturnType<typeof setTimeout> | null = null;
-  private queueStartAt = 0;
+  private matchmaking: MatchmakingQueue;
+  private queueWakeTimer: ReturnType<typeof setTimeout> | null = null;
+  private queueSweepTimer: ReturnType<typeof setInterval> | null = null;
   private rooms = new Map<string, Room>();
   private userGame = new Map<string, string>(); // userId -> gameId
   private inviteSessions = new Map<string, InviteSession>();
@@ -128,12 +134,25 @@ export class GameServer {
       aiTimeBudgetMs: opts.aiTimeBudgetMs ?? 250,
       inviteGatherMs: opts.inviteGatherMs ?? 30_000,
       forfeitGraceMs: opts.forfeitGraceMs ?? 10_000,
+      queueSweepMs: opts.queueSweepMs ?? 500,
+      turnTimeoutMs: opts.turnTimeoutMs ?? 30_000,
     };
+    this.matchmaking = new MatchmakingQueue(this.opts.queueTimeoutMs);
     this.wss = new WebSocketServer({ noServer: true });
   }
 
   /** 挂到 HTTP server 的 upgrade 事件 */
   attach(httpServer: import('node:http').Server, path = '/'): void {
+    if (!this.queueSweepTimer) {
+      this.queueSweepTimer = setInterval(() => this.finalizeEligibleMatchmaking('sweeper'), this.opts.queueSweepMs);
+      this.queueSweepTimer.unref?.();
+      httpServer.once('close', () => {
+        if (this.queueSweepTimer) clearInterval(this.queueSweepTimer);
+        this.queueSweepTimer = null;
+        if (this.queueWakeTimer) clearTimeout(this.queueWakeTimer);
+        this.queueWakeTimer = null;
+      });
+    }
     httpServer.on('upgrade', (req, socket, head) => {
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (url.pathname !== path) {
@@ -154,7 +173,7 @@ export class GameServer {
       ws.close(4001, 'unauthorized');
       return;
     }
-    const client: Client = { ws, userId: user.id, username: user.username };
+    const client: Client = { ws, connectionId: randomUUID(), userId: user.id, username: user.username };
     this.clients.set(user.id, client);
     this.db.touchOnline(user.id, 'online');
     ws.send(JSON.stringify({ type: 'hello', user: { id: user.id, username: user.username, tutorialCompleted: user.tutorialCompleted } }));
@@ -183,36 +202,37 @@ export class GameServer {
         if (existing) {
           const room = this.rooms.get(existing);
           if (room && !room.ended && room.members[client.userId]) {
-            if (room.humanIds.has(client.userId)) {
-              // 连接仍在房间（如好友局离开页面后再进匹配页）→ 与旧版一致：禁止重复匹配
-              return sendErr('already in game');
-            }
-            // 掉线/刷新后回到匹配页：原对局仍在宽限期 → 自动恢复，不判负
+            // queue.join is also a recovery signal. Re-send the authoritative
+            // room even when the server still considers this user connected.
             this.resumeIntoRoom(room, client);
             return;
           }
           // 残留绑定（房间已清理）→ 释放后可正常重新匹配
           this.userGame.delete(client.userId);
         }
-        if (this.queue.some((c) => c.userId === client.userId)) return;
+        const now = Date.now();
+        const entry = this.matchmaking.join(client.userId, client.connectionId, now);
         this.db.touchOnline(client.userId, 'matching');
-        this.queue.push(client);
-        const first = this.queueTimer === null;
-        if (first) {
-          this.queueStartAt = Date.now();
-          this.queueTimer = setTimeout(() => this.flushQueue(true), this.opts.queueTimeoutMs);
-        }
-        this.sendTo(client.ws, {
-          type: 'queue.joined',
-          waiting: this.queue.length,
-          timeoutMs: this.opts.queueTimeoutMs,
-          queueStartAt: this.queueStartAt,
+        this.sendQueueJoined(client, entry);
+        this.logMatchmaking('queue_join', {
+          queueId: entry.queueId, userId: entry.userId, humanCount: this.matchmaking.size,
+          aiCount: Math.max(0, 3 - this.matchmaking.size), deadline: entry.deadlineAt,
         });
-        if (this.queue.length >= 3) this.flushQueue(false);
+        this.scheduleQueueWake();
+        if (this.matchmaking.size >= 3) this.finalizeEligibleMatchmaking('three_humans');
+        break;
+      }
+      case 'queue.sync': {
+        this.syncQueueOrMatch(client);
         break;
       }
       case 'queue.leave': {
         this.leaveQueue(client);
+        break;
+      }
+      case 'invite.leave': {
+        const room = client.gameId ? this.rooms.get(client.gameId) : undefined;
+        if (room?.mode === 'invite' && room.members[client.userId]) this.abortRoom(room);
         break;
       }
       case 'PLAYER_RESIGN': {
@@ -253,24 +273,73 @@ export class GameServer {
     }
   }
 
-  /** 匹配出队：满 3 立即开局；超时后 1-2 人由 AI 补位 */
-  private flushQueue(timedOut: boolean): void {
-    if (this.queueTimer !== null) {
-      clearTimeout(this.queueTimer);
-      this.queueTimer = null;
+  private queuePayload(entry: MatchmakingEntry): Record<string, unknown> {
+    return {
+      queueId: entry.queueId,
+      waiting: this.matchmaking.size,
+      timeoutMs: this.opts.queueTimeoutMs,
+      enqueuedAt: entry.enqueuedAt,
+      deadlineAt: this.matchmaking.nextDeadlineAt ?? entry.deadlineAt,
+      serverNow: Date.now(),
+    };
+  }
+
+  private sendQueueJoined(client: Client, entry: MatchmakingEntry): void {
+    this.sendTo(client.ws, { type: 'queue.joined', ...this.queuePayload(entry) });
+  }
+
+  private syncQueueOrMatch(client: Client): void {
+    const gameId = this.userGame.get(client.userId);
+    const room = gameId ? this.rooms.get(gameId) : undefined;
+    if (room && !room.ended && room.members[client.userId]) {
+      this.sendTo(client.ws, { type: 'queue.state', state: 'MATCHED', gameId: room.id, serverNow: Date.now() });
+      this.logMatchmaking('client_resume', { roomId: room.id, userId: client.userId });
+      this.resumeIntoRoom(room, client);
+      return;
     }
-    const humans = this.queue.splice(0, this.queue.length);
-    this.queueStartAt = 0;
-    if (humans.length === 0) return;
-    if (humans.length >= 3 || timedOut) {
-      // 1 人 → H+AI+AI；2 人 → H+H+AI（startRoom 内补齐）；0 人不会到这里
-      this.startRoom(humans.map((c) => c.userId));
-    } else {
-      // 理论不达：不足 3 人且未超时 → 放回队列等下一人
-      this.queue.unshift(...humans);
-      this.queueStartAt = Date.now();
-      this.queueTimer = setTimeout(() => this.flushQueue(true), this.opts.queueTimeoutMs);
+    const queued = this.matchmaking.snapshotFor(client.userId);
+    if (queued) {
+      const entry = this.matchmaking.join(client.userId, client.connectionId, Date.now());
+      this.sendTo(client.ws, { type: 'queue.state', state: 'QUEUED', ...this.queuePayload(entry) });
+      return;
     }
+    this.sendTo(client.ws, { type: 'queue.state', state: 'NOT_QUEUED', serverNow: Date.now() });
+  }
+
+  private scheduleQueueWake(): void {
+    if (this.queueWakeTimer) clearTimeout(this.queueWakeTimer);
+    this.queueWakeTimer = null;
+    const deadline = this.matchmaking.nextDeadlineAt;
+    if (deadline === null) return;
+    this.queueWakeTimer = setTimeout(
+      () => this.finalizeEligibleMatchmaking('timer'),
+      Math.max(0, deadline - Date.now()),
+    );
+    this.queueWakeTimer.unref?.();
+  }
+
+  /** Timer, sweeper and third-human paths share one idempotent atomic claim. */
+  private finalizeEligibleMatchmaking(trigger: 'timer' | 'sweeper' | 'three_humans'): void {
+    let claim = this.matchmaking.claimEligible(Date.now());
+    while (claim) {
+      if (trigger !== 'three_humans') {
+        this.logMatchmaking('deadline_reached', {
+          queueId: claim.queueId, humanCount: claim.entries.length, aiCount: claim.aiCount,
+          deadline: Math.min(...claim.entries.map((entry) => entry.deadlineAt)), trigger,
+        });
+      }
+      const liveIds = claim.entries
+        .map((entry) => entry.userId)
+        .filter((userId) => this.clients.get(userId)?.ws.readyState === WebSocket.OPEN);
+      if (liveIds.length > 0) {
+        this.logMatchmaking('ai_fill_begin', {
+          queueId: claim.queueId, humanCount: liveIds.length, aiCount: 3 - liveIds.length,
+        });
+        this.startRoom(liveIds, 'online', claim.queueId);
+      }
+      claim = this.matchmaking.claimEligible(Date.now());
+    }
+    this.scheduleQueueWake();
   }
 
   /** 启动对局：
@@ -280,7 +349,7 @@ export class GameServer {
    *      2H+1AI：4★60% / 5★40%（无保护）；
    *      3H：无 AI。
    *  - invite（好友邀请）：保持邀请顺序（发送者/接受者），AI 补位沿用原有 1–5★ 权重。 */
-  private startRoom(humanIds: string[], mode: 'online' | 'invite' = 'online'): void {
+  private startRoom(humanIds: string[], mode: 'online' | 'invite' = 'online', queueId = `invite-${randomUUID()}`): void {
     const live = humanIds.filter((id) => this.clients.has(id));
     const humans: SeatInfo[] = live.map((id) => {
       const u = this.db.findUserById(id);
@@ -289,13 +358,13 @@ export class GameServer {
     if (humans.length === 0) return;
     const participants: SeatInfo[] = [...humans];
     while (participants.length < 3) {
-      let lvl: AILevel;
+      let lvl: AiDifficulty;
       if (mode === 'online') {
         lvl = humans.length === 1 ? pickOnlineSingleHumanAiDifficulty() : pickOnlineTwoHumanAiDifficulty();
       } else {
-        lvl = pickAiLevel();
+        lvl = pickAiDifficulty();
       }
-      participants.push({ kind: 'ai', stars: AI_STARS[lvl], aiLevel: lvl });
+      participants.push({ kind: 'ai', stars: lvl, aiLevel: lvl });
     }
     // 随机分配“参与者 → A/B/C 座位”；不改变 A→B→C 的行动顺序（只换谁坐在哪）
     const assigned = mode === 'online' ? shuffled(participants) : participants;
@@ -323,6 +392,13 @@ export class GameServer {
       policy,
     };
     this.rooms.set(room.id, room);
+    this.ensureTurnClock(room);
+    this.logMatchmaking('ai_fill_complete', {
+      queueId, roomId: room.id, humanCount: humans.length, aiCount: 3 - humans.length,
+    });
+    this.logMatchmaking('room_created', {
+      queueId, roomId: room.id, humanCount: humans.length, aiCount: 3 - humans.length,
+    });
     for (const h of humans) {
       this.userGame.set(h.userId!, room.id);
       this.db.touchOnline(h.userId!, 'playing');
@@ -337,9 +413,17 @@ export class GameServer {
           yourSeat: members[h.userId!],
           state: room.state,
           qualification: qualificationFromState(room.state),
+          turnDeadlineAt: room.turnDeadlineAt ?? null,
+          serverNow: Date.now(),
+        });
+        this.logMatchmaking('broadcast_start', {
+          queueId, roomId: room.id, userId: h.userId, humanCount: humans.length, aiCount: 3 - humans.length,
         });
       }
     }
+    this.logMatchmaking('match_started', {
+      queueId, roomId: room.id, humanCount: humans.length, aiCount: 3 - humans.length,
+    });
     void this.maybeRunAI(room);
   }
 
@@ -458,13 +542,18 @@ export class GameServer {
         await new Promise((r) => setTimeout(r, this.opts.aiMoveDelayMs));
         if (room.ended) return;
         if (room.mode === 'online' && this.anyHumanAway(room)) return;
+        const moveStarted = performance.now();
         const decision = chooseAIMove(room.state, cur, seat.aiLevel, {
           seed: (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0,
           timeBudgetMs: this.opts.aiTimeBudgetMs,
-          maxDepth: OFFLINE_LEVEL_CONFIG[seat.aiLevel].maxDepth,
-          candidateK: OFFLINE_LEVEL_CONFIG[seat.aiLevel].candidateK,
           policy: room.policy ?? undefined,
         });
+        console.info(JSON.stringify({
+          event: 'ai_tactic_selected', difficulty: seat.aiLevel,
+          selectedTactic: decision.selectedTactic, moveLatency: performance.now() - moveStarted,
+          legal: !decision.fallbackUsed, round: Math.floor(room.state.turnIndex / 3) + 1,
+          seat: cur, roomId: room.id, timestamp: Date.now(),
+        }));
         const res = applyMove(room.state, decision.row, decision.col);
         if (res.rejected) break;
         room.state = res.state;
@@ -481,6 +570,12 @@ export class GameServer {
 
   private async applyAndBroadcast(room: Room, row: number, col: number): Promise<void> {
     if (room.ended) return;
+    // Validate the absolute server deadline BEFORE accepting a move, even if the
+    // timer callback was delayed by CPU work. Illegal moves never reset it.
+    if (room.mode === 'online' && room.turnDeadlineAt && Date.now() >= room.turnDeadlineAt) {
+      this.forfeitSeat(room, currentPlayerOf(room.state), 'TIMEOUT');
+      return;
+    }
     const res = applyMove(room.state, row, col);
     if (res.rejected) {
       for (const id of room.humanIds) {
@@ -498,12 +593,43 @@ export class GameServer {
     void this.maybeRunAI(room);
   }
 
+  private clearTurnClock(room: Room): void {
+    if (room.turnTimer) clearTimeout(room.turnTimer);
+    room.turnTimer = undefined;
+    room.turnDeadlineAt = undefined;
+    room.timedTurnIndex = undefined;
+  }
+
+  private ensureTurnClock(room: Room): void {
+    if (room.mode !== 'online' || room.ended || room.state.status !== 'playing') {
+      this.clearTurnClock(room); return;
+    }
+    const actor = currentPlayerOf(room.state);
+    // AI uses its existing bounded server search. Only humans have a move clock.
+    if (room.seats[actor].kind !== 'human' || getLegalMoves(room.state).length === 0) {
+      this.clearTurnClock(room); return;
+    }
+    if (room.timedTurnIndex === room.state.turnIndex && room.turnDeadlineAt) return;
+    this.clearTurnClock(room);
+    const turn = room.state.turnIndex;
+    room.timedTurnIndex = turn;
+    room.turnDeadlineAt = Date.now() + this.opts.turnTimeoutMs;
+    room.turnTimer = setTimeout(() => {
+      if (room.ended || room.mode !== 'online' || room.state.turnIndex !== turn) return;
+      this.forfeitSeat(room, actor, 'TIMEOUT');
+    }, this.opts.turnTimeoutMs);
+    room.turnTimer.unref?.();
+  }
+
   private broadcastRoom(room: Room): void {
+    this.ensureTurnClock(room);
     const payload = JSON.stringify({
       type: 'game.state',
       state: room.state,
       seats: this.publicSeats(room),
       qualification: qualificationFromState(room.state),
+          turnDeadlineAt: room.turnDeadlineAt ?? null,
+          serverNow: Date.now(),
     });
     for (const id of room.humanIds) {
       const c = this.clients.get(id);
@@ -529,6 +655,7 @@ export class GameServer {
     if (room.ended) return;
     room.ended = true;
     room.phase = 'FINISHED';
+    this.clearTurnClock(room);
     room.endReason = info.reason;
     for (const t of room.disconnectTimers.values()) clearTimeout(t);
     room.disconnectTimers.clear();
@@ -580,7 +707,7 @@ export class GameServer {
       const c = this.clients.get(uid);
       if (c && c.gameId === room.id && c.ws.readyState === WebSocket.OPEN) {
         this.sendTo(c.ws, { type: 'game.end', winner: info.winnerSeat, status: info.status, ...endPayload });
-        this.sendTo(c.ws, { type: 'MATCH_ENDED', ...endPayload });
+        this.sendTo(c.ws, { type: 'MATCH_ENDED', status: info.status, winner: info.winnerSeat, ...endPayload });
         c.gameId = undefined;
       }
       this.userGame.delete(uid);
@@ -638,6 +765,7 @@ export class GameServer {
     if (room.ended) return;
     room.ended = true;
     room.phase = 'FINISHED';
+    this.clearTurnClock(room);
     for (const t of room.disconnectTimers.values()) clearTimeout(t);
     room.disconnectTimers.clear();
     for (const [uid] of Object.entries(room.members) as Array<[string, Seat]>) {
@@ -691,10 +819,13 @@ export class GameServer {
     this.sendTo(client.ws, {
       type: 'game.start',
       gameId: room.id,
+      mode: room.mode,
       seats: this.publicSeats(room),
       yourSeat: seat,
       state: room.state,
       qualification: qualificationFromState(room.state),
+          turnDeadlineAt: room.turnDeadlineAt ?? null,
+          serverNow: Date.now(),
     });
     this.sendRoomEvent(room, { type: 'player.status', seat, status: 'reconnected' });
     void this.maybeRunAI(room);
@@ -762,21 +893,21 @@ export class GameServer {
   }
 
   private leaveQueue(client: Client): void {
-    const idx = this.queue.findIndex((c) => c.userId === client.userId);
-    if (idx >= 0) {
-      this.queue.splice(idx, 1);
+    const removed = this.matchmaking.leave(client.userId);
+    if (removed) {
       this.sendTo(client.ws, { type: 'queue.left' });
-      if (this.queue.length === 0 && this.queueTimer) {
-        clearTimeout(this.queueTimer);
-        this.queueTimer = null;
-        this.queueStartAt = 0;
-      } else if (this.queue.length > 0 && this.queueTimer === null) {
-        this.queueStartAt = Date.now();
-        this.queueTimer = setTimeout(() => this.flushQueue(true), this.opts.queueTimeoutMs);
-      }
+      this.scheduleQueueWake();
+      this.logMatchmaking('queue_leave', {
+        queueId: removed.queueId, userId: removed.userId, humanCount: this.matchmaking.size,
+        aiCount: Math.max(0, 3 - this.matchmaking.size), deadline: removed.deadlineAt,
+      });
       const user = this.db.findUserById(client.userId);
       if (user && !this.userGame.has(client.userId)) this.db.touchOnline(client.userId, 'online');
     }
+  }
+
+  private logMatchmaking(event: string, fields: Record<string, unknown>): void {
+    console.info(JSON.stringify({ event, ...fields, timestamp: Date.now() }));
   }
 
   private clearDisconnectTimer(room: Room, seat: Seat): void {

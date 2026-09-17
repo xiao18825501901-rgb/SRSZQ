@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../rng';
 import type { GameState, Player } from '../../game/types';
 import { applyDefensePolicy, projectedTurnsToWin, threatCellsFor } from '../defensePolicy';
-import { chooseAIMove } from '../chooseAIMove';
+import { chooseTacticMove } from '../chooseAIMove';
 
 /** 构造 13×13 棋盘状态（turnIndex 决定 Round 与当前行动者；不经过引擎校验，仅用于策略单测） */
 function makeState(turnIndex: number, stones: Array<[Player, number, number]>): GameState {
@@ -31,7 +31,7 @@ describe('Online 1H+2AI Hidden Human Protection（internal）', () => {
 
   it('HP4：2★ 不启用保护（chooseAIMove 层级 gating）', () => {
     const state = makeState(21, stones);
-    const d = chooseAIMove(state, 'A', 'tactical', { seed: 7, policy: { protectSingleHuman: true, humanSeat: 'C' } });
+    const d = chooseTacticMove(state, 'A', 'tactical', { seed: 7, policy: { protectSingleHuman: true, humanSeat: 'C' } });
     expect(d.reason).not.toContain('Defensive preference');
   });
 

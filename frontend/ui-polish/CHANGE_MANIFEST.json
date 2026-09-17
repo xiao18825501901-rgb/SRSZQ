@@ -1,0 +1,502 @@
+{
+  "base_archive": "SRSZQ_UI_Refresh_Complete.zip",
+  "status": "FRONTEND_ONLY",
+  "existing_files_changed": [
+    {
+      "path": "frontend/dist/index.html",
+      "before": "78787deb33b257be1db6c7de5d383b1d74cf40d38027a85ebd67f81247bd26e1",
+      "after": "7817197f8ced9df45179ee7eb250187532d0cfac92a19c81947e0e13b2f84209"
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "before": "c540b8fe1635363e6a647b1f1ae2e6aea401d398cc017304caafe22d6dae240a",
+      "after": "b5b59b5e9bb0f0869dbf00cad7afa02d363a09984c7f6163ac9515b36a2b2420"
+    }
+  ],
+  "files_added": [
+    {
+      "path": "frontend/START_HERE_INK.md",
+      "sha256": "d25e8feb895c9ac4c4280d2eed3069c982f60e4a9db67fc9461b262cb0fb3818"
+    },
+    {
+      "path": "frontend/ui-polish/render_manifest.json",
+      "sha256": "7dc178d20456cf49d83bfe2668bc8fb4b9a18bb530ba99f2ec4f83e64165bc14"
+    },
+    {
+      "path": "frontend/ui-polish/layout_checks.json",
+      "sha256": "661b7249326c86411f435b58436e7a8f87a09e5d9803194938abb2298884551c"
+    },
+    {
+      "path": "frontend/ui-polish/UPDATE_REPORT.md",
+      "sha256": "7245278e790903ba789dd8234b36c2efa8434d481f1eebd07d3119cb9a08050a"
+    },
+    {
+      "path": "frontend/ui-demos/02_register_desktop.png",
+      "sha256": "df509a3564c94672e5adcf9eeaa91ed43dac85c1a3f76664c3d565a78bc99d92"
+    },
+    {
+      "path": "frontend/ui-demos/14_local_game_mobile.png",
+      "sha256": "ee6d5bf81e6758694c8ae188e16a761224bb64818f561ab85789081a5a48d12a"
+    },
+    {
+      "path": "frontend/ui-demos/15_local_review_mobile.png",
+      "sha256": "2edae95bd39394f25e104ae336b8910e7d285cc3c5f022094aaf2aa32613efdc"
+    },
+    {
+      "path": "frontend/ui-demos/15_local_review_desktop.png",
+      "sha256": "1a0cdc184d7f6f76c4b7ae6636c80cc8f56fd7805a365870db2832df8884e9d5"
+    },
+    {
+      "path": "frontend/ui-demos/16_board_settings_mobile.png",
+      "sha256": "8d3a644ad5811f75cf78717bdb99661a9639747e04fd42efac8fd839b1c66642"
+    },
+    {
+      "path": "frontend/ui-demos/UI_OVERVIEW_MOBILE.png",
+      "sha256": "a95af3398f643a0884143bdb45b6dca54e51517f41867e300523382b9a5e6450"
+    },
+    {
+      "path": "frontend/ui-demos/render_manifest.json",
+      "sha256": "7dc178d20456cf49d83bfe2668bc8fb4b9a18bb530ba99f2ec4f83e64165bc14"
+    },
+    {
+      "path": "frontend/ui-demos/02_register_mobile.png",
+      "sha256": "6e4eac87859beffe8ef2faa395fb21ab0794479e78624bec839af524f190b71c"
+    },
+    {
+      "path": "frontend/ui-demos/17_local_17_desktop.png",
+      "sha256": "684c6f6161a84d2f09d1807e556b6c635178484a7d5c4f04007eefb6bc2fe07c"
+    },
+    {
+      "path": "frontend/ui-demos/06_ranking_mobile.png",
+      "sha256": "dd66b4198e10fba67016c65b1846cb066a0b5c2ee937a1a5c8c79a8f9c443e96"
+    },
+    {
+      "path": "frontend/ui-demos/03_login_desktop.png",
+      "sha256": "702a4a4474c05776cbf155f8f5d0868b6cd545b8dd53e1f93a62c44a03f82ea6"
+    },
+    {
+      "path": "frontend/ui-demos/14_local_game_desktop.png",
+      "sha256": "fa122c886caa2326de3b4b4959d21c6e4bfd0df69193147dde34141d328ae25d"
+    },
+    {
+      "path": "frontend/ui-demos/11_ai_after_move_desktop.png",
+      "sha256": "a61417643075188b5be5357d2d8f20f3bcbf15ab5673538089b92f52e9ca2820"
+    },
+    {
+      "path": "frontend/ui-demos/11_ai_after_move_mobile.png",
+      "sha256": "b6413f8a23ed516aaed801f21c6b704acd4838976c13271c853ce01bee50a61d"
+    },
+    {
+      "path": "frontend/ui-demos/04_lobby_desktop.png",
+      "sha256": "1b8f028f96d6b99546f7cd08af8fc4009631e3fb6bc44b583094d8a521e1734a"
+    },
+    {
+      "path": "frontend/ui-demos/22_online_result_desktop.png",
+      "sha256": "484c0b6f9536ec409ac6921f56a68d5fa3670733979f774510d3f8552aac3a70"
+    },
+    {
+      "path": "frontend/ui-demos/12_ai_review_mobile.png",
+      "sha256": "178bb0bfdf87909099859345b34f5f607e11cabccdb679c6453d57b8b9dc76b6"
+    },
+    {
+      "path": "frontend/ui-demos/README.md",
+      "sha256": "a83b5a502cbae727cd0e4eeb89c476da59219974d84705620c8c4f64d48e372b"
+    },
+    {
+      "path": "frontend/ui-demos/09_ai_setup_desktop.png",
+      "sha256": "63e485882d74ea21ff30b8df0a379c76cc1dee3c5ef11d98a9de006af9366fe4"
+    },
+    {
+      "path": "frontend/ui-demos/13_local_setup_mobile.png",
+      "sha256": "60497479d456e2c4c8e8dff18c09ed75871db32f9e43de10dcc1d62d19a8c339"
+    },
+    {
+      "path": "frontend/ui-demos/05_rules_mobile.png",
+      "sha256": "d40682564dea66c2bfc1a8efccf071fd2985f9f61c78a053b4857cbad3ee4ac2"
+    },
+    {
+      "path": "frontend/ui-demos/06_ranking_desktop.png",
+      "sha256": "70e7f6090b36d8b01f4085823b7d1e0f738d368511e633bb61f45def4c3446e6"
+    },
+    {
+      "path": "frontend/ui-demos/19_online_game_desktop.png",
+      "sha256": "f23b6c6d620be2fd21ab338ebc7d40f69f12868e29eb6fc30e09260e2fffae33"
+    },
+    {
+      "path": "frontend/ui-demos/07_friends_mobile.png",
+      "sha256": "6327106a410faca9a203e305b637ff1ae2ede55eede58affad1160f95b226d74"
+    },
+    {
+      "path": "frontend/ui-demos/05_rules_desktop.png",
+      "sha256": "5eae63da7b29bbbe618c567e67e891540d96cf1e1bd5897e294352085fea2067"
+    },
+    {
+      "path": "frontend/ui-demos/layout_checks.json",
+      "sha256": "661b7249326c86411f435b58436e7a8f87a09e5d9803194938abb2298884551c"
+    },
+    {
+      "path": "frontend/ui-demos/08_matching_mobile.png",
+      "sha256": "8289b85f78938588460f1be5f3ad46e14b30f1b872b1959d79968ac4e7ff412d"
+    },
+    {
+      "path": "frontend/ui-demos/25_local_result_desktop.png",
+      "sha256": "7ea12d998029c755285ff566cce6746d539d324d81f3b0516f6f667db6b46da8"
+    },
+    {
+      "path": "frontend/ui-demos/12_ai_review_desktop.png",
+      "sha256": "4e2b79c4a3a1503969d6ee2aadb9d68966a16815007898e47cc941df8d77ee45"
+    },
+    {
+      "path": "frontend/ui-demos/20_online_review_mobile.png",
+      "sha256": "40ffda760f39ca5912d5393fe7b43c1915627200149848c9f5a581c65b59c312"
+    },
+    {
+      "path": "frontend/ui-demos/08_matching_desktop.png",
+      "sha256": "3573f58928dc406c72988772b620d1f482336aef6d5e179f41f445b6ed2be0d3"
+    },
+    {
+      "path": "frontend/ui-demos/24_tutorial_game_desktop.png",
+      "sha256": "1f4b1d571c780aab7c8f86d77f233133ffe19f6ea219d6abd303e2c99e3c8ee6"
+    },
+    {
+      "path": "frontend/ui-demos/23_tutorial_mobile.png",
+      "sha256": "24947211fe83bffb7d07759058f92293162581dabdaf3b85e34754db22bc46d4"
+    },
+    {
+      "path": "frontend/ui-demos/16_board_settings_desktop.png",
+      "sha256": "1beb8b685ac2522298fc6df83cea7851ec7711bbe4f6e4ea7ac032162ae620a3"
+    },
+    {
+      "path": "frontend/ui-demos/22_online_result_mobile.png",
+      "sha256": "31e316b5c8f721d31e1083caa0a4d2b9c8f0bc16a195dce253e3069c64c44cb8"
+    },
+    {
+      "path": "frontend/ui-demos/18_friend_game_desktop.png",
+      "sha256": "01cd65da46a590c310b14b62d4ad60b3d201476ccea3fd0d28d8a93d3e4a3a6f"
+    },
+    {
+      "path": "frontend/ui-demos/10_ai_game_desktop.png",
+      "sha256": "e25c2822e2e525ae4ba6a238381a08d48e78945ec32436033e49b2d2d4fe4209"
+    },
+    {
+      "path": "frontend/ui-demos/UI_OVERVIEW_DESKTOP.png",
+      "sha256": "434269ca2ebb60954838c98ffe94863eb514e6488bbefdba763a01f6ac7b6da0"
+    },
+    {
+      "path": "frontend/ui-demos/17_local_17_mobile.png",
+      "sha256": "c0932534b155a31a26a0386631b51605e30f49203608f67a48101fcb8a2c6d84"
+    },
+    {
+      "path": "frontend/ui-demos/19_online_game_mobile.png",
+      "sha256": "2eece2a6eef8f3d8bb000531ccb4e90bed5ede59638aa1d6453c6c0c901eaa2f"
+    },
+    {
+      "path": "frontend/ui-demos/21_leave_confirm_mobile.png",
+      "sha256": "236194327df724d102578b17b60bc27f07e742ab0cab9737f4704ffb4babd0b3"
+    },
+    {
+      "path": "frontend/ui-demos/25_local_result_mobile.png",
+      "sha256": "d01be208f79a2bec8b4b354bb2f5c7def5b46e78141d5f4219b42cff5e8082c2"
+    },
+    {
+      "path": "frontend/ui-demos/21_leave_confirm_desktop.png",
+      "sha256": "f2ae048cd848081d589b33b295b97a1e86adce5920bd2cfd8c20ba537c026dbf"
+    },
+    {
+      "path": "frontend/ui-demos/index.html",
+      "sha256": "d6b3ee6f033182106213f4b2144392cf3d6aecbfd8b0beaba8ccdbeba1d56b40"
+    },
+    {
+      "path": "frontend/ui-demos/20_online_review_desktop.png",
+      "sha256": "b9abcbc6118d651e47ac89e7dd12ea1fc76fbebb7ec4334e78f84d65d5f65e8d"
+    },
+    {
+      "path": "frontend/ui-demos/01_home_desktop.png",
+      "sha256": "2c5c4a0487217a9b00d514f7dd575864340f2474eef6890c8dfe7898062f4382"
+    },
+    {
+      "path": "frontend/ui-demos/04_lobby_mobile.png",
+      "sha256": "a8934efe1be5281dc829d3c26e66787981fa35d7ec764ea74087d038b062ccc7"
+    },
+    {
+      "path": "frontend/ui-demos/18_friend_game_mobile.png",
+      "sha256": "40ecfeb5b857f509efa94aa791e29e5be4f28adc0ff0c2221416af7a61205b03"
+    },
+    {
+      "path": "frontend/ui-demos/07_friends_desktop.png",
+      "sha256": "81c1051cc8a3dbff1c4841c20260649813fad4b4d00bd135facd117ea1ba2006"
+    },
+    {
+      "path": "frontend/ui-demos/24_tutorial_game_mobile.png",
+      "sha256": "5dd34bb6d57b63bcfc3acf1ac12dfd70ef489187e2e322c289e770c6937d2289"
+    },
+    {
+      "path": "frontend/ui-demos/23_tutorial_desktop.png",
+      "sha256": "f8f8577475f01953b62ff080cd7c0f6b942fa9be8a2be13afc8c4d2b8291eac7"
+    },
+    {
+      "path": "frontend/ui-demos/13_local_setup_desktop.png",
+      "sha256": "8d899443ee88e04e792ea1f7a69e6c545551cdf3f22af1722845200c44cf5bd5"
+    },
+    {
+      "path": "frontend/ui-demos/10_ai_game_mobile.png",
+      "sha256": "e885e3835226f36be0e45bafc19b3e90cf74698547b166f4f9618209325a2a83"
+    },
+    {
+      "path": "frontend/ui-demos/03_login_mobile.png",
+      "sha256": "30ad66926e21a31ea3cd494852bd84ff680037ece189b32789183ee205496d6e"
+    },
+    {
+      "path": "frontend/ui-demos/09_ai_setup_mobile.png",
+      "sha256": "287d4858af1e82b17d52f16d3fce0b8073cc91019e4f9089c1c52f276ca44538"
+    },
+    {
+      "path": "frontend/ui-demos/01_home_mobile.png",
+      "sha256": "99b20111b5e050bb796c4d9ece04b7f62f9050e4b8c27dc002d705736592fa80"
+    },
+    {
+      "path": "frontend/src/styles/ink.css",
+      "sha256": "58c7b9f0d7f1dd2b7decbd797a7c75aa21fa154d63feed4f2fc1ccded8ccb0a9"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/10_ai_game_desktop.jpg",
+      "sha256": "38fce58a1d938f7765e8c3b0ed798a508b3c7c92db433495b398954341be2d0d"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/15_local_review_desktop.jpg",
+      "sha256": "07b73337ba3de74cf2374d9d4c3535ff718c7b9e0e3a7f410a030b0fd55e9c31"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/03_login_mobile.jpg",
+      "sha256": "7a621b2157b9f59baa6c6eb34444473a5f4fdd551dd791c13e98bf54b7cedab7"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/08_matching_mobile.jpg",
+      "sha256": "75388a77f47614cbb3436b03441e4a232c259dba90dd081e43de63b7889ecb8b"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/09_ai_setup_desktop.jpg",
+      "sha256": "528e904201dfd74087ea02ea3d81142469b00882d4092ae39d26d9ced7a60fb2"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/14_local_game_desktop.jpg",
+      "sha256": "3159e13cb223092d07903b5f996ddc09dccb0a5dd19c6a437dd9444cf27ed9c0"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/20_online_review_desktop.jpg",
+      "sha256": "9aca5f063bc70117330983a8bbd515b31df31c0ca313e0c9eda441f70b42782d"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/05_rules_desktop.jpg",
+      "sha256": "7cefda360ba4e71010b97dbc5b92769cd7af8fb9444d692d0dc10d176638de78"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/06_ranking_desktop.jpg",
+      "sha256": "d45cf7543519406fe053a7c1971b9a29b49c2fb647589519b64a59559b087543"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/22_online_result_desktop.jpg",
+      "sha256": "6ff18ba34301b11c230e3be0cc8360b8d07c94ec97f10bf631d7127765367e93"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/15_local_review_mobile.jpg",
+      "sha256": "d4ab4072a757c95e990e05d2cfceab4c0e3a20e9519795b8b07364613e16fedf"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/07_friends_desktop.jpg",
+      "sha256": "8d1765e4eb72fe00ac7c296e54beae19154185197744db2c97735ed824ecfa7a"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/07_friends_mobile.jpg",
+      "sha256": "62367e8e39db28f220876e9b9064a83149eaa7cfcaa8d6266322affa06787479"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/02_register_mobile.jpg",
+      "sha256": "a140c5c625a9d5b2aecbed9edd916218f63ba053d9aac256a68617d6cb11fde1"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/17_local_17_mobile.jpg",
+      "sha256": "2092b574b0677c7cb174ee768e29941828b7a99503d30b222b3e96be6bf10195"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/04_lobby_mobile.jpg",
+      "sha256": "62b1c6689e1dfbd28da2de2cd142e4fb9e6cc677745d79b564c6db82071bc3cb"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/02_register_desktop.jpg",
+      "sha256": "8cd1d2ca579a5c2c36cc693e4a2c3179537778467761b6c47f645b62925af8c1"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/25_local_result_desktop.jpg",
+      "sha256": "64b618fe74760f3a6b443207fb17e97c031ac2e40907ba564471dcbe84eee7b3"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/05_rules_mobile.jpg",
+      "sha256": "a724410b9ef074984836a19c706f6036c1cbe408fa10ebb700b2d5cfb4a230e0"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/16_board_settings_mobile.jpg",
+      "sha256": "b10ceac51b48dd763e6b8b7ed4289b53ea733088c513856758108f39cc227252"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/12_ai_review_mobile.jpg",
+      "sha256": "7221c130bda4581a90c411026b1abc6904a5ac25b39e968b727b522105903fe5"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/11_ai_after_move_desktop.jpg",
+      "sha256": "1fcf46db6f8e196d204a5cd5a3f53792a9dc748b324eca004512b057a74b6609"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/18_friend_game_desktop.jpg",
+      "sha256": "15d0b38586936f567e896e0a33d7a7ccb402a641cf4291031da8195bc9c92ae3"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/18_friend_game_mobile.jpg",
+      "sha256": "5215a597345c0083872378e7aae0d81c891097e5fbb8c4e018fb471c62249a09"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/23_tutorial_mobile.jpg",
+      "sha256": "90709509212af14411e2aeb5e66cd5f5c4cbdf1ac0db90d22d46cf8e150aa649"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/12_ai_review_desktop.jpg",
+      "sha256": "f92c0f33fbb3f21cdfe8f00095161498bbff3c619cf555d0440a1806da3e18e5"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/24_tutorial_game_mobile.jpg",
+      "sha256": "8785e4762444ff48989f9c76f68fada8f7bdbfc844b3bc7aef8cfd8644bdb465"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/06_ranking_mobile.jpg",
+      "sha256": "521225684adb9761e00b58ade3cf52ae081f61841aa1d38ed7ff691e7fbfb157"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/24_tutorial_game_desktop.jpg",
+      "sha256": "7115063e58f5f2e93109a1252bf0b89033ecaca415fd906c8249b1b8108e6532"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/03_login_desktop.jpg",
+      "sha256": "9d7dd143f5a525f2a9154b78e8f8526de7b2a0cd9a6b5c325215f705fe869f9f"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/21_leave_confirm_desktop.jpg",
+      "sha256": "8e62e5bf7a7d59419601c3676c21e94aaeb04811e40d09998453585754e419ee"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/16_board_settings_desktop.jpg",
+      "sha256": "4f9dd1e05de7fa05e902aa019d0ea9499a3e95a63cbf3a07c6657853c9d6646c"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/08_matching_desktop.jpg",
+      "sha256": "09234179321b9166e12f7160c4eec9967e94665d5daa972de70b8ce11922e8b9"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/19_online_game_mobile.jpg",
+      "sha256": "aab51fc7477d1258d8f59a40ba6da078753d5b2aa34ad1ac7c382367b98a7fa6"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/20_online_review_mobile.jpg",
+      "sha256": "8945735eec6ecabb8a72d6f03fea9dc80882acbabe9a6496fdb90c348e56e98a"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/01_home_mobile.jpg",
+      "sha256": "fa16b52b4b60e35d0060c28245dc8f1ea4920aec618e38aeb8de4f43df197cbb"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/13_local_setup_mobile.jpg",
+      "sha256": "33860a51469c3a00b313465a22d041590da4e052de4a214ca2e9028da7819935"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/19_online_game_desktop.jpg",
+      "sha256": "512165752597f902ca7e0d8b0773af1ed7a1cabf5cf1090ca7038f4f2c26efda"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/14_local_game_mobile.jpg",
+      "sha256": "512bd875c86fe17de5400644afeda5c8bd2ed0b3040958b466b70995b2b0c039"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/13_local_setup_desktop.jpg",
+      "sha256": "0456bf63f3479188944b12a144243e6c524ad40f9049279b473301d574778392"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/04_lobby_desktop.jpg",
+      "sha256": "4c3da25ab350206039bdb07267b94c98c4f070b810a92d6d2161b701116ac1a3"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/10_ai_game_mobile.jpg",
+      "sha256": "c92b36fd37fc22f4a433bb60dceb916a438a1456214941b08d1cd9fb7fbe6ad2"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/09_ai_setup_mobile.jpg",
+      "sha256": "42b52a2dd1843f4799f8a164ef2c88816c274daa131bcf8e317ad6c8be23ed3b"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/22_online_result_mobile.jpg",
+      "sha256": "b631b3d03177578a39566ebe98527b16adc065c3b340ff77c9f7ebce7dc14d68"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/23_tutorial_desktop.jpg",
+      "sha256": "ca603023dd7958b924a91a747fd364abb4cc007019ba72829d12fa341f9d6bd2"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/21_leave_confirm_mobile.jpg",
+      "sha256": "663ebd3ac3c7e173e128e9f164f1bc3d205af9abd786c0ea2092dbd24a68f655"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/01_home_desktop.jpg",
+      "sha256": "47a669e1f216cc8294755f2eccded17d130336f5e7279cfc90f02b052ecfe5f9"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/17_local_17_desktop.jpg",
+      "sha256": "0a26b33269b4a11e0e41f17a11f7b025345a93ce0c69470ca2fe80b1f6e8d7b7"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/25_local_result_mobile.jpg",
+      "sha256": "00366df1acc36d324689771116dd2782ca6197f1faf469323906068459c75447"
+    },
+    {
+      "path": "frontend/ui-demos/thumbnails/11_ai_after_move_mobile.jpg",
+      "sha256": "7527293ee3d1b18e22c6dc6e0b6cbe3f63e2fc8ceb7dd13b4a1b6304ff5d2658"
+    },
+    {
+      "path": "frontend/dist/ink/landscape-portrait.svg",
+      "sha256": "e896749582ccc89c619915603b398bfec1b8c5b39346c34fb43dadf12454160e"
+    },
+    {
+      "path": "frontend/dist/ink/landscape-wide.svg",
+      "sha256": "9234b8a451fa542b6c45f4934a5569eb72ac6630b1151e475c5718ad9e605d87"
+    },
+    {
+      "path": "frontend/dist/ink/paper-fiber.svg",
+      "sha256": "4d4c4749ec59d14e93c29495fd2f81b4c5a78b9875e3c896b50a54f8e3b8d369"
+    },
+    {
+      "path": "frontend/dist/assets/ink.css",
+      "sha256": "58c7b9f0d7f1dd2b7decbd797a7c75aa21fa154d63feed4f2fc1ccded8ccb0a9"
+    },
+    {
+      "path": "frontend/public/ink/landscape-portrait.svg",
+      "sha256": "e896749582ccc89c619915603b398bfec1b8c5b39346c34fb43dadf12454160e"
+    },
+    {
+      "path": "frontend/public/ink/README.md",
+      "sha256": "a29952af234af2d30ed60de919c32fbc65833769f52049830fafd7eef76d2b2a"
+    },
+    {
+      "path": "frontend/public/ink/landscape-wide.svg",
+      "sha256": "9234b8a451fa542b6c45f4934a5569eb72ac6630b1151e475c5718ad9e605d87"
+    },
+    {
+      "path": "frontend/public/ink/paper-fiber.svg",
+      "sha256": "4d4c4749ec59d14e93c29495fd2f81b4c5a78b9875e3c896b50a54f8e3b8d369"
+    }
+  ],
+  "original_files_byte_unchanged": 2977,
+  "non_frontend_changes": [],
+  "backend_and_shared_unchanged": true,
+  "screenshots": 50,
+  "checks": 69,
+  "check_failures": 0,
+  "preview_js_unchanged": true,
+  "standard_npm_build_rerun": false
+}

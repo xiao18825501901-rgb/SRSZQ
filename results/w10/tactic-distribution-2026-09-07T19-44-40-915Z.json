@@ -1,0 +1,141 @@
+{
+  "samplesPerDifficulty": 100000,
+  "tolerance": 0.01,
+  "rows": [
+    {
+      "difficulty": 1,
+      "samples": 100000,
+      "target": {
+        "random": 0.45,
+        "tactical": 0.22,
+        "selfish": 0.15,
+        "3ply": 0.1,
+        "maxn": 0.08
+      },
+      "counts": {
+        "random": 44893,
+        "tactical": 21910,
+        "selfish": 14948,
+        "3ply": 10111,
+        "maxn": 8138
+      },
+      "actual": {
+        "random": 0.44893,
+        "tactical": 0.2191,
+        "selfish": 0.14948,
+        "3ply": 0.10111,
+        "maxn": 0.08138
+      },
+      "maxAbsoluteError": 0.0013799999999999923,
+      "expectedRank": 2.1399999999999997
+    },
+    {
+      "difficulty": 2,
+      "samples": 100000,
+      "target": {
+        "random": 0.31,
+        "tactical": 0.22,
+        "selfish": 0.19,
+        "3ply": 0.15,
+        "maxn": 0.13
+      },
+      "counts": {
+        "random": 31034,
+        "tactical": 22198,
+        "selfish": 18884,
+        "3ply": 14894,
+        "maxn": 12990
+      },
+      "actual": {
+        "random": 0.31034,
+        "tactical": 0.22198,
+        "selfish": 0.18884,
+        "3ply": 0.14894,
+        "maxn": 0.1299
+      },
+      "maxAbsoluteError": 0.0019800000000000095,
+      "expectedRank": 2.57
+    },
+    {
+      "difficulty": 3,
+      "samples": 100000,
+      "target": {
+        "random": 0.2,
+        "tactical": 0.2,
+        "selfish": 0.2,
+        "3ply": 0.2,
+        "maxn": 0.2
+      },
+      "counts": {
+        "random": 19795,
+        "tactical": 19804,
+        "selfish": 20025,
+        "3ply": 20202,
+        "maxn": 20174
+      },
+      "actual": {
+        "random": 0.19795,
+        "tactical": 0.19804,
+        "selfish": 0.20025,
+        "3ply": 0.20202,
+        "maxn": 0.20174
+      },
+      "maxAbsoluteError": 0.002050000000000024,
+      "expectedRank": 3
+    },
+    {
+      "difficulty": 4,
+      "samples": 100000,
+      "target": {
+        "random": 0.12,
+        "tactical": 0.16,
+        "selfish": 0.19,
+        "3ply": 0.24,
+        "maxn": 0.29
+      },
+      "counts": {
+        "random": 12082,
+        "tactical": 15905,
+        "selfish": 19066,
+        "3ply": 24207,
+        "maxn": 28740
+      },
+      "actual": {
+        "random": 0.12082,
+        "tactical": 0.15905,
+        "selfish": 0.19066,
+        "3ply": 0.24207,
+        "maxn": 0.2874
+      },
+      "maxAbsoluteError": 0.002599999999999991,
+      "expectedRank": 3.42
+    },
+    {
+      "difficulty": 5,
+      "samples": 100000,
+      "target": {
+        "random": 0.08,
+        "tactical": 0.12,
+        "selfish": 0.16,
+        "3ply": 0.25,
+        "maxn": 0.39
+      },
+      "counts": {
+        "random": 7943,
+        "tactical": 12163,
+        "selfish": 15978,
+        "3ply": 24907,
+        "maxn": 39009
+      },
+      "actual": {
+        "random": 0.07943,
+        "tactical": 0.12163,
+        "selfish": 0.15978,
+        "3ply": 0.24907,
+        "maxn": 0.39009
+      },
+      "maxAbsoluteError": 0.0016300000000000064,
+      "expectedRank": 3.75
+    }
+  ]
+}

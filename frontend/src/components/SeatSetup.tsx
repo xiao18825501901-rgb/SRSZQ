@@ -22,7 +22,7 @@ function choiceLabel(c: SeatChoice): string {
 
 /**
  * SRSZQ AI 座位设置（正式规则 v2：一套资格规则）。
- * 每座位 6 选 1：人类 / AI★~★★★★★（内部映射 Random…MaxN）。
+ * 每座位 6 选 1：人类 / AI★~★★★★★（星级对应概率计策画像）。
  * 约束：至少 1 人类，至多 2 AI（禁止三 AI 对弈）。
  */
 export function SeatSetup({ seats, disabled, onChange }: Props) {
@@ -48,7 +48,10 @@ export function SeatSetup({ seats, disabled, onChange }: Props) {
                 aria-label={`玩家 ${p} 的座位类型与 AI 难度`}
                 disabled={disabled}
                 value={value}
-                onChange={(e) => onChange(p, e.target.value as SeatChoice)}
+                onChange={(e) => onChange(
+                  p,
+                  e.target.value === 'human' ? 'human' : Number(e.target.value) as AILevel,
+                )}
               >
                 {CHOICES.map((c) => {
                   // 当前已是 AI 的座位可自由换档；人类座位想变 AI 需 <2 AI

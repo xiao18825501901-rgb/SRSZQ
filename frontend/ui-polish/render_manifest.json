@@ -1,0 +1,502 @@
+[
+  {
+    "id": "01_home",
+    "title": "首页",
+    "device": "desktop",
+    "file": "01_home_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "02_register",
+    "title": "注册",
+    "device": "desktop",
+    "file": "02_register_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "03_login",
+    "title": "登录",
+    "device": "desktop",
+    "file": "03_login_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "04_lobby",
+    "title": "大厅",
+    "device": "desktop",
+    "file": "04_lobby_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "05_rules",
+    "title": "怎么玩",
+    "device": "desktop",
+    "file": "05_rules_desktop.png",
+    "width": 1440,
+    "height": 1928,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "06_ranking",
+    "title": "排行榜",
+    "device": "desktop",
+    "file": "06_ranking_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "07_friends",
+    "title": "好友与邀请",
+    "device": "desktop",
+    "file": "07_friends_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "08_matching",
+    "title": "在线匹配等待",
+    "device": "desktop",
+    "file": "08_matching_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "09_ai_setup",
+    "title": "人机对战设置",
+    "device": "desktop",
+    "file": "09_ai_setup_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "10_ai_game",
+    "title": "人机对战",
+    "device": "desktop",
+    "file": "10_ai_game_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "11_ai_after_move",
+    "title": "人机对战·落子后",
+    "device": "desktop",
+    "file": "11_ai_after_move_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "12_ai_review",
+    "title": "人机棋局复盘",
+    "device": "desktop",
+    "file": "12_ai_review_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "13_local_setup",
+    "title": "离线模式设置",
+    "device": "desktop",
+    "file": "13_local_setup_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "14_local_game",
+    "title": "离线对局",
+    "device": "desktop",
+    "file": "14_local_game_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "15_local_review",
+    "title": "离线棋局复盘",
+    "device": "desktop",
+    "file": "15_local_review_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "16_board_settings",
+    "title": "棋盘设置",
+    "device": "desktop",
+    "file": "16_board_settings_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "17_local_17",
+    "title": "十七路离线棋盘",
+    "device": "desktop",
+    "file": "17_local_17_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "18_friend_game",
+    "title": "好友对弈",
+    "device": "desktop",
+    "file": "18_friend_game_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "19_online_game",
+    "title": "在线对局",
+    "device": "desktop",
+    "file": "19_online_game_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "20_online_review",
+    "title": "在线对局·复盘",
+    "device": "desktop",
+    "file": "20_online_review_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "21_leave_confirm",
+    "title": "退出对局确认",
+    "device": "desktop",
+    "file": "21_leave_confirm_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "22_online_result",
+    "title": "在线对局结算",
+    "device": "desktop",
+    "file": "22_online_result_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "23_tutorial",
+    "title": "新手教学",
+    "device": "desktop",
+    "file": "23_tutorial_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "24_tutorial_game",
+    "title": "教学练习棋盘",
+    "device": "desktop",
+    "file": "24_tutorial_game_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "25_local_result",
+    "title": "离线对局结算",
+    "device": "desktop",
+    "file": "25_local_result_desktop.png",
+    "width": 1440,
+    "height": 1000,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "01_home",
+    "title": "首页",
+    "device": "mobile",
+    "file": "01_home_mobile.png",
+    "width": 390,
+    "height": 844,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "02_register",
+    "title": "注册",
+    "device": "mobile",
+    "file": "02_register_mobile.png",
+    "width": 390,
+    "height": 844,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "03_login",
+    "title": "登录",
+    "device": "mobile",
+    "file": "03_login_mobile.png",
+    "width": 390,
+    "height": 844,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "04_lobby",
+    "title": "大厅",
+    "device": "mobile",
+    "file": "04_lobby_mobile.png",
+    "width": 390,
+    "height": 844,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "05_rules",
+    "title": "怎么玩",
+    "device": "mobile",
+    "file": "05_rules_mobile.png",
+    "width": 390,
+    "height": 2541,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "06_ranking",
+    "title": "排行榜",
+    "device": "mobile",
+    "file": "06_ranking_mobile.png",
+    "width": 390,
+    "height": 865,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "07_friends",
+    "title": "好友与邀请",
+    "device": "mobile",
+    "file": "07_friends_mobile.png",
+    "width": 390,
+    "height": 844,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "08_matching",
+    "title": "在线匹配等待",
+    "device": "mobile",
+    "file": "08_matching_mobile.png",
+    "width": 390,
+    "height": 844,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "09_ai_setup",
+    "title": "人机对战设置",
+    "device": "mobile",
+    "file": "09_ai_setup_mobile.png",
+    "width": 390,
+    "height": 844,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "10_ai_game",
+    "title": "人机对战",
+    "device": "mobile",
+    "file": "10_ai_game_mobile.png",
+    "width": 390,
+    "height": 1035,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "11_ai_after_move",
+    "title": "人机对战·落子后",
+    "device": "mobile",
+    "file": "11_ai_after_move_mobile.png",
+    "width": 390,
+    "height": 1035,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "12_ai_review",
+    "title": "人机棋局复盘",
+    "device": "mobile",
+    "file": "12_ai_review_mobile.png",
+    "width": 390,
+    "height": 1233,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "13_local_setup",
+    "title": "离线模式设置",
+    "device": "mobile",
+    "file": "13_local_setup_mobile.png",
+    "width": 390,
+    "height": 844,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "14_local_game",
+    "title": "离线对局",
+    "device": "mobile",
+    "file": "14_local_game_mobile.png",
+    "width": 390,
+    "height": 1035,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "15_local_review",
+    "title": "离线棋局复盘",
+    "device": "mobile",
+    "file": "15_local_review_mobile.png",
+    "width": 390,
+    "height": 1233,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "16_board_settings",
+    "title": "棋盘设置",
+    "device": "mobile",
+    "file": "16_board_settings_mobile.png",
+    "width": 390,
+    "height": 1035,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "17_local_17",
+    "title": "十七路离线棋盘",
+    "device": "mobile",
+    "file": "17_local_17_mobile.png",
+    "width": 390,
+    "height": 1035,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "18_friend_game",
+    "title": "好友对弈",
+    "device": "mobile",
+    "file": "18_friend_game_mobile.png",
+    "width": 390,
+    "height": 977,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "19_online_game",
+    "title": "在线对局",
+    "device": "mobile",
+    "file": "19_online_game_mobile.png",
+    "width": 390,
+    "height": 884,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "20_online_review",
+    "title": "在线对局·复盘",
+    "device": "mobile",
+    "file": "20_online_review_mobile.png",
+    "width": 390,
+    "height": 1082,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "21_leave_confirm",
+    "title": "退出对局确认",
+    "device": "mobile",
+    "file": "21_leave_confirm_mobile.png",
+    "width": 390,
+    "height": 884,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "22_online_result",
+    "title": "在线对局结算",
+    "device": "mobile",
+    "file": "22_online_result_mobile.png",
+    "width": 390,
+    "height": 960,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "23_tutorial",
+    "title": "新手教学",
+    "device": "mobile",
+    "file": "23_tutorial_mobile.png",
+    "width": 390,
+    "height": 1123,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "24_tutorial_game",
+    "title": "教学练习棋盘",
+    "device": "mobile",
+    "file": "24_tutorial_game_mobile.png",
+    "width": 390,
+    "height": 1089,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  },
+  {
+    "id": "25_local_result",
+    "title": "离线对局结算",
+    "device": "mobile",
+    "file": "25_local_result_mobile.png",
+    "width": 390,
+    "height": 1035,
+    "runtimeErrors": [],
+    "layoutErrors": []
+  }
+]

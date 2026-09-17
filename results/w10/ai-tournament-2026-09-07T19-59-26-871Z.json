@@ -1,0 +1,307 @@
+{
+  "fixedSeedBase": "0x5a170000",
+  "searchBudgetMs": 20,
+  "pure": {
+    "games": 1050,
+    "gamesPerPermutation": 5,
+    "configurations": 35,
+    "seatPermutations": 3,
+    "boardSizes": [
+      13,
+      17
+    ],
+    "draws": 17,
+    "aborted": 0,
+    "illegal": 0,
+    "averageTerminalRound": 11.983809523809525,
+    "stats": {
+      "random": {
+        "appearances": 630,
+        "wins": 30,
+        "winRate": 0.047619047619047616,
+        "decisions": 6734,
+        "seatWins": {
+          "A": 3,
+          "B": 9,
+          "C": 18
+        },
+        "selectedTactics": {
+          "random": 6734,
+          "tactical": 0,
+          "selfish": 0,
+          "3ply": 0,
+          "maxn": 0
+        },
+        "blocks": 132,
+        "bacWins": 30,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 0.026200000000244472,
+          "p95": 0.07280000000014297,
+          "p99": 0.16329999999999245,
+          "max": 1.169700000000006
+        }
+      },
+      "tactical": {
+        "appearances": 630,
+        "wins": 157,
+        "winRate": 0.2492063492063492,
+        "decisions": 9700,
+        "seatWins": {
+          "A": 47,
+          "B": 39,
+          "C": 71
+        },
+        "selectedTactics": {
+          "random": 0,
+          "tactical": 9700,
+          "selfish": 0,
+          "3ply": 0,
+          "maxn": 0
+        },
+        "blocks": 4868,
+        "bacWins": 157,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 0.0906000000104541,
+          "p95": 0.23810000000230502,
+          "p99": 0.4569999999948777,
+          "max": 1.7127999999938766
+        }
+      },
+      "selfish": {
+        "appearances": 630,
+        "wins": 194,
+        "winRate": 0.30793650793650795,
+        "decisions": 5745,
+        "seatWins": {
+          "A": 53,
+          "B": 58,
+          "C": 83
+        },
+        "selectedTactics": {
+          "random": 0,
+          "tactical": 0,
+          "selfish": 5745,
+          "3ply": 0,
+          "maxn": 0
+        },
+        "blocks": 2187,
+        "bacWins": 194,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 20.4033000000054,
+          "p95": 39.03979999999865,
+          "p99": 50.626399999979185,
+          "max": 99.3640000000014
+        }
+      },
+      "3ply": {
+        "appearances": 630,
+        "wins": 322,
+        "winRate": 0.5111111111111111,
+        "decisions": 6885,
+        "seatWins": {
+          "A": 98,
+          "B": 107,
+          "C": 117
+        },
+        "selectedTactics": {
+          "random": 0,
+          "tactical": 0,
+          "selfish": 0,
+          "3ply": 6885,
+          "maxn": 0
+        },
+        "blocks": 2089,
+        "bacWins": 322,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 21.4548000000068,
+          "p95": 32.12030000000959,
+          "p99": 44.73379999998724,
+          "max": 84.16340000001946
+        }
+      },
+      "maxn": {
+        "appearances": 630,
+        "wins": 330,
+        "winRate": 0.5238095238095238,
+        "decisions": 6510,
+        "seatWins": {
+          "A": 105,
+          "B": 113,
+          "C": 112
+        },
+        "selectedTactics": {
+          "random": 0,
+          "tactical": 0,
+          "selfish": 0,
+          "3ply": 0,
+          "maxn": 6510
+        },
+        "blocks": 1893,
+        "bacWins": 330,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 21.26050000000032,
+          "p95": 30.699099999997998,
+          "p99": 38.5622000000003,
+          "max": 104.24900000001071
+        }
+      }
+    }
+  },
+  "mixed": {
+    "games": 1050,
+    "gamesPerPermutation": 5,
+    "configurations": 35,
+    "seatPermutations": 3,
+    "boardSizes": [
+      13,
+      17
+    ],
+    "draws": 0,
+    "aborted": 0,
+    "illegal": 0,
+    "averageTerminalRound": 9.512380952380953,
+    "stats": {
+      "1": {
+        "appearances": 630,
+        "wins": 92,
+        "winRate": 0.14603174603174604,
+        "decisions": 5251,
+        "seatWins": {
+          "A": 43,
+          "B": 25,
+          "C": 24
+        },
+        "selectedTactics": {
+          "random": 2421,
+          "tactical": 1124,
+          "selfish": 799,
+          "3ply": 471,
+          "maxn": 436
+        },
+        "blocks": 1104,
+        "bacWins": 92,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 0.0834000000031665,
+          "p95": 32.75390000001062,
+          "p99": 37.192800000018906,
+          "max": 49.052800000004936
+        }
+      },
+      "2": {
+        "appearances": 630,
+        "wins": 142,
+        "winRate": 0.2253968253968254,
+        "decisions": 5541,
+        "seatWins": {
+          "A": 40,
+          "B": 55,
+          "C": 47
+        },
+        "selectedTactics": {
+          "random": 1685,
+          "tactical": 1235,
+          "selfish": 1072,
+          "3ply": 835,
+          "maxn": 714
+        },
+        "blocks": 1464,
+        "bacWins": 142,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 0.1766999999526888,
+          "p95": 33.49780000001192,
+          "p99": 39.39110000000801,
+          "max": 52.25079999992158
+        }
+      },
+      "3": {
+        "appearances": 630,
+        "wins": 239,
+        "winRate": 0.37936507936507935,
+        "decisions": 5766,
+        "seatWins": {
+          "A": 79,
+          "B": 79,
+          "C": 81
+        },
+        "selectedTactics": {
+          "random": 1133,
+          "tactical": 1218,
+          "selfish": 1171,
+          "3ply": 1144,
+          "maxn": 1100
+        },
+        "blocks": 1625,
+        "bacWins": 239,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 11.03649999992922,
+          "p95": 33.852099999960046,
+          "p99": 38.548200000077486,
+          "max": 56.149199999985285
+        }
+      },
+      "4": {
+        "appearances": 630,
+        "wins": 259,
+        "winRate": 0.4111111111111111,
+        "decisions": 5641,
+        "seatWins": {
+          "A": 85,
+          "B": 83,
+          "C": 91
+        },
+        "selectedTactics": {
+          "random": 656,
+          "tactical": 893,
+          "selfish": 1114,
+          "3ply": 1341,
+          "maxn": 1637
+        },
+        "blocks": 1608,
+        "bacWins": 259,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 14.572700000018813,
+          "p95": 34.32579999999143,
+          "p99": 43.425900000031106,
+          "max": 76.79879999998957
+        }
+      },
+      "5": {
+        "appearances": 630,
+        "wins": 318,
+        "winRate": 0.5047619047619047,
+        "decisions": 5663,
+        "seatWins": {
+          "A": 105,
+          "B": 106,
+          "C": 107
+        },
+        "selectedTactics": {
+          "random": 459,
+          "tactical": 618,
+          "selfish": 871,
+          "3ply": 1452,
+          "maxn": 2263
+        },
+        "blocks": 1509,
+        "bacWins": 318,
+        "fallbacks": 0,
+        "latency": {
+          "p50": 16.699500000104308,
+          "p95": 33.93969999998808,
+          "p99": 41.84759999997914,
+          "max": 77.74150000000373
+        }
+      }
+    }
+  },
+  "wallMs": 738878
+}

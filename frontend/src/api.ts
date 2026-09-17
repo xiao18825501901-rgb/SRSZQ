@@ -65,7 +65,7 @@ export const authApi = {
   logout: () => api('POST', '/api/logout'),
   me: () => api<{ user: PublicUser }>('GET', '/api/me'),
   completeTutorial: () => api<{ user: PublicUser }>('POST', '/api/tutorial/complete'),
-  ranking: (limit = 20) => api<{ ranking: Array<PublicUser & { wins: number; games: number; winRate: number }> }>('GET', `/api/ranking?limit=${limit}`),
+  ranking: (limit = 50, offset = 0) => api<{ ranking: Array<PublicUser & { wins: number; games: number; winRate: number }>; total: number }>('GET', `/api/ranking?limit=${limit}&offset=${offset}`),
   friends: () => api<{ friends: PublicUser[] }>('GET', '/api/friends'),
   invitations: () => api<{ invitations: Array<{ id: string; sender: string; senderName: string; status: string }> }>('GET', '/api/invitations'),
   invite: (toUsername: string) => api('POST', '/api/invite', { toUsername }),

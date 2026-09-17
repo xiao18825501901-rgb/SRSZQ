@@ -1,0 +1,89 @@
+[
+  {
+    "name": "三真人真实WebSocket开局",
+    "pass": true
+  },
+  {
+    "name": "服务器30秒落子期限",
+    "pass": true,
+    "data": {
+      "deadline": 1789488320667,
+      "serverNow": 1789488290667
+    }
+  },
+  {
+    "name": "正式资格R1无人/R6白棋",
+    "pass": true
+  },
+  {
+    "name": "真人落子与下一玩家计时同步",
+    "pass": true
+  },
+  {
+    "name": "非法落子/恢复连接不延长倒计时",
+    "pass": true
+  },
+  {
+    "name": "实际等待30秒后服务器TIMEOUT判负",
+    "pass": true,
+    "data": {
+      "type": "game.end",
+      "winner": null,
+      "status": "forfeit",
+      "matchId": "fd8de161-a26d-4c72-b87a-cfe62455e615",
+      "mode": "online",
+      "reason": "TIMEOUT",
+      "timestamp": 1789488320696,
+      "winnerIds": [
+        "85753830-8b4f-4c5b-8e7d-eead3da591e5",
+        "bee475e3-fad2-4a7f-8c9a-4441af1cb5ae"
+      ],
+      "loserIds": [
+        "71275875-93b5-4b67-a6da-83d048e47c95"
+      ],
+      "winnerSeats": [
+        "A",
+        "C"
+      ],
+      "loserSeats": [
+        "B"
+      ]
+    }
+  },
+  {
+    "name": "三客户端一致终局",
+    "pass": true
+  },
+  {
+    "name": "超时终局后可立即重新匹配",
+    "pass": true
+  },
+  {
+    "name": "排行榜可返回全部玩家含零场次",
+    "pass": true,
+    "data": 24
+  },
+  {
+    "name": "排行榜分页不重复",
+    "pass": true
+  },
+  {
+    "name": "好友接受后真实2真人+AI开局",
+    "pass": true
+  },
+  {
+    "name": "好友对弈不启用30秒落子时钟",
+    "pass": true
+  },
+  {
+    "name": "好友退出清理房间",
+    "pass": true
+  },
+  {
+    "name": "真实60秒后1真人+2AI自动开局",
+    "pass": true,
+    "data": {
+      "elapsedMs": 60018
+    }
+  }
+]
