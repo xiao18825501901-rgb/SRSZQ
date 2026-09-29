@@ -198,7 +198,11 @@ async function main() {
     }
 
     let suiteOk = true;
-    if (key === 'results' || key === 'recovery' || key === 'security' || key === 'features') {
+    // 执行方式必须**由数据决定**，而不是在这里写死套件名。
+    // 曾经这里写死 results/recovery/security/features 四个键：新增的 replay 套件
+    // 于是既不进 tsx 分支也不进 baseline 分支，一步都没跑，却被判成 PASS ——
+    // 这是最危险的失败模式（静默假通过），所以下面还有 steps 为空的硬断言。
+    if (suite.runner === 'tsx' && suite.entry) {
       const entryPath = join(ROOT, suite.entry);
       if (!existsSync(entryPath)) {
         record.status = 'FAIL';
@@ -222,6 +226,20 @@ async function main() {
         record.steps.push({ name: step.name, exitCode: r.code, ms: r.ms, log: logName });
         if (r.code !== 0) suiteOk = false;
       }
+    } else {
+      // 未知执行方式（既不是 tsx 入口也不是 baseline）一律失败，绝不静默通过。
+      record.status = 'FAIL';
+      record.blocker = '未知的执行方式：entry=' + String(suite.entry) + ' runner=' + String(suite.runner);
+      console.log('FAIL  ' + record.blocker);
+      report.suites.push(record);
+      continue;
+    }
+
+    // 硬防线：一个套件不可能“什么都没跑”却通过。
+    if (suiteOk && record.steps.length === 0) {
+      suiteOk = false;
+      record.blocker = '没有任何执行步骤，拒绝判为 PASS';
+      console.log('FAIL  ' + record.blocker);
     }
 
     record.status = suiteOk ? 'PASS' : 'FAIL';
