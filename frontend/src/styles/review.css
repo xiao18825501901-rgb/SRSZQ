@@ -1,0 +1,85 @@
+/* P2 复盘 / 题库界面（R09）。
+ * 只补新页面需要的部分：既有水墨底、红绿白棋色、按钮与面板类都沿用，不另造一套视觉语言。
+ * 手机端顺序按验收矩阵：时间线在上 → 棋盘居中 → 操作在下。
+ */
+
+.rv-page{max-width:1160px;margin:0 auto;padding:26px 0 44px}
+.rv-page-head h1{margin:0 0 6px;font-size:26px}
+.rv-page-head p{margin:0 0 18px;max-width:70ch}
+.rv-alert{color:#a4322b;background:#fdf3f1;border:1px solid #e9c7c1;border-radius:10px;padding:10px 12px}
+.rv-notice{color:#1f5c3d;background:#f2faf5;border:1px solid #bfe0cd;border-radius:10px;padding:10px 12px;word-break:break-all}
+.rv-hint{margin:10px 0 0;text-align:center}
+
+/* 桌面：棋盘在左、信息在右；手机：时间线 → 棋盘 → 操作 */
+.rv-layout{display:grid;gap:26px;align-items:start;grid-template-columns:minmax(0,1fr) 350px;
+  grid-template-areas:"timeline aside" "board aside"}
+.rv-col-timeline{grid-area:timeline;min-width:0}
+.rv-col-board{grid-area:board;min-width:0;max-width:620px;margin:0 auto;width:100%}
+.rv-col-aside{grid-area:aside;min-width:0}
+.rv-aside-stack{display:flex;flex-direction:column;gap:16px}
+.rv-board-stack{display:flex;flex-direction:column;gap:12px}
+.rv-puzzle-layout{display:grid;gap:26px;align-items:start;grid-template-columns:minmax(0,1fr) 350px;
+  grid-template-areas:"board aside"}
+.rv-puzzle-board{grid-area:board;max-width:620px;margin:0 auto;width:100%}
+.rv-puzzle-layout .rv-col-aside{grid-area:aside}
+
+@media(max-width:900px){
+  .rv-layout{grid-template-columns:1fr;grid-template-areas:"timeline" "board" "aside"}
+  .rv-puzzle-layout{grid-template-columns:1fr;grid-template-areas:"board" "aside"}
+  .rv-col-board,.rv-puzzle-board{max-width:min(560px,100%)}
+  .rv-page{padding:16px 0 32px}
+}
+
+/* 时间线 */
+.rv-timeline{margin:0 0 18px}
+.rv-timeline-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}
+.rv-timeline-list{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:230px;overflow:auto}
+.rv-ply{display:grid;grid-template-columns:14px 34px 1fr auto auto;align-items:center;gap:8px;width:100%;
+  background:none;border:1px solid transparent;border-radius:8px;padding:5px 8px;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.rv-ply:hover{background:#faf7ef}
+.rv-ply.current{border-color:#b9a98a;background:#fbf8f0}
+.rv-ply.key{border-color:#c9a24a}
+.rv-ply-no{color:#8a8172;font-variant-numeric:tabular-nums}
+.rv-ply-round{color:#8a8172;font-size:12px}
+.rv-ply-key{font-size:11px;color:#8a6a12;background:#fdf6e3;border:1px solid #e6d3a1;border-radius:999px;padding:1px 6px}
+.rv-dot{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.dot-a{background:#E5484D}
+.dot-b{background:#30A46C}
+.dot-c{background:#F7F7F7}
+
+/* 历史表 */
+.rv-table-wrap{overflow:auto}
+.rv-table{width:100%;border-collapse:collapse;min-width:640px}
+.rv-table th,.rv-table td{padding:8px 10px;text-align:left;border-bottom:1px solid #ece5d8;font-variant-numeric:tabular-nums}
+.rv-table th{font-weight:600;color:#6f6759;font-size:13px}
+.rv-pager{display:flex;align-items:center;gap:14px;padding-top:12px}
+.rv-out{font-weight:600}
+.out-win{color:#1f7a4d}
+.out-loss{color:#a4322b}
+.out-other{color:#6f6759}
+
+/* 关键片段 */
+.rv-keys .panel-title{margin-bottom:8px}
+.rv-key-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.rv-key{border-left:3px solid #c9a24a;padding-left:10px}
+.rv-key-head{display:flex;justify-content:space-between;gap:8px;font-weight:600}
+.rv-key-type{color:#8a6a12}
+.rv-key-ply,.rv-key-meta{color:#8a8172;font-size:12px}
+.rv-key-text{margin:4px 0}
+.rv-key-points,.rv-key-window{margin:4px 0;font-size:12px}
+.rv-key-meta{margin:6px 0 0;font-variant-numeric:tabular-nums}
+
+/* 复盘控制 */
+.rv-scrub input[type=range]{width:100%}
+.rv-scrub-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.rv-btnrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.rv-shares,.rv-seats,.rv-wrong{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rv-shares li,.rv-seats li,.rv-wrong li{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:13px}
+.rv-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rv-tag{background:#fdf6e3;border:1px solid #e6d3a1;border-radius:999px;padding:2px 10px;font-size:12px;color:#8a6a12}
+.rv-verdict{font-weight:600}
+.rv-verdict-correct{color:#1f7a4d}
+.rv-verdict-incorrect{color:#a4322b}
+.rv-verdict-illegal{color:#8a6a12}
+.rv-explain{margin:6px 0 0}
+.rv-demo{margin-left:8px;color:#8a6a12;background:#fdf6e3;border:1px solid #e6d3a1;border-radius:999px;padding:1px 8px;font-size:12px}

@@ -57,6 +57,78 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
   return { status: res.status, data };
 }
 
+/* ---- P2 复盘与题库接口（R01-R08） ---- */
+
+export interface HistoryItem {
+  gameId: string; seat: string; outcome: string; ratingDelta: number;
+  mode: string; boardSize: number; endReason: string; winnerSeat: string | null;
+  isRanked: boolean; scorePolicy: string; settledAt: number; moveCount: number; hasShare: boolean;
+}
+export interface ReplayMove { ply: number; seat: 'A' | 'B' | 'C'; row: number; col: number; round: number }
+export interface DefenseWindow {
+  threatenedSeat: string; row: number; col: number; openedAtPly: number;
+  resolvedAtPly: number | null; resolvedBySeat: string | null; actions: number[]; selfResolved: boolean;
+}
+export interface KeyMove {
+  ply: number; type: 'IMMEDIATE_WIN' | 'MISSED_WIN' | 'PREEMPTIVE_BLOCK';
+  actorSeat: 'A' | 'B' | 'C'; row: number; col: number; round: number;
+  eligiblePlayer: string | null; actorEligible: boolean; forbiddenCells: number;
+  points: Array<{ row: number; col: number }>;
+  referenceLine: Array<{ row: number; col: number }>;
+  alternativeLines: Array<{ row: number; col: number; legal: boolean; winning: boolean }>;
+  certainty: string; proofHorizon: number; nodes: number; wallMs: number;
+  messageKey: string; args: Record<string, string | number>;
+  defenseWindow: DefenseWindow | null;
+}
+export interface ReplayView {
+  gameId: string; mySeat: string; myOutcome: string; myRatingDelta: number;
+  mode: string; scorePolicy: string; settledAt: number;
+  boardSize: number; moveCount: number; moves: ReplayMove[];
+  status: string; winnerSeat: string | null; winLine: Array<{ row: number; col: number }> | null;
+  finalHash: string; snapshotHash: string | null; snapshotRevision: number | null;
+  replayOk: boolean; replayErrors: string[]; hashMatches: boolean | null;
+  analysisMode: string; reviewCacheKey: string;
+  keyMoves: KeyMove[]; defenseWindowCount: number; seatLabels: Record<string, string>;
+  shares: Array<{ token: string; path: string; createdAt: number; expiresAt: number; revokedAt: number | null; views: number }>;
+}
+export interface PuzzleView {
+  puzzleId: string; schema: number; acceptanceType: string; boardSize: number;
+  actorSeat: 'A' | 'B' | 'C'; round: number; eligiblePlayer: string | null;
+  startMoves: number; moves: Array<{ seat: 'A' | 'B' | 'C'; row: number; col: number }>;
+  sourceKind: string; split: string; status: string;
+  myStatus: string | null; myAttempts: number;
+}
+export interface AttemptResult {
+  verdict: 'CORRECT' | 'INCORRECT' | 'ILLEGAL' | 'OPEN';
+  duplicate: boolean; attempts: number; solved: boolean; reveal?: boolean;
+  answers?: Array<{ row: number; col: number }>;
+  answerCount?: number; answerSetComplete?: boolean;
+  threatsBefore?: number; threatsAfter?: number; excludedByForbidden?: number;
+  threatenedSeat?: string | null;
+  explanation?: { messageKey: string; args: Record<string, string | number> };
+}
+export interface PuzzleProgress {
+  solved: number; failed: number; totalAttempts: number; firstSolvedAt: number | null;
+  totalPublished: number;
+  wrong: Array<{ puzzleId: string; attempts: number; lastVerdict: string; updatedAt: number; acceptanceType: string | null; boardSize: number | null; round: number | null }>;
+}
+
+export const reviewApi = {
+  history: (limit = 20, offset = 0) => api<{ history: HistoryItem[]; total: number; limit: number; offset: number }>('GET', `/api/history?limit=${limit}&offset=${offset}`),
+  replay: (gameId: string) => api<{ replay: ReplayView }>('GET', `/api/games/${encodeURIComponent(gameId)}/replay`),
+  shares: (gameId: string) => api<{ shares: Array<{ token: string; path: string; createdAt: number; expiresAt: number; revokedAt: number | null; views: number }> }>('GET', `/api/games/${encodeURIComponent(gameId)}/share`),
+  share: (gameId: string) => api<{ share: { token: string; path: string; createdAt: number; expiresAt: number; ttlMs: number } }>('POST', `/api/games/${encodeURIComponent(gameId)}/share`, {}),
+  revoke: (token: string) => api<{ revoked: boolean }>('DELETE', `/api/share/${encodeURIComponent(token)}`),
+};
+
+export const puzzleApi = {
+  daily: (day?: string) => api<{ day: string; puzzle: PuzzleView; bank: { total: number; byType: Record<string, number>; solverVersion: string } }>('GET', `/api/puzzles/daily${day ? `?day=${day}` : ''}`),
+  get: (puzzleId: string) => api<{ puzzle: PuzzleView }>('GET', `/api/puzzles/${encodeURIComponent(puzzleId)}`),
+  attempt: (puzzleId: string, attemptId: string, row: number, col: number) =>
+    api<AttemptResult>('POST', `/api/puzzles/${encodeURIComponent(puzzleId)}/attempt`, { attemptId, row, col }),
+  progress: () => api<{ progress: PuzzleProgress }>('GET', '/api/puzzles/progress'),
+};
+
 export const authApi = {
   register: (email: string, username: string, password: string) =>
     api<{ user: PublicUser; token: string }>('POST', '/api/register', { email, username, password }),

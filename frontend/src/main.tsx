@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import Platform from './platform/Platform';
 import './styles/refresh.css';
 import './styles/ink.css';
+import './styles/review.css';
 
 
 createRoot(document.getElementById('root')!).render(

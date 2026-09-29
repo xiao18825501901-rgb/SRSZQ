@@ -15,6 +15,9 @@ import { HowToPlayContent, RulesQuickView } from '../components/HowToPlay';
 import { ColorChip } from '../components/MatchPanel';
 import { ModeArtwork } from '../components/ModeArtwork';
 import { OnlinePage } from './OnlinePage';
+import { HistoryPage } from './HistoryPage';
+import { PuzzlePage } from './PuzzlePage';
+import { SharedReplayPage } from './SharedReplayPage';
 import { HERO_GAME } from '../data/heroGame';
 import { colorName, playerName } from '../playerPresentation';
 
@@ -42,7 +45,7 @@ export function Platform(){
   {user&&<button className={route.path==='/lobby'?'nav-active':''} onClick={()=>route.navigate('/lobby')}>大厅</button>}
   <button className={route.path==='/rules'?'nav-active':''} onClick={()=>route.navigate('/rules')}>怎么玩</button>
   <button className={route.path==='/ranking'?'nav-active':''} onClick={()=>route.navigate('/ranking')}>排行榜</button>
-  {user?<><button className={route.path==='/friends'?'nav-active':''} onClick={()=>route.navigate('/friends')}>好友</button><span className="nav-rating" aria-label={`积分 ${user.rating}`}>{user.rating}<small>分</small></span><button className="nav-auth" onClick={logout}>退出</button></>:<button className="nav-auth" onClick={()=>route.navigate('/auth')}>登录 / 注册</button>}
+  {user?<><button className={route.path==='/puzzles'?'nav-active':''} onClick={()=>route.navigate('/puzzles')}>每日一题</button><button className={route.path==='/history'?'nav-active':''} onClick={()=>route.navigate('/history')}>历史复盘</button><button className={route.path==='/friends'?'nav-active':''} onClick={()=>route.navigate('/friends')}>好友</button><span className="nav-rating" aria-label={`积分 ${user.rating}`}>{user.rating}<small>分</small></span><button className="nav-auth" onClick={logout}>退出</button></>:<button className="nav-auth" onClick={()=>route.navigate('/auth')}>登录 / 注册</button>}
  </nav></header>;
  const wrap=(child:ReactNode,noNav=false)=><div className={`site-page ${noNav?'immersive':''}`}>{!noNav&&nav}{child}</div>;
  const {path}=route;
@@ -50,6 +53,9 @@ export function Platform(){
  if(path==='/rules')return wrap(<HowToPlayContent onBack={()=>route.navigate(user?'/lobby':'/')} onStartTutorial={user&&!user.tutorialCompleted?()=>route.navigate('/tutorial'):undefined}/>);
  if(path==='/ranking')return wrap(<RankingPage onBack={()=>route.navigate(user?'/lobby':'/')}/>);
  if(path==='/friends')return user?wrap(<FriendsPage/>):<RedirectTo to="/auth"/>;
+ if(path==='/puzzles')return user?wrap(<PuzzlePage/>):<RedirectTo to="/auth"/>;
+ if(path==='/history')return user?wrap(<HistoryPage/>):<RedirectTo to="/auth"/>;
+ if(path.startsWith('/s/'))return wrap(<SharedReplayPage token={path.slice(3)}/>,true);
  if(path==='/lobby')return !user?<RedirectTo to="/auth"/>:!user.tutorialCompleted?<RedirectTo to="/tutorial"/>:wrap(<Lobby/>);
  if(path==='/tutorial')return user?wrap(<TutorialPage user={user} applyAuth={applyAuth} onDone={()=>route.navigate('/lobby')}/>):<RedirectTo to="/auth"/>;
  if(path==='/online'){
