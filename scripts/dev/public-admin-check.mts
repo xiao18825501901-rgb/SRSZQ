@@ -13,6 +13,7 @@ import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { WebSocket } from 'ws';
+import { RELEASE_ID } from '../../shared/src/product/protocol.js';
 
 const args = process.argv.slice(2);
 const argOf = (n: string, d: string): string => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
@@ -24,7 +25,7 @@ const PORT = Number(argOf('--port', String(9300 + Math.floor(Math.random() * 500
 const ADMIN_USER = argOf('--admin-user', '');
 const ADMIN_PASS = argOf('--admin-pass', '');
 const EXPECT_SHA = argOf('--expect-sha', '');
-const EXPECT_RELEASE = argOf('--expect-release', 'p4b-20260930');
+const EXPECT_RELEASE = argOf('--expect-release', RELEASE_ID);
 if (!ADMIN_USER || !ADMIN_PASS) { console.error('需要 --admin-user/--admin-pass（管理员账号）'); process.exit(2); }
 
 const BROWSERS = [

@@ -10,6 +10,8 @@
  */
 import { WebSocket } from 'ws';
 import { api, registerDemo } from './lib/scriptedGame.mjs';
+// 同上：期望版本从 shared 唯一真源来，不写死（曾写死 p3b-20260930）。
+import { RELEASE_ID } from '../../shared/src/product/protocol.js';
 
 const API = process.env.SRSZQ_API_URL ?? 'https://api.srszq.com';
 const WSURL = process.env.SRSZQ_WS_URL ?? 'wss://api.srszq.com/ws';
@@ -22,7 +24,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function main(): Promise<void> {
   console.log('=== 版本与开关（可外部复核） ===');
   const v = await api(API, 'GET', '/api/version');
-  ok(v.json?.protocol?.releaseId === 'p3b-20260930', 'releaseId=' + v.json?.protocol?.releaseId);
+  ok(v.json?.protocol?.releaseId === RELEASE_ID, 'releaseId=' + v.json?.protocol?.releaseId + '（期望 ' + RELEASE_ID + '）');
   const f = await api(API, 'GET', '/api/config/features');
   ok(f.json?.flags?.invitusShadow === false, 'Invitus shadow 关闭（' + f.json?.flags?.invitusShadow + '）');
   const evidence = (f.json?.evidence ?? []) as Array<{ key: string; parsedValue: boolean; isDefault: boolean; rawValue: string | null }>;

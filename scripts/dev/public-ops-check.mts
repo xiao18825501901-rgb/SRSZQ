@@ -9,6 +9,10 @@
  *  - /api/version 报出**实际部署的提交**（生产上应等于部署脚本给出的那个 sha）；
  *  - 版本/就绪响应不含任何密钥。
  */
+// 期望的 releaseId 从 shared 唯一真源导入：硬编码会在下一次发布变成“永远 FAIL 的假警报”
+// （public-ops-check 里曾写死 p4-20260930、public-provider-check 里曾写死 p3b-20260930）。
+import { RELEASE_ID } from '../../shared/src/product/protocol.js';
+
 const API = process.env.SRSZQ_API_URL ?? 'https://api.srszq.com';
 const EXPECTED_SHA = process.env.EXPECTED_BACKEND_SHA ?? '';
 
@@ -39,7 +43,7 @@ async function main(): Promise<void> {
   const version = await versionRes.json() as any;
   ok(version.protocol?.protocolVersion === 2, 'protocolVersion=' + version.protocol?.protocolVersion);
   ok(version.protocol?.rulesetVersion === 'formal-rules-v2', 'rulesetVersion=' + version.protocol?.rulesetVersion);
-  ok(version.protocol?.releaseId === 'p4-20260930', 'releaseId=' + version.protocol?.releaseId);
+  ok(version.protocol?.releaseId === RELEASE_ID, 'releaseId=' + version.protocol?.releaseId + '（期望 ' + RELEASE_ID + '）');
   const sha = version.source?.backendSourceSha;
   ok(typeof sha === 'string' && /^[0-9a-f]{7,40}$/.test(sha), 'backendSourceSha=' + sha + '（从部署树读取，不是人工填的）');
   if (EXPECTED_SHA) ok(sha === EXPECTED_SHA, 'backendSourceSha 等于本次部署提交 ' + EXPECTED_SHA);
