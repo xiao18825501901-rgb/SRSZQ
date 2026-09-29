@@ -14,8 +14,9 @@ import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMo
 import { qualificationFromState } from '../../../shared/src/game/qualification.js';
 import { pickOnlineSingleHumanAiDifficulty, pickOnlineTwoHumanAiDifficulty, shuffled } from '../../../shared/src/ai/assignment.js';
 import type { AiDifficulty, MatchPolicyContext } from '../../../shared/src/ai/types.js';
-import { chooseAIMove } from '../../../shared/src/ai/chooseAIMove.js';
 import { MatchmakingQueue, type MatchmakingEntry } from './matchmaking.js';
+import { AiWorkerHost } from '../ai/aiWorkerHost.js';
+import { decideWebSocketOrigin, rejectFrame, SlidingWindowLimiter, WS_MAX_MESSAGE_BYTES, WS_COMMAND_RATE_LIMIT, WS_COMMAND_RATE_WINDOW_MS } from './security.js';
 import {
   buildSettlement,
   broadcastStatusFor,
@@ -89,6 +90,19 @@ export interface GameServerOptions {
   settlementMaxAttempts?: number;
   /** 进程重启后，恢复出来的对局等待玩家回来的窗口（默认 60_000ms）。 */
   recoveryGraceMs?: number;
+  /** P0C：AI worker 池大小（默认 min(4, CPU-1)，与房间数无关，保证有界）。 */
+  aiPoolSize?: number;
+  /** P0C：AI 任务队列上限（默认 64）；超出立即拒绝并降级，不无限堆积。 */
+  aiQueueLimit?: number;
+  /** P0C：单个 AI 任务的硬超时（默认 1500ms）；超时杀线程重建。 */
+  aiHardTimeoutMs?: number;
+  /** P0C：WS 单条消息字节上限（默认 64KB）。 */
+  wsMaxMessageBytes?: number;
+  /** P0C：WS 逐连接命令速率上限（默认 60 条 / 10 秒）。 */
+  wsCommandRateLimit?: number;
+  wsCommandRateWindowMs?: number;
+  /** P0C：允许的 WS Origin 白名单；不传则用与 HTTP API 相同的默认集合。 */
+  allowedOrigins?: string[];
 }
 
 interface Client {
@@ -141,6 +155,10 @@ export interface RoomSnapshot {
   seq: number;
 }
 
+/** WS Origin 白名单默认值与 HTTP API 保持一致（部署时可用 SRSZQ_ALLOWED_ORIGINS 覆盖）。 */
+const DEFAULT_ALLOWED_ORIGINS = ['https://srszq.com', 'https://www.srszq.com', 'https://srszq.netlify.app'];
+
+/** 结构化 AI 日志（与既有 logMatchmaking 一致的 JSON 行格式）。 */
 const AI_WEIGHTS: Array<{ difficulty: AiDifficulty; w: number }> = [
   { difficulty: 1, w: 100 },
   { difficulty: 2, w: 200 },
@@ -183,9 +201,16 @@ interface InviteSession {
 export class GameServer {
   private db: Db;
   /** 已填充默认值的时序/容量参数；开关与重试次数单独持有，不参与 Required 展开。 */
-  private opts: Required<Omit<GameServerOptions, 'featureFlags' | 'settlementMaxAttempts'>>;
+  private opts: Required<Omit<GameServerOptions, 'featureFlags' | 'settlementMaxAttempts' | 'aiPoolSize' | 'aiQueueLimit' | 'aiHardTimeoutMs' | 'allowedOrigins'>>;
   /** 进程重启后从快照恢复出来的对局（gameId），用于诊断与证据。 */
   readonly recoveredGameIds: string[] = [];
+  /** P0C：有界 AI worker 池（所有 AI 搜索都在这里执行，不占主线程）。 */
+  readonly aiHost: AiWorkerHost;
+  private readonly aiPoolSize: number;
+  private readonly aiQueueLimit: number;
+  private readonly aiHardTimeoutMs: number;
+  private readonly wsLimiter: SlidingWindowLimiter;
+  private readonly allowedOrigins: Set<string>;
   private wss: WebSocketServer;
   private clients = new Map<string, Client>();
   private matchmaking: MatchmakingQueue;
@@ -216,7 +241,20 @@ export class GameServer {
       turnTimeoutMs: opts.turnTimeoutMs ?? 30_000,
       heartbeatIntervalMs: opts.heartbeatIntervalMs ?? 25_000,
       recoveryGraceMs: opts.recoveryGraceMs ?? 60_000,
+      wsMaxMessageBytes: opts.wsMaxMessageBytes ?? WS_MAX_MESSAGE_BYTES,
+      wsCommandRateLimit: opts.wsCommandRateLimit ?? WS_COMMAND_RATE_LIMIT,
+      wsCommandRateWindowMs: opts.wsCommandRateWindowMs ?? WS_COMMAND_RATE_WINDOW_MS,
     };
+    this.aiPoolSize = opts.aiPoolSize ?? 0;
+    this.aiQueueLimit = opts.aiQueueLimit ?? 64;
+    this.aiHardTimeoutMs = opts.aiHardTimeoutMs ?? 1500;
+    this.aiHost = new AiWorkerHost({
+      ...(this.aiPoolSize > 0 ? { poolSize: this.aiPoolSize } : {}),
+      queueLimit: this.aiQueueLimit,
+      hardTimeoutMs: this.aiHardTimeoutMs,
+    });
+    this.wsLimiter = new SlidingWindowLimiter(this.opts.wsCommandRateLimit, this.opts.wsCommandRateWindowMs);
+    this.allowedOrigins = new Set(opts.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
     this.matchmaking = new MatchmakingQueue(this.opts.queueTimeoutMs);
     this.wss = new WebSocketServer({ noServer: true });
   }
@@ -246,15 +284,38 @@ export class GameServer {
         socket.destroy();
         return;
       }
+      // S05：来源校验在**升级之前**完成。伪造成白名单之外的浏览器来源直接拒绝，
+      // 连 WebSocket 都不建立，避免给未授权来源分配任何服务端资源。
+      // S05：认证也在升级之前完成。未认证客户端连 WebSocket 都不建立，
+      // 不再"先握手再关闭"——那会为一个未授权来源分配真实的连接资源。
+      if (!this.resolveSessionUser(url.searchParams.get('token') ?? '')) {
+        console.warn(JSON.stringify({ event: 'ws_unauthenticated_rejected', timestamp: Date.now() }));
+        socket.write(['HTTP/1.1 401 Unauthorized', 'Connection: close', '', ''].join(String.fromCharCode(13, 10)));
+        socket.destroy();
+        return;
+      }
+      const decision = decideWebSocketOrigin(req.headers.origin, this.allowedOrigins);
+      if (!decision.allowed) {
+        console.warn(JSON.stringify({ event: 'ws_origin_rejected', origin: decision.origin, reason: decision.reason, timestamp: Date.now() }));
+        // 用字符码拼 CRLF：字面量 \r\n 会被写进源码时展开成真实换行，把字符串截断。
+        socket.write(['HTTP/1.1 403 Forbidden', 'Connection: close', '', ''].join(String.fromCharCode(13, 10)));
+        socket.destroy();
+        return;
+      }
       this.wss.handleUpgrade(req, socket, head, (ws) => this.onSocket(ws, req));
     });
+  }
+
+  /** 由 token 解析出有效用户；升级阶段与 onSocket 共用同一判定，避免两处逻辑漂移。 */
+  private resolveSessionUser(token: string) {
+    const session = token ? this.db.findSession(token) : null;
+    return session && session.expiresAt >= Date.now() ? this.db.findUserById(session.userId) : null;
   }
 
   private async onSocket(ws: WebSocket, req: IncomingMessage): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const token = url.searchParams.get('token') ?? '';
-    const session = token ? this.db.findSession(token) : null;
-    const user = session && session.expiresAt >= Date.now() ? this.db.findUserById(session.userId) : null;
+    const user = this.resolveSessionUser(token);
     if (!user) {
       ws.send(JSON.stringify({ type: 'error', error: 'unauthorized' }));
       ws.close(4001, 'unauthorized');
@@ -284,7 +345,20 @@ export class GameServer {
       protocol: { ...PROTOCOL_INFO },
     }));
 
-    ws.on('message', (raw) => {
+    ws.on('message', (raw, isBinary) => {
+      // S06：先做帧级校验（体积/二进制），再解析 JSON。超限的帧不解析、不分配结构。
+      const bad = rejectFrame(raw as Buffer, Boolean(isBinary), this.opts.wsMaxMessageBytes);
+      if (bad) {
+        if (bad === 'TOO_LARGE') {
+          // 明确拒绝并断开：继续读一个大帧流只会拖垮进程。
+          this.sendTo(ws, { type: 'error', error: 'message too large', code: bad, maxBytes: this.opts.wsMaxMessageBytes });
+          ws.close(4009, 'message too large');
+        } else {
+          this.sendTo(ws, { type: 'error', error: 'binary frames are not supported', code: bad });
+        }
+        console.warn(JSON.stringify({ event: 'ws_frame_rejected', userId: client.userId, code: bad, timestamp: Date.now() }));
+        return;
+      }
       let msg: { type?: string; [k: string]: unknown };
       try {
         msg = JSON.parse(String(raw));
@@ -292,10 +366,16 @@ export class GameServer {
         this.sendTo(ws, { type: 'error', error: 'invalid json' });
         return;
       }
+      // S06：逐连接速率上限。超限不执行该消息，但**不**重置任何对局时钟。
+      if (!this.wsLimiter.tryTake(client.userId)) {
+        this.sendTo(ws, { type: 'error', error: 'rate limited', code: 'RATE_LIMITED' });
+        console.warn(JSON.stringify({ event: 'ws_rate_limited', userId: client.userId, timestamp: Date.now() }));
+        return;
+      }
       void this.handleMessage(client, msg);
     });
-    ws.on('close', () => this.onClose(client));
-    ws.on('error', () => this.onClose(client));
+    ws.on('close', () => { this.wsLimiter.forget(client.userId); this.onClose(client); });
+    ws.on('error', () => { this.wsLimiter.forget(client.userId); this.onClose(client); });
   }
 
   private async handleMessage(client: Client, msg: { type?: string; [k: string]: unknown }): Promise<void> {
@@ -659,23 +739,55 @@ export class GameServer {
         await new Promise((r) => setTimeout(r, this.opts.aiMoveDelayMs));
         if (room.ended) return;
         if (room.mode === 'online' && this.anyHumanAway(room)) return;
-        const moveStarted = performance.now();
-        const decision = chooseAIMove(room.state, cur, seat.aiLevel, {
+
+        // P0C/S01：搜索移出主线程。提交前记下 revision，结果回来时若房间已推进
+        // 就丢弃该结果 —— 绝不用一个过期棋盘上的决策去改现在的棋局。
+        const revisionAtRequest = room.revision;
+        const taskId = randomUUID();
+        const outcome = await this.aiHost.submit({
+          taskId,
+          gameId: room.id,
+          revision: revisionAtRequest,
+          state: room.state,
+          seat: cur,
+          level: seat.aiLevel,
           seed: (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0,
           timeBudgetMs: this.opts.aiTimeBudgetMs,
           policy: room.policy ?? undefined,
         });
-        console.info(JSON.stringify({
-          event: 'ai_tactic_selected', difficulty: seat.aiLevel,
-          selectedTactic: decision.selectedTactic, moveLatency: performance.now() - moveStarted,
-          legal: !decision.fallbackUsed, round: Math.floor(room.state.turnIndex / 3) + 1,
-          seat: cur, roomId: room.id, timestamp: Date.now(),
-        }));
-        const res = applyMove(room.state, decision.row, decision.col);
+        if (room.ended) return;
+        if (room.revision !== revisionAtRequest) {
+          this.logAi({ event: 'ai_task_stale_discarded', roomId: room.id, taskId, requestedRevision: revisionAtRequest, currentRevision: room.revision, outcome: outcome.kind });
+          return;
+        }
+
+        const decided = outcome.kind === 'decided' ? outcome.decision : null;
+        let degraded: string | null = null;
+        if (!decided) degraded = outcome.kind === 'timeout' ? 'TIMEOUT' : outcome.kind === 'rejected' ? outcome.reason : outcome.kind === 'cancelled' ? 'STALE' : 'WORKER_FAILED';
+        // S03：AI 失败/超时必须仍走出**合法**一手（或按引擎规则 Pass），
+        // 不篡改棋盘、不让对局卡死；降级原因写进事件与日志。
+        const fallbackMove = decided ? null : legal[0];
+        const row = decided ? decided.row : fallbackMove?.row;
+        const col = decided ? decided.col : fallbackMove?.col;
+        if (row === undefined || col === undefined) {
+          this.logAi({ event: 'ai_no_legal_fallback', roomId: room.id, taskId, outcome: outcome.kind });
+          break;
+        }
+        this.logAi({
+          event: decided ? 'ai_tactic_selected' : 'ai_degraded_legal_fallback',
+          difficulty: seat.aiLevel,
+          selectedTactic: decided?.selectedTactic ?? 'legal-fallback',
+          degraded,
+          moveLatency: decided ? (outcome.kind === 'decided' ? outcome.workerMs + outcome.queuedMs : 0) : 0,
+          legal: decided ? !decided.fallbackUsed : true,
+          round: Math.floor(room.state.turnIndex / 3) + 1,
+          seat: cur, roomId: room.id, taskId, timestamp: Date.now(),
+        });
+        const res = applyMove(room.state, row, col);
         if (res.rejected) break;
         // AI 落子与人类落子走同一条提交路径：先持久化，再改内存，最后广播。
         // commandId 由服务器生成 —— 服务器是权威，AI 没有客户端信封。
-        this.commitAppliedMove(room, cur, 'ai-' + randomUUID(), { row: decision.row, col: decision.col }, res.state);
+        this.commitAppliedMove(room, cur, 'ai-' + randomUUID(), { row, col }, res.state);
         if (room.ended || room.state.status !== 'playing') return;
       }
     } finally {
@@ -824,6 +936,9 @@ export class GameServer {
     room.revision = revisionAfter;
     room.seq = seq;
     room.state = nextState;
+    // S02：房间推进后，之前排队的旧 revision AI 任务立刻作废，不再浪费算力。
+    const dropped = this.aiHost.cancelUpTo(room.id, room.revision);
+    if (dropped > 0) this.logAi({ event: 'ai_queue_cancelled_stale', roomId: room.id, dropped, revision: room.revision });
     this.broadcastRoom(room);
     const c = room.seats[seat].kind === 'human' && room.seats[seat].userId ? this.clients.get(room.seats[seat].userId!) : undefined;
     if (c && c.gameId === room.id) this.sendTo(c.ws, ack);
@@ -911,6 +1026,7 @@ export class GameServer {
     }
     this.rooms.clear();
     this.userGame.clear();
+    void this.aiHost.close();
     for (const id of [...this.clients.keys()]) this.matchmaking.leave(id);
     for (const c of this.clients.values()) {
       try { c.ws.close(1001, 'server shutdown'); } catch { /* noop */ }
@@ -1338,6 +1454,26 @@ export class GameServer {
 
   private logMatchmaking(event: string, fields: Record<string, unknown>): void {
     console.info(JSON.stringify({ event, ...fields, timestamp: Date.now() }));
+  }
+
+  /**
+   * S07：撤销某用户的会话 → 立刻切断其 WebSocket 并清理在线状态。
+   * 登出/改密后旧连接必须失效；对手会收到正常的掉线宽限流程，不会卡死。
+   */
+  revokeUserSession(userId: string, reason: 'LOGOUT' | 'PASSWORD_RESET'): void {
+    const c = this.clients.get(userId);
+    if (!c) return;
+    this.sendTo(c.ws, { type: 'error', error: 'session revoked', code: 'SESSION_REVOKED', reason });
+    try {
+      c.ws.close(4003, 'session revoked');
+    } catch {
+      /* 连接可能已在关闭中 */
+    }
+    console.info(JSON.stringify({ event: 'ws_session_revoked', userId, reason, timestamp: Date.now() }));
+  }
+
+  private logAi(fields: Record<string, unknown>): void {
+    console.info(JSON.stringify({ ...fields, timestamp: fields.timestamp ?? Date.now() }));
   }
 
   private clearDisconnectTimer(room: Room, seat: Seat): void {

@@ -57,13 +57,13 @@ const SUITES = {
     phase: 'P0B',
   },
   security: {
-    title: 'P0C 有界 AI Worker / 过期任务 / WS ticket / Origin / 限流 / 会话撤销',
-    entry: null,
-    runner: null,
-    implemented: false,
-    covers: ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09', 'S10'],
+    title: 'P0C 有界 AI Worker / 硬超时 / 合法降级 / Origin / 体积 / 限流 / 会话撤销',
+    entry: 'backend/tests/security.worker.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['S01', 'S02', 'S03', 'S05', 'S06', 'S07'],
     phase: 'P0C',
-    blocker: '尚未实现：等待 B2 批次编写',
+    deferred: ['S04 WS 单次票据', 'S08 邮件找回', 'S09 账号枚举', 'S10 活跃对局分析'],
   },
   features: {
     title: 'P1/P2 游客 / 教学 / 匹配 / 排位 / 历史 / 复盘 / 分享 / 题库',
@@ -189,7 +189,7 @@ async function main() {
     }
 
     let suiteOk = true;
-    if (key === 'results' || key === 'recovery') {
+    if (key === 'results' || key === 'recovery' || key === 'security') {
       const entryPath = join(ROOT, suite.entry);
       if (!existsSync(entryPath)) {
         record.status = 'FAIL';

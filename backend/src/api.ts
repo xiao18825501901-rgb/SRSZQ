@@ -80,6 +80,11 @@ export interface ApiHooks {
   onInviteAccepted?: (senderId: string, receiverId: string) => void;
   /** 邀请被拒绝 */
   onInviteRejected?: (senderId: string, receiverId: string) => void;
+  /**
+   * S07：会话被撤销（登出）。服务端据此**立即切断**该用户的 WebSocket，
+   * 否则登出后旧连接仍能继续下棋 —— 那等于登出没有生效。
+   */
+  onSessionRevoked?: (userId: string, reason: 'LOGOUT') => void;
 }
 
 export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: ApiContext } {
@@ -151,6 +156,8 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
             if (session) {
               db.deleteSession(token);
               db.touchOnline(session.userId, 'offline');
+              // 会话没了，长连接也必须没了。
+              hooks.onSessionRevoked?.(session.userId, 'LOGOUT');
             }
           }
           return send(res, 200, {});
