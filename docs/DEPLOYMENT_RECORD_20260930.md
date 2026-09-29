@@ -96,6 +96,55 @@ wss://api.srszq.com/ws?protocol=2&ruleset=formal-rules-v2
 - 公网 21 项端到端全部通过，含未认证 401、伪造 Origin 403、命令信封、ACK、幂等重放、STALE_REVISION。
 - 实测改善：主线程事件循环阻塞从 125–195ms 降到 15.1ms（仅调度噪声）。
 
+---
+
+## 第三次发布：P1（B3）— 2026-09-30
+
+| 项 | 值 |
+|---|---|
+| releaseId | `p1-20260930` |
+| 生产提交 | `b93413962d6b08144657973e4f40f53f4e6b3ae6` |
+| 回滚点 | `ef175ed81a165209b9fd7fb78f804edcb5e68b90`（首次）/ `40f2a1a`（releaseId 升级前） |
+| 回滚依赖 | `/var/backups/srszq/release-20260929T201737Z-VJRA6l` |
+| 上线前独立备份 | `/home/admin/srszq-predeploy-backups/p1-20260929T201245Z.sqlite`（integrity ok，177 用户 / 46 局） |
+| 前端 | 无源码改动 |
+
+### 行为变更（规格强制，且影响真实用户）
+
+**AI 补位的在线局不再改真人竞技分。**
+
+规格 01 第 4.1 节「快速人机/好友/教学/本地不改真人竞技分」、第 55 行「快速对局标
+不计真人排位」、第 142 行「新赛季 beta 仅 3 真人 eligible」。此前实现是
+`isRanked = (mode === 'online')`，所以 1H+2AI 会给真人 +30/-10 —— 既违反规格，
+也允许对着 AI 刷分。
+
+上线后公网实测（`scripts/dev/public-rating-check.mjs`）：
+```
+注册 DEMO -> 读 /api/me = 1200
+打一局 1H+2AI 并退出 -> 终局 reason=PLAYER_FORFEIT
+再读 /api/me = 1200          <- 分数未变
+广播 participants 分差 = [0,0,0]
+```
+
+注意：这会让排行榜在低并发时段基本不动（大多数局是 AI 补位）。这是规格设计
+（第 56 行：新排位按观测数据开放固定测试时段），不是故障。快速对局仍可玩，
+只是不再产生竞技分后果。
+
+### 同时修掉的 P0C 遗留缺陷
+
+1. `warmup()` 被自己的 `hardTimeoutMs` 约束 -> 冷启动必然超时，预热等于没有。
+   改为独立 `warmupTimeoutMs`（默认 15s）。
+2. 硬超时杀线程后新 worker 是冷的，立刻接业务流量会再次超时 -> 活锁。
+   改为「冷槽位只跑预热探针，热了才接业务」。
+   （修第 2 条时我自己又引入过一次**无限预热循环**：`slot.warm` 未置位导致每次
+   `pump()` 重派探针、真实任务永远排队。用隔离脚本定位并修复。）
+
+### 上线后观测
+
+- 五个 smoke 门禁全过：API / WS(401 before upgrade) / PM2 / DB quick_check / NGINX。
+- `releaseId: p1-20260930`，生产可自证版本。
+- `/api/version` 与 `game.start` 报告的 releaseId 一致。
+
 ## 未做的事
 
 - 未改 DNS、未改域名、未改仓库可见性。

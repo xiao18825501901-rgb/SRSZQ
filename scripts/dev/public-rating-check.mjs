@@ -29,9 +29,14 @@ async function api(method, path, body, token) {
   });
   return { status: res.status, json: await res.json().catch(() => null) };
 }
-async function ratingInLeaderboard(userId) {
-  const r = await api('GET', '/api/ranking');
-  return r.json?.ranking?.find((x) => x.id === userId)?.rating ?? null;
+/**
+ * 读本人的竞技分。
+ * 不能用 /api/ranking 找自己：排行榜有分页上限，而 1200 分段按 created_at 升序排列，
+ * 新注册账号排在最后 —— 会读到 null（分页假象，不是分数没变）。
+ */
+async function myRating(token) {
+  const r = await api('GET', '/api/me', undefined, token);
+  return typeof r.json?.user?.rating === 'number' ? r.json.user.rating : null;
 }
 
 const main = async () => {
@@ -47,8 +52,8 @@ const main = async () => {
   if (!token || !userId) { console.log('FATAL: 无法继续'); process.exit(1); }
   await api('POST', '/api/tutorial/complete', {}, token);
 
-  const r0 = await ratingInLeaderboard(userId);
-  ok(typeof r0 === 'number', '排行榜可读到初始分 ' + r0);
+  const r0 = await myRating(token);
+  ok(typeof r0 === 'number', '读到本人初始分 ' + r0 + '（/api/me）');
 
   console.log('=== 打一局 1H+2AI 快速局并退出 ===');
   const ws = new WebSocket(WS + '?protocol=2&ruleset=formal-rules-v2&token=' + encodeURIComponent(token));
@@ -82,7 +87,7 @@ const main = async () => {
   ws.close();
 
   console.log('=== 核心断言：分数必须没变 ===');
-  const r1 = await ratingInLeaderboard(userId);
+  const r1 = await myRating(token);
   ok(r1 === r0, 'AI 补位快速局不得改真人竞技分：' + r0 + ' -> ' + r1);
 
   const parts = ended?.participants ?? [];
