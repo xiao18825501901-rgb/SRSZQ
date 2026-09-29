@@ -207,3 +207,27 @@ pragma integrity_check -> ok
 - 未迁移/覆盖生产库；上线前由发布脚本自动做了一次库备份。
 - 未删除任何生产数据。`match_results` 只统计 P0A 建表之后结算的局，早期对局完整保存在 `games`/`matches`（50 局）里。
 - R07 题库、R08 每日题/错题、R09 前端界面、R10 真实浏览器截图仍未完成，见交付包 `NEXT_ACTION.md`。
+
+### 补充发布 `020e60f`（测试运行器修复；运行时行为不变）
+
+| 项 | 值 |
+|---|---|
+| 生产提交 | `020e60f972a43d04814e684f9ce1c591bea2a2b5` |
+| 回滚点（上一提交） | `84db1fcbe62699fe1b6730dfb6eb5060ef397ee0` |
+| 发布脚本结论 | `RELEASE PASS: 020e60f972a43d04814e684f9ce1c591bea2a2b5` |
+| 回滚依赖 + 上线前库备份 | `/var/backups/srszq/release-20260929T205847Z-AY5Jmw` |
+| 服务端校验树 | `/var/tmp/srszq-release-LllUZ9` |
+
+为什么为一个“测试脚本的修复”再发一次：`scripts/product/run-tests.mjs` 曾把可执行套件的键写死成四个，
+新增的 `replay` 套件既不进 tsx 分支也不进 baseline 分支 —— 一步没跑却被记成 PASS，`--all` 的 overall 也跟着变成 PASS。
+它不影响运行时行为，但会让**之后每一批次的回归证据失真**，因此先修掉、并把生产与 main 对齐，再继续 B4 第二批。
+修复内容：执行方式改为按 `runner`/`entry` 数据驱动；未知执行方式直接 FAIL；`steps.length === 0` 拒绝判 PASS。
+
+补充发布后重跑公网验收（同一脚本、新的 DEMO 账号与新的对局，与上一次完全独立）：
+
+```
+PUBLIC REPLAY CHECK: ALL PASS 0（退出码 0）
+finalHash=be6f08fd0d1950c1c6dfab4c9a0c199a   <- 与上一次公网验收、以及本机同一脚本对局逐位一致
+keyMoves=IMMEDIATE_WIN@20 · MISSED_WIN@18 · PREEMPTIVE_BLOCK@16
+ratingDeltas=[-10,30,-10]
+```
