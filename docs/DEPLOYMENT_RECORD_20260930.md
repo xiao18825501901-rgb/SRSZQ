@@ -231,3 +231,79 @@ finalHash=be6f08fd0d1950c1c6dfab4c9a0c199a   <- 与上一次公网验收、以�
 keyMoves=IMMEDIATE_WIN@20 · MISSED_WIN@18 · PREEMPTIVE_BLOCK@16
 ratingDeltas=[-10,30,-10]
 ```
+
+---
+
+## P2b 上线（B4 第二批：题库 V1 / 每日题 / 错题本）
+
+| 项 | 值 |
+|---|---|
+| releaseId | `p2b-20260930` |
+| 生产提交 | `13a6b478ab17c3220f87c4e783e9e61c57d9ceee` |
+| 回滚点（上一提交） | `2c66ad2b8b59806abf40a873509ddd99e1fad911` |
+| 发布脚本结论 | `RELEASE PASS: 13a6b478ab17c3220f87c4e783e9e61c57d9ceee` |
+| 回滚依赖 + 上线前库备份 | `/var/backups/srszq/release-20260929T211436Z-zLbB0R` |
+| 服务端校验树 | `/var/tmp/srszq-release-9E7XVx`（npm ci + typecheck + 单测 + API + WS + build + npm audit） |
+| 上线后的测试修正 | `415ec4bc`（只改测试与开发脚本，运行时行为不变；生产仍运行 13a6b47） |
+
+### 本次上线的能力
+
+R07 题库 V1：60 道已发布题，四类各 15 道（当前胜点 / 跨轮唯一威胁 / 跨轮多威胁 / 禁手防守冲突，
+其中 12 道是真冲突）。题目全部来自**合法完整轨迹**：生产库只读导出的 3 局 3 真人 20 手真实对局，
+加上 22 条固定种子自对弈轨迹；每条轨迹都能用真实 `applyMove` 完整重放。
+即时胜利题枚举全部合法致胜点（15 道里 13 道有多个答案）。
+
+R08 每日题与错题：`puzzle_attempts`（`(user_id, attempt_id)` 唯一）与 `puzzle_progress` 两张新表；
+`GET /api/puzzles/daily|progress`、`GET /api/puzzles/:id`、`POST /api/puzzles/:id/attempt`。
+attemptId 幂等（重发回放同一结论且不重复计数，换答案 409 且不改动历史）；答对或第 3 次尝试后
+才下发完整答案集与解析；只有 `status=PUBLISHED` 的题进入索引。
+
+### 公网验收（真实域名，两个脚本都对生产跑）
+
+```
+release=p2b-20260930
+
+A) 题库（scripts/dev/public-puzzle-check.mts）PUBLIC PUZZLE CHECK: ALL PASS 0
+   线上今日题目 == 本仓库确定性算出的同一题（selfplay-13-forbidden-s163:ply45:preempt-B）
+   线上起始局面 44 手逐手与本地一致；线上题库总数 60 与本地一致
+   合法非答案 -> INCORRECT；同一 attemptId 重发 -> duplicate 且次数不变
+   同一 attemptId 换答案 -> 409，且冲突后再重发结论与次数均未变
+   答案点 -> CORRECT，下发完整答案集（8 个）与解析 PUZZLE_PREEMPT_ONE_OF
+   进度：solved=1 failed=0 totalAttempts=2 firstSolvedAt 已落库
+
+B) P2 功能回归（scripts/dev/public-replay-check.mjs）PUBLIC REPLAY CHECK: ALL PASS 0
+   3 真人 20 手脚本对局；finalHash=be6f08fd0d1950c1c6dfab4c9a0c199a（与 P2 上线时逐位一致）
+   keyMoves=IMMEDIATE_WIN@20 · MISSED_WIN@18 · PREEMPTIVE_BLOCK@16；ratingDeltas=[-10,-10,30]
+```
+
+原始日志：`SRSZQ_Productization_Deliveries/P2B_20260930/public-puzzle-check.log`（退出码 0）与
+`public-replay-check.log`（退出码 0）。
+
+### 上线后生产库只读核对（未做任何迁移）
+
+```
+users=193 games=52 matches=52 match_results=10 rating_ledger=16 game_events=90
+share_links=4 live_games=0 puzzle_attempts=4 puzzle_progress=2
+pragma integrity_check -> ok
+/api/config/features -> ratingBeta=false(isDefault) invitusShadow=false(isDefault)
+```
+
+### 本轮自己修掉的缺陷（写在这里，因为其中两条是产品缺陷）
+
+1. `isLegalMove(state,row,col)` 是三参数，抽题代码按对象调用（`isLegalMove(before, c)`）导致所有
+   需要合法性判断的分支恒为假：产生 294 个假的“无合法防守点”，规格要求的三类里少了两类。
+   根因是写完模块没先跑 typecheck 就生成产物。
+2. 选取用 `slice(0,target)` 会静默丢弃合法题目，且排序按类型名导致“跨轮提前防守”整类落选；
+   改为按类型轮转 + 未收录明确标 PENDING 并计数。
+3. “禁手防守冲突”不是自对弈随机能走出的形态（首轮真冲突题 0 道）；新增 forbidden-builder
+   定向策略后才产出 12 道 —— 换的是生成策略，不是判定标准。
+4. 测试用例自身的偶发误判：断言冲突时写死坐标 (0,0)，与首次尝试重复，于是把正确的重发处理
+   判成失败（公网验收 24/25 就是它）。已修，并补“冲突不得改动历史”的断言。
+
+### 本批次仍然没碰的东西
+
+- 未改 DNS、未改域名、未改仓库可见性。
+- 未开启评分 Beta、未晋级 Invitus、未开 shadow（实测都是默认关闭）。
+- 未迁移/覆盖生产库；发布脚本自动做了一次在线库备份。
+- 未删除任何生产数据。
+- R09 前端界面、R10 真实浏览器截图（仍是 0 张）、B7 容量与备份恢复演练仍未完成。
