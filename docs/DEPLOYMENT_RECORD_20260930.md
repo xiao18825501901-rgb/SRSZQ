@@ -428,3 +428,66 @@ PUBLIC PRIVACY CHECK: ALL PASS 0（退出码 0）
 
 - 未改 DNS / 域名 / 仓库可见性；未开启评分 Beta / Invitus；未删除任何用户数据（DEMO 账号的删除是流程验证）。
 - 未做：D07/D08 续训声明与模型卡、O02 留存口径、O05 备份恢复演练、O07 容量实测（B6/B7）。
+
+---
+
+## P3B 上线（B6：provider 接口 / 续训声明校验 / CPU 评测矩阵与模型卡）
+
+| 项 | 值 |
+|---|---|
+| releaseId | `p3b-20260930` |
+| 生产提交 | `69ed609d08360ceb2fad3cf2462fc303cca9f8fb` |
+| 发布脚本结论 | `RELEASE PASS: 69ed609d08360ceb2fad3cf2462fc303cca9f8fb` |
+| 回滚点 | `95d87c660b5bf21603adbfe501e1dd6a061fe56d` |
+| 回滚依赖 + 上线前库备份 | `/var/backups/srszq/release-20260929T222017Z-f4KXGu` |
+| 服务端校验树 | `/var/tmp/srszq-release-nLffdY` |
+
+### research/invitus：只读检查结论
+
+远端存在 `refs/heads/research/invitus`（`696c5d9`，比 main 多 78 个提交，含 `research/invitus/` 下
+5K 评测、校准、架构、GPU 迁移等报告，以及冻结的 `INVICTUS_ACCEPTANCE_CRITERIA.md`）。
+本次只 `fetch` 到 remote-tracking 引用做只读查看：**未合并、未改写、未检出**，其文件不在工作区里，
+其验收标准被用作本批次的评测门槛口径（100k 训练量、17 路 ≥ 30%、三座覆盖、无 illegal move、
+校准 ECE/Brier、搜索 scaling、原项目回归）。
+
+### 本次上线的能力
+
+- 统一 `DecisionProvider` / `AnalysisProvider`：五档现有 AI 是默认且唯一落子的生产 provider；
+  shadow 适配器（Invitus 形态）在权重/元数据不全时**拒绝运行**并列出缺失项；
+  `resolveProvider`/`resolveMove` 让“shadow 不得影响对局”成为类型约束（落子只可能来自 mover）。
+- `validateResumeClaim`：EXACT_RESUME 需 12 个字段齐全（权重/RNG/优化器/步数/局数/seed 区间/
+  引擎与规则版本/configHash/trajectoryHash/budget），缺一即拒绝；WEIGHTS_ONLY_LOAD 通过但必须列出
+  “没有恢复什么”；不存在静默升级。
+- 研究协议门槛判定（READY/PARTIAL/BLOCKED）与评测矩阵聚合（按棋盘 × 对手族 × 档位 × 座位分层，
+  含延迟分位、合法性、崩溃、拒绝；校准如实标 NOT_AVAILABLE）。
+- `scripts/product/ai-eval-matrix.mts` + `docs/MODEL_CARD_20260930.md`。
+
+### 一个实测出来的可复现性结论（写进代码，不是写进注释）
+
+现有引擎用**墙钟时间预算**控制搜索，没有节点预算旋钮。实测：预算一旦成为约束，同一 seed 会因为
+运行时冷热/JIT 走出**不同的棋**（同样 20ms，重负载后能搜更深）；预算给足时同种子逐手完全一致。
+因此评测用 `DETERMINISTIC_SEARCH_BUDGET = { timeBudgetMs: 3000, maxDepth: 3 }`，
+并把“单次决策耗时 / 预算”的**预算压力**记录下来；超过 50% 即声明可复现性不成立。
+这是相对规格 6.3“固定节点预算”的已知差距，已写入模型卡。
+
+实测矩阵（30 局 / 906 次决策）：`illegal=0 crashes=0 legalityRate=1`，同种子重跑 IDENTICAL，
+预算压力 17%；门禁判定 `PARTIAL`（训练量 0、未报告校准）——如实反映没有训练。
+
+### 公网验收（真实域名，三个脚本全过）
+
+```
+release=p3b-20260930
+A) scripts/dev/public-provider-check.mts   -> PUBLIC PROVIDER CHECK: ALL PASS 0
+   invitusShadow=false 且 isDefault=true、rawValue=null（可外部复核：从未被打开过）
+   线上 1H+2AI 局：AI 座位 A,B 真的走出 2 手，广播坐标全部合法
+   /api/ranking 200 · srszq.com 200
+B) scripts/dev/public-replay-check.mjs     -> PUBLIC REPLAY CHECK: ALL PASS 0（重放/关键三手/分享未受影响）
+C) scripts/dev/public-puzzle-check.mts     -> PUBLIC PUZZLE CHECK: ALL PASS 0（题库/每日题未受影响）
+```
+
+原始日志：`SRSZQ_Productization_Deliveries/P3B_20260930/`。
+
+### 本批次仍然没碰的东西
+
+- 未合并、未检出、未改写 `research/invitus`；未训练任何模型；未开启评分 Beta 或 shadow。
+- 未做：O05 备份恢复演练、O07 容量实测、`/ready` 探针、管理界面、68 项封版（B7）。
