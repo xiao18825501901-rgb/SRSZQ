@@ -188,6 +188,9 @@ async function main(): Promise<void> {
 
     console.log('=== 桌面 1440x900：历史页 ===');
     ok(await page.waitFor('[data-testid="history-page"]'), '历史页渲染成功（url=' + String(await page.evaluate('location.href')) + '）');
+    // 列表行是**异步**取回的：必须等它出现（或等到明确的空态），
+    // 否则 "0 行" 只是断言跑在数据到达之前 —— 本地因为快而侥幸通过，生产上必现。
+    await page.waitFor('[data-testid="history-row"], [data-testid="history-empty"]', 20000);
     const rows = await page.evaluate(`document.querySelectorAll('[data-testid="history-row"]').length`);
     if (rows === 0) {
       const diag = await page.evaluate(`(async () => {
@@ -260,7 +263,39 @@ async function main(): Promise<void> {
     ok(pLayout.docWidth <= pLayout.viewport.w + 1, '手机端题库页无横向溢出（scrollWidth=' + pLayout.docWidth + '）');
     ok(pLayout.board !== null && pLayout.board.width <= pLayout.viewport.w, '手机端题库棋盘在视口内');
 
+    console.log('=== 去标识分享页（#/s/<token>）===');
+    const created = await api(API, 'POST', `/api/games/${game.gameId}/share`, {}, winner.token);
+    ok(created.status === 201, '创建分享链接 http=' + created.status);
+    const token = created.json?.share?.token as string;
+    await goto('/s/' + token);
+    ok(await page.waitFor('[data-testid="shared-page"]'), '分享页渲染成功（不需要登录态也走这条路）');
+    const sharedText = await page.evaluate(`document.body.innerText.replace(/\\s+/g, ' ').slice(0, 400)`);
+    const noLeak = await page.evaluate(`(() => {
+      const t = document.body.innerText;
+      return { hasDemo: !!document.querySelector('[data-testid="shared-demo"]'),
+        mentionsEmail: t.includes('@example.invalid'),
+        mentionsToken: t.includes(${JSON.stringify(token)}),
+        seats: document.querySelectorAll('[data-testid^="shared-seat-"]').length };
+    })()`);
+    ok(noLeak.seats === 3, '分享页显示 3 个座位（实际 ' + noLeak.seats + '）');
+    ok(noLeak.mentionsEmail === false && noLeak.mentionsToken === false, '分享页不泄露邮箱与 token');
+    ok(noLeak.hasDemo === true, '合成/演示账号的对局标了 DEMO（不冒充真人）');
+    console.log('  分享页文本：' + String(sharedText).slice(0, 160));
+    const revoked = await api(API, 'DELETE', `/api/share/${token}`, undefined, winner.token);
+    ok(revoked.status === 200, '撤销分享链接 http=' + revoked.status);
+    const afterRevoke = await page.evaluate(`(async () => { const r = await fetch(${JSON.stringify(API)} + '/api/shared/' + ${JSON.stringify(token)}); return { status: r.status, body: (await r.text()).slice(0, 60) }; })()`);
+    ok(afterRevoke.status === 410, '撤销后公开接口返回 410（实际 ' + afterRevoke.status + ' ' + afterRevoke.body + '）');
+    await page.send('Page.reload', { ignoreCache: true });
+    ok(await page.waitFor('[data-testid="shared-error"]', 20000), '撤销后重新打开：页面给出不可用提示（不是空白页）');
+    const revokedText = await page.evaluate(`document.querySelector('[data-testid="shared-error"]')?.textContent ?? document.body.innerText.slice(0, 120)`);
+    ok(/不可用|撤销|过期/.test(String(revokedText)), '分享页如实显示链接已不可用：' + String(revokedText).slice(0, 60));
+    const sharedShot = await page.shot(join(OUT, 'mobile-390x844-shared-revoked.png'));
+    ok(sharedShot.width === 390 && sharedShot.height === 844, '撤销后分享页截图 390x844');
+
     console.log('=== 渲染密度（防“空白页也算通过”） ===');
+    // 密度与棋子检查必须回到一个内容页：上一步停在已撤销的分享页（那里本来就该是空的）。
+    await goto('/puzzles');
+    ok(await page.waitFor('[data-testid="puzzle-page"]'), '回到题库页（密度检查的前置条件）');
     const density = await page.evaluate(`(() => ({
       text: document.body.innerText.replace(/\\s+/g, ' ').length,
       points: document.querySelectorAll('.go-point').length,

@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { SlidingWindowLimiter } from './ws/security.js';
 import {
   featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID,
-  asBoardSize, moveListOf, replayGame, reviewKeyMoves, stateDigest, threatWindows,
+  asBoardSize, moveListOf, replayGame, reviewKeyMoves, stateDigest, threatWindows, classifyAccountSource,
   PLAYER_LABELS, RULESET_VERSION, RELEASE_ID,
   dailyPuzzleId, expandTrails, gradeAnswer,
   type PersistedEvent, type GameState, type Player, type Puzzle, type ReplayOutcome, type ReviewMove, type ThreatWindow,
@@ -472,6 +472,9 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           if (db.findUserByUsername(username)) return send(res, 409, { error: '用户名已被占用' });
           const salt = makeSalt();
           const user = db.createUser({ email, username, passwordHash: hashPassword(password, salt), salt });
+          // 规格 4.1：测试/合成账号必须可被识别，否则它们会像真人一样进排行榜与被分享。
+          const source = classifyAccountSource(email, username, process.env);
+          if (source !== 'HUMAN') db.setUserSource(user.id, source);
           db.touchOnline(user.id, 'online');
           const token = createSessionToken();
           db.createSession(token, user.id, sessionExpiry());

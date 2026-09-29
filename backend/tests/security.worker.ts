@@ -356,9 +356,18 @@ async function main(): Promise<void> {
       send(c, { type: 'queue.join' });
       const start = await waitFor(c, 'game.start', 12000);
       const gameId = start.gameId as string;
-      // 等 AI 走几步（全部会超时降级）
-      const deadline = Date.now() + 12000;
-      while (Date.now() - deadline < 0) break;
+      // 座位由服务端分配：如果真人拿到 A 座（先手），服务器本来就该等真人落子，
+      // AI 一步都不会走。上一版忽略了这一点，于是测试结果取决于座位分配的运气 ——
+      // 空闲机器上连跑三次会出现 0/0/2 这种"时好时坏"，看起来像 S03 产品缺陷。
+      const mySeat = start.yourSeat as 'A' | 'B' | 'C';
+      observed.g6_mySeat = mySeat;
+      if (mySeat === 'A') {
+        const first = getLegalMoves(start.state)[0];
+        assert.ok(first, '开局必须有合法手');
+        send(c, { type: 'move', commandId: 'degrade-' + randomUUID(), row: first.row, col: first.col });
+        await waitFor(c, 'ack', 8000);
+      }
+      // 现在轮到 AI：即使 AI 池拒绝一切任务，也必须靠合法降级继续推进。
       let moved = 0;
       const t0 = Date.now();
       while (Date.now() - t0 < 12000 && moved < 2) {
@@ -367,7 +376,11 @@ async function main(): Promise<void> {
         else await sleep(20);
       }
       observed.g6_aiMovesUnderDegrade = moved;
-      assert.ok(moved >= 1, '即使 AI 池拒绝一切任务，也必须靠合法降级继续推进，实际走了 ' + moved + ' 步');
+      const expectedFloor = mySeat === 'A' ? 2 : 1;
+      assert.ok(
+        moved >= expectedFloor,
+        '即使 AI 池拒绝一切任务，也必须靠合法降级继续推进（座位 ' + mySeat + '，实际 ' + moved + ' 步）',
+      );
       // 事件流里必须能看到降级记录，而不是静默换了策略
       const events = db2.listGameEvents(gameId);
       const degraded = events.filter((e) => JSON.stringify(e.payload).includes('ai-') || e.type === 'move.applied');

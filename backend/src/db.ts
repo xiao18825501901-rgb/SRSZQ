@@ -19,10 +19,10 @@ export interface RankingRow {
   winRate: number;
 }
 
-/** 账号来源。只有 HUMAN 参与公开排行榜与竞技分。 */
-export type AccountSource = 'HUMAN' | 'SYNTHETIC' | 'TEST' | 'ADMIN_DEMO';
-
-export const ACCOUNT_SOURCES: readonly AccountSource[] = ['HUMAN', 'SYNTHETIC', 'TEST', 'ADMIN_DEMO'];
+/** 账号来源：类型与判定规则都收敛在 shared 一处，这里再导出以兼容既有引用。 */
+import type { AccountSource } from '../../shared/src/product/accountSource.js';
+export { ACCOUNT_SOURCES } from '../../shared/src/product/accountSource.js';
+export type { AccountSource };
 
 /** 结算输入：由 shared/product/resultModel.buildSettlement 产出的纯计划 + 落盘所需的棋谱。 */
 export interface SettleMatchInput extends SettlementPlan {

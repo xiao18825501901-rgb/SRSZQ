@@ -24,6 +24,7 @@ import {
   type EligibilityInput, type Eligibility,
 } from '../../shared/src/product/ratingPolicy.js';
 import { buildSettlement } from '../../shared/src/product/resultModel.js';
+import { classifyAccountSource } from '../../shared/src/product/accountSource.js';
 import { PROTOCOL_VERSION, RULESET_VERSION } from '../../shared/src/product/protocol.js';
 
 let db: Db;
@@ -385,6 +386,25 @@ async function main(): Promise<void> {
       { seat: 'C', userId: 'c', rating: 1200, outcome: 'DRAW' },
     ]);
     assert.deepEqual(d.map((x) => x.delta), [30, -10, 0]);
+  });
+
+  await check('J6 测试/合成账号按规则登记（规格 4.1：不得冒充真人进排行榜）', async () => {
+    // 保留域（RFC 2606）永远不可能属于真人；用户名前缀由环境变量配置。
+    assert.equal(classifyAccountSource('someone@example.invalid', 'AnyName'), 'TEST', '保留域必须归为 TEST');
+    assert.equal(classifyAccountSource('a@gmail.com', 'dshabc'), 'TEST', '默认 dsh 前缀命中');
+    assert.equal(classifyAccountSource('a@gmail.com', 'RealPlayer'), 'HUMAN', '普通账号不得被误判');
+    assert.equal(classifyAccountSource('a@gmail.com', 'x', { SRSZQ_TEST_ACCOUNT_PATTERN: '(' }), 'HUMAN', '配置写错时退回 HUMAN，不冤枉真人');
+    const stamp = Date.now().toString(36);
+    const reg = await api('POST', '/api/register', {
+      email: 'reserved.' + stamp + '@example.invalid',
+      username: ('Reserved' + stamp).slice(0, 16),
+      password: 'Passw0rd!23',
+    });
+    assert.equal(reg.status, 201, JSON.stringify(reg.json));
+    assert.equal(db.getUserSource(reg.json.user.id), 'TEST', '注册接口必须按规则落库 source=TEST');
+    const list = await api('GET', '/api/ranking');
+    assert.ok(!list.json.ranking.some((x: any) => x.id === reg.json.user.id), '保留域账号不得出现在公开排行榜');
+    observed.j6_source = db.getUserSource(reg.json.user.id);
   });
 
   console.log('--- 观测 ---');

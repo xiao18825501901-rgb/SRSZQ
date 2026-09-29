@@ -10,6 +10,7 @@ export * from './product/protocol';
 export * from './product/ratingPolicy';
 export * from './product/replay';
 export * from './product/puzzleBank';
+export * from './product/accountSource';
 export * from './game/types';
 export * from './game/eligibility';
 export * from './game/legalMoves';
