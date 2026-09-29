@@ -27,6 +27,8 @@
     "test:puzzles": "tsx backend/tests/puzzles.bank.ts",
     "test:privacy": "tsx backend/tests/privacy.dataset.ts",
     "test:provider": "tsx backend/tests/ai.provider.ts",
+    "test:ops": "tsx backend/tests/ops.readiness.ts",
+    "probe:capacity": "tsx scripts/ops/capacity-probe.mts",
     "eval:ai": "tsx scripts/product/ai-eval-matrix.mts",
     "build:puzzles": "tsx scripts/product/build-puzzle-bank.mts",
     "test:product": "node scripts/product/run-tests.mjs",

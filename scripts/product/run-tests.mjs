@@ -101,6 +101,15 @@ const SUITES = {
     phase: 'P3B',
     deferred: ['真实训练与 checkpoint（本项目未训练任何模型）', 'GPU/搜索 scaling 与 exact oracle 残局评测'],
   },
+  ops: {
+    title: 'P4 备份恢复演练 / 就绪探针 / 迁移向后兼容',
+    entry: 'backend/tests/ops.readiness.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['O05', 'O10(预生产门禁)', 'O06(version source sha)'],
+    phase: 'P4',
+    deferred: ['O07 容量实测（独立脚本，跑在隔离环境）', '管理界面'],
+  },
   features: {
     title: 'P1 排位资格 / V1 评分算法 / 重复对手保护 / 排行榜过滤',
     entry: 'backend/tests/rating.policy.ts',

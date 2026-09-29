@@ -5,6 +5,7 @@ import { avatarFor, createSessionToken, hashPassword, makeSalt, sessionExpiry, v
 import type { PublicUser, User } from './models.js';
 import { randomUUID } from 'node:crypto';
 import { SlidingWindowLimiter } from './ws/security.js';
+import { buildReadyReport, detectBackendSourceSha, livenessPayload } from './readiness.js';
 import {
   featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID,
   asBoardSize, moveListOf, replayGame, reviewKeyMoves, stateDigest, threatWindows, classifyAccountSource,
@@ -269,6 +270,11 @@ export interface ApiHooks {
   /** 邀请被拒绝 */
   onInviteRejected?: (senderId: string, receiverId: string) => void;
   /**
+   * P4：就绪探针的运行时信息（AI worker 池状态）。
+   * 刻意做成注入而不是直接依赖 GameServer：/ready 需要的是**状态快照**，不是游戏逻辑。
+   */
+  readiness?: () => { worker?: { poolSize: number; warm: number } };
+  /**
    * S07：会话被撤销（登出）。服务端据此**立即切断**该用户的 WebSocket，
    * 否则登出后旧连接仍能继续下棋 —— 那等于登出没有生效。
    */
@@ -290,6 +296,10 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
   };
 
   const publicShareLimiter = new SlidingWindowLimiter(PUBLIC_SHARE_RATE_LIMIT, PUBLIC_SHARE_RATE_WINDOW_MS);
+  const startedAt = Date.now();
+  // 启动时探测一次：/version 与 /ready 报的是实际部署的提交。
+  const backendSourceSha = detectBackendSourceSha();
+  const frontendSourceSha = process.env.SRSZQ_FRONTEND_SOURCE_SHA?.trim() || null;
   const server = createServer(async (req, res) => {
     const origin = req.headers.origin;
     const originAllowed = typeof origin === 'string' && allowedOrigins.has(origin);
@@ -755,9 +765,31 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           }
           return send(res, 200, {});
         }
+        case 'GET /health':
+        case 'GET /api/health': {
+          // 规格 7.3：/health 只表示存活 —— 这里刻意不检查任何依赖，
+          // 否则依赖抖动会让编排系统杀掉一个其实还能服务的进程。
+          return send(res, 200, livenessPayload());
+        }
+        case 'GET /ready':
+        case 'GET /api/ready': {
+          const report = buildReadyReport(db, {
+            worker: hooks.readiness?.().worker,
+            version: { ...PROTOCOL_INFO },
+            source: { backendSourceSha, frontendSourceSha },
+            startedAt,
+          });
+          return send(res, report.ready ? 200 : 503, { ...report });
+        }
         case 'GET /api/version': {
           // O06：让第三方可以直接核查前后端规则/协议版本，而不是靠声明。
-          return send(res, 200, { protocol: { ...PROTOCOL_INFO }, serverTime: Date.now() });
+          return send(res, 200, {
+            protocol: { ...PROTOCOL_INFO },
+            // 规格 7.3 要求 /version 能给出前后端源码标识（不含任何密钥）。
+            source: { backendSourceSha, frontendSourceSha },
+            sourceMode: 'IMPLEMENTED_FROM_VERIFIED_BASELINE',
+            serverTime: Date.now(),
+          });
         }
         case 'GET /api/config/features': {
           // 只读、非机密：暴露开关的**实际解析值**与原始环境变量字符串，

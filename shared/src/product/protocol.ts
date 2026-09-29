@@ -17,7 +17,7 @@ export const PROTOCOL_VERSION = 2;
 export const RULESET_VERSION = 'formal-rules-v2';
 
 /** 本批次发布标识，仅用于把证据绑定到一次具体构建。 */
-export const RELEASE_ID = 'p3b-20260930';
+export const RELEASE_ID = 'p4-20260930';
 
 /** 服务端在 hello / game.start 中下发的版本三元组。 */
 export interface ProtocolInfo {

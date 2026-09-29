@@ -62,6 +62,8 @@ export interface AiWorkerHostOptions {
 
 export interface AiWorkerStats {
   poolSize: number;
+  /** 已预热（可以立刻接业务任务）的槽位数：就绪探针据此判断能否开始服务。 */
+  warm: number;
   running: number;
   queued: number;
   submitted: number;
@@ -151,6 +153,7 @@ export class AiWorkerHost {
   get stats(): AiWorkerStats {
     return {
       poolSize: this.poolSize,
+      warm: this.slots.filter((s) => s.warm).length,
       running: this.inFlight.size,
       queued: this.queue.length,
       ...this.counters,

@@ -57,6 +57,10 @@ const { server: apiServer } = createApi(db, {
   onInviteRejected: (a, b) => gameServer.onInviteRejected(a, b),
   // S07：登出即撤销长连接，否则登出只对 HTTP 生效。
   onSessionRevoked: (userId, reason) => gameServer.revokeUserSession(userId, reason),
+  // P4：/ready 的就绪判据之一 —— AI worker 池是否存在且已有预热槽位。
+  readiness: () => ({
+    worker: { poolSize: gameServer.aiHost.stats.poolSize, warm: gameServer.aiHost.stats.warm },
+  }),
 });
 const apiPort = Number(process.env.PORT ?? 8080);
 apiServer.listen(apiPort, '127.0.0.1', () => {
