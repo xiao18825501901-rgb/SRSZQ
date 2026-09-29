@@ -26,6 +26,13 @@ import {
   RULESET_VERSION,
   COMMAND_ERRORS,
   commandPayloadDigest,
+  resolveRatingPolicy,
+  deriveScoreTargets,
+  computeRatingDeltas,
+  LEGACY_POLICY_ID,
+  BETA_V1_POLICY_ID,
+  NO_RATING_POLICY_ID,
+  RATING_INITIAL,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 见下方 O06 校验
   type FeatureFlags,
   type EndReason,
@@ -1145,7 +1152,7 @@ export class GameServer {
         inGrace: info.inGraceSeats.includes(s),
       };
     });
-    return buildSettlement({
+    const base = buildSettlement({
       gameId: room.id,
       mode: room.mode,
       boardSize: room.state.boardSize,
@@ -1155,6 +1162,88 @@ export class GameServer {
       isRanked: room.mode === 'online',
       participants,
     });
+    return this.applyRatingPolicy(room, base);
+  }
+
+  /**
+   * 按规格第 4 节决定本局的评分策略并改写参与者分差。
+   *
+   * 修复的实际缺陷：此前只要 mode 是 online 就算排位，于是 **1H+2AI 的快速局
+   * 会给真人加/减竞技分** —— 与规格 4.1（快速人机不改真人竞技分）和 55 行
+   * （快速对局标「不计真人排位」）直接冲突，也允许对着 AI 刷分。
+   *
+   * 现在：
+   *   - AI 补位 / 好友局 / 不够 3 真人 / 本机模式 -> 策略 none，分差全 0，isRanked=false；
+   *   - 恰好 3 真人且 beta 关闭 -> 过渡期保留 legacy +30/-10；
+   *   - 恰好 3 真人且 beta 开启 -> 规格 4.2 的 V1 算法（按当前分值算 p_i）。
+   */
+  private applyRatingPolicy(room: Room, plan: SettlementPlan): SettlementPlan {
+    const seatIsHuman = {} as Record<Seat, boolean>;
+    const seatGatePassed = {} as Record<Seat, boolean>;
+    const humanIds: string[] = [];
+    for (const s of SEATS) {
+      const si = room.seats[s];
+      const isHuman = si.kind === 'human' && !!si.userId;
+      seatIsHuman[s] = isHuman;
+      if (isHuman) {
+        humanIds.push(si.userId!);
+        // 门禁口径：三步教学完成（老用户兼容，不要求重做）。邮箱验证暂无 transport，未纳入。
+        seatGatePassed[s] = this.db.findUserById(si.userId!)?.tutorialCompleted === true;
+      } else {
+        seatGatePassed[s] = false;
+      }
+    }
+    const humanParticipants = plan.participants.filter((p) => p.kind === 'human');
+    const humanLosses = humanParticipants.filter((p) => p.outcome === 'LOSS').length;
+    const noContest = plan.endReason === 'SYSTEM_ABORT'
+      || (humanParticipants.length > 0 && humanLosses === humanParticipants.length);
+    const sameTrioMatchNumber = humanIds.length === 3
+      ? this.db.countRecentMatchesForUsers(humanIds, Date.now() - 24 * 3600 * 1000) + 1
+      : 1;
+
+    const policy = resolveRatingPolicy({
+      mode: room.mode, seatIsHuman, seatGatePassed,
+      ratingBeta: this.featureFlags.ratingBeta,
+      noContest, sameTrioMatchNumber,
+    });
+
+    if (policy === NO_RATING_POLICY_ID) {
+      this.logAi({ event: 'rating_policy_applied', roomId: room.id, policy, sameTrioMatchNumber, noContest });
+      return {
+        ...plan, isRanked: false, scorePolicy: NO_RATING_POLICY_ID,
+        participants: plan.participants.map((p) => ({ ...p, ratingDelta: 0 })),
+      };
+    }
+
+    if (policy === LEGACY_POLICY_ID) {
+      return { ...plan, isRanked: true, scorePolicy: LEGACY_POLICY_ID };
+    }
+
+    // V1：需要当前分值，所以要读库。参与者顺序与 plan 一致。
+    const targets = deriveScoreTargets(plan);
+    const rated = humanParticipants
+      .filter((p) => !!p.userId)
+      .map((p) => ({
+        seat: p.seat,
+        userId: p.userId as string,
+        rating: this.db.findUserById(p.userId as string)?.rating ?? RATING_INITIAL,
+      }));
+    const deltas = targets.updatesRating ? computeRatingDeltas(rated, targets) : [];
+    const bySeat = new Map(deltas.map((d) => [d.seat, d]));
+    this.logAi({
+      event: 'rating_policy_applied', roomId: room.id, policy,
+      reason: targets.reason, updatesRating: targets.updatesRating,
+      deltas: deltas.map((d) => ({ seat: d.seat, delta: d.delta })),
+    });
+    return {
+      ...plan,
+      isRanked: targets.updatesRating,
+      scorePolicy: BETA_V1_POLICY_ID,
+      participants: plan.participants.map((p) => {
+        const d = bySeat.get(p.seat);
+        return { ...p, ratingDelta: d ? d.delta : 0 };
+      }),
+    };
   }
 
   /**

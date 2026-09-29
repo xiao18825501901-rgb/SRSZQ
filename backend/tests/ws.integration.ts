@@ -495,9 +495,18 @@ async function main(): Promise<void> {
       const loserIds = JSON.parse(row.loser_ids as string) as string[];
       const humanWin = row.result === (start.yourSeat as string);
       const after = await rankOf(a.id);
-      assert.equal(after.games, before.games + 1, '排位对局应计入 games');
-      assert.equal(after.rating, before.rating + (humanWin ? 30 : -10), '胜 +30 / 负 -10');
-      assert.equal(after.wins, before.wins + (humanWin ? 1 : 0), '胜利场次');
+      // 规格 4.1 / 55：1H+2AI 是**快速对局**，必须标「不计真人排位」，
+      // 不得改真人竞技分（旧契约是只要 online 就 +/-30/-10，已被规格明确替换）。
+      // 注意：is_ranked 在历史 matches 表里也有，score_policy 只在 match_results 上。
+      assert.equal(row.is_ranked, 0, 'AI 补位快速局不得标记为排位');
+      const mr = db.raw.prepare('SELECT is_ranked, score_policy FROM match_results WHERE game_id = ?').get(gameId) as any;
+      assert.ok(mr, 'match_results 必须落盘');
+      assert.equal(mr.is_ranked, 0, 'match_results.is_ranked 必须为 0');
+      assert.equal(mr.score_policy, 'none', 'AI 补位快速局的评分策略必须是 none');
+      assert.equal(after.games, before.games, '快速局不计入排位 games');
+      assert.equal(after.rating, before.rating, '快速局不改真人 rating');
+      assert.equal(after.wins, before.wins, '快速局不计胜场');
+      // 业务断言不变：胜负归属与落盘仍然必须正确
       assert.equal(winnerIds.includes(a.id), humanWin, 'winner_ids 与胜负一致');
       assert.equal(loserIds.includes(a.id), !humanWin, 'loser_ids 与胜负一致');
     } finally {
@@ -593,8 +602,10 @@ async function main(): Promise<void> {
       assert.deepEqual(JSON.parse(row.loser_ids as string), [a.id]);
       assert.deepEqual(JSON.parse(row.winner_ids as string), [], 'AI 不获胜、不继续');
       const after = await rankOf(a.id);
-      assert.equal(after.rating, before.rating - 10, '掉线判负 -10');
-      assert.equal(after.games, before.games + 1);
+      // 同样是 1H+2AI 快速局：判负行为不变，但不动真人竞技分。
+      assert.equal(row.is_ranked, 0, 'AI 补位快速局不得标记为排位');
+      assert.equal(after.rating, before.rating, '快速局掉线判负不改真人 rating');
+      assert.equal(after.games, before.games, '快速局不计入排位 games');
       assert.equal(after.wins, before.wins);
       // 人类已离开 → AI 不应继续推进（无新 game 落盘）—— match 唯一行即判负行
       const rows = db.raw.prepare('SELECT COUNT(*) AS n FROM games WHERE id = ?').get(gameId) as { n: number };
@@ -880,11 +891,12 @@ async function main(): Promise<void> {
       const st = await drainUntil(winner, 'game.state', () => true, 500);
       assert.ok(!st, '人类退出后 AI 不应继续推进');
       const [afterA, afterB] = await Promise.all([rankOf(test7Alice.id), rankOf(test7Bob.id)]);
-      assert.equal(afterA.rating, beforeA.rating - 10);
-      assert.equal(afterA.games, beforeA.games + 1);
-      assert.equal(afterB.rating, beforeB.rating + 30);
-      assert.equal(afterB.games, beforeB.games + 1);
-      assert.equal(afterB.wins, beforeB.wins + 1);
+      // 2H+1AI 同样是快速对局（有 AI 补位）：胜负由服务器判定，但不计真人竞技分。
+      assert.equal(afterA.rating, beforeA.rating, 'AI 补位局不得扣真人分');
+      assert.equal(afterA.games, beforeA.games);
+      assert.equal(afterB.rating, beforeB.rating, 'AI 补位局不得加真人分');
+      assert.equal(afterB.games, beforeB.games);
+      assert.equal(afterB.wins, beforeB.wins, 'AI 补位局的胜利不计入排位胜场');
       // 胜者立即可再匹配（Test5 补充）
       send(winner, { type: 'queue.join' });
       const again = await waitFor(winner, 'game.start', 5000);

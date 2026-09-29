@@ -330,13 +330,16 @@ async function main(): Promise<void> {
     assert.equal(again.hello, false, '更不得收到 hello：未认证连接不应被当作会话');
   });
 
-  await check('G6 S03 真实对局：AI 超时降级后仍走合法一手，对局不卡死', async () => {
-    // 用一个把硬超时压到极短的独立服务器，逼出 AI 降级路径。
+  await check('G6 S03 AI 不可用时仍走合法一手，对局不卡死（确定性触发降级）', async () => {
+    // 降级路径要**确定性**触发，不能靠把硬超时掐到极小 ——那会变成
+    // 「超时 -> 杀线程 -> 重建 -> 又超时」的重建风暴（实测把 CPU 打满并挂死套件）。
+    // 这里改用「队列上限为 0」：AI 池直接拒绝一切任务，
+    // 走的正是 S03 要求的那条路（AI 不可用 -> 必须仍出合法一手）。
     const dir2 = mkdtempSync(join(tmpdir(), 'srszq-sec2-'));
     const db2 = openDb(join(dir2, 't.sqlite'));
     const gs2 = new GameServer(db2, {
       queueTimeoutMs: 120, aiMoveDelayMs: 2, forfeitGraceMs: 400, aiTimeBudgetMs: 250,
-      queueSweepMs: 20, aiPoolSize: 1, aiQueueLimit: 2, aiHardTimeoutMs: 1,
+      queueSweepMs: 20, aiPoolSize: 1, aiQueueLimit: 0, aiHardTimeoutMs: 1500,
     });
     const http2 = createServer();
     gs2.attach(http2, '/ws');
@@ -364,7 +367,7 @@ async function main(): Promise<void> {
         else await sleep(20);
       }
       observed.g6_aiMovesUnderDegrade = moved;
-      assert.ok(moved >= 1, '即使 AI 全部超时，也必须靠合法降级继续推进，实际走了 ' + moved + ' 步');
+      assert.ok(moved >= 1, '即使 AI 池拒绝一切任务，也必须靠合法降级继续推进，实际走了 ' + moved + ' 步');
       // 事件流里必须能看到降级记录，而不是静默换了策略
       const events = db2.listGameEvents(gameId);
       const degraded = events.filter((e) => JSON.stringify(e.payload).includes('ai-') || e.type === 'move.applied');

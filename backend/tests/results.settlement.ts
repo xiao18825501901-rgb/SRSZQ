@@ -644,9 +644,13 @@ async function main(): Promise<void> {
       const ended: any = await waitFor(cf, 'MATCH_ENDED', 6000);
       assert.equal(ended.reason, 'PLAYER_FORFEIT');
       assert.equal(ended.matchId, gameId);
+      // 本用例是 1H+2AI 快速局：按规格 4.1/55 不计真人竞技分，
+      // 所以「恰好一次结算」的证据落在 match_results / match_participants 上，
+      // 而不是账本行数上（账本在快速局必须为空）。
       assert.equal(Number((realDb.raw.prepare('SELECT COUNT(*) AS n FROM match_results WHERE game_id = ?').get(gameId) as any).n), 1, '重试后恰好一条结果');
-      assert.equal(Number((realDb.raw.prepare('SELECT COUNT(*) AS n FROM rating_ledger WHERE game_id = ?').get(gameId) as any).n), 1, '重试后恰好一条账本');
-      assert.equal(Number((realDb.raw.prepare('SELECT rating FROM users WHERE id = ?').get(uid) as any).rating), 1190, '重试成功后只扣一次分');
+      assert.equal(Number((realDb.raw.prepare('SELECT COUNT(*) AS n FROM match_participants WHERE game_id = ?').get(gameId) as any).n), 3, '重试后恰好三条参与者行');
+      assert.equal(Number((realDb.raw.prepare('SELECT COUNT(*) AS n FROM rating_ledger WHERE game_id = ?').get(gameId) as any).n), 0, '快速局不得写积分账本');
+      assert.equal(Number((realDb.raw.prepare('SELECT rating FROM users WHERE id = ?').get(uid) as any).rating), 1200, '快速局重试成功后评分仍不变');
     } finally {
       // 先同步终止套接字再关服务端，避免 GameServer.onClose 仍在飞行时数据库已被关闭
       // （那会以 ERR_INVALID_STATE 直接把测试进程打挂，把真实失败掩盖成崩溃）。

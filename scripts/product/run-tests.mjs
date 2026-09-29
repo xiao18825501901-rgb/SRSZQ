@@ -66,13 +66,13 @@ const SUITES = {
     deferred: ['S04 WS 单次票据', 'S08 邮件找回', 'S09 账号枚举', 'S10 活跃对局分析'],
   },
   features: {
-    title: 'P1/P2 游客 / 教学 / 匹配 / 排位 / 历史 / 复盘 / 分享 / 题库',
-    entry: null,
-    runner: null,
-    implemented: false,
-    covers: ['U01', 'U12', 'R01', 'R10'],
-    phase: 'P1/P2',
-    blocker: '尚未实现：等待 B3/B4 批次编写',
+    title: 'P1 排位资格 / V1 评分算法 / 重复对手保护 / 排行榜过滤',
+    entry: 'backend/tests/rating.policy.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['U05', 'U06', 'U12', 'G09(ledger)'],
+    phase: 'P1',
+    deferred: ['U01 游客', 'U02 三步教学', 'U03/U04 匹配分流 UI', 'U07 迁移', 'U08 24h 门禁展示', 'U09 好友链接/二维码/ready', 'U10 并发第三第四人', 'U11 再来一局'],
   },
 };
 
@@ -189,7 +189,7 @@ async function main() {
     }
 
     let suiteOk = true;
-    if (key === 'results' || key === 'recovery' || key === 'security') {
+    if (key === 'results' || key === 'recovery' || key === 'security' || key === 'features') {
       const entryPath = join(ROOT, suite.entry);
       if (!existsSync(entryPath)) {
         record.status = 'FAIL';

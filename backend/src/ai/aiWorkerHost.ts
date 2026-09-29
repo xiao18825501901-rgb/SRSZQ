@@ -26,6 +26,9 @@ function createInitialStateLite(): GameState {
   return createInitialState(13);
 }
 
+/** 模块级共享的预热棋盘：探针只读它，不参与任何真实对局。 */
+const WARMUP_STATE: GameState = createInitialStateLite();
+
 export interface AiTaskRequest {
   taskId: string;
   gameId: string;
@@ -50,6 +53,11 @@ export interface AiWorkerHostOptions {
   poolSize?: number;
   queueLimit?: number;
   hardTimeoutMs?: number;
+  /**
+   * 预热任务的超时（默认 15s）。必须远大于业务硬超时：
+   * worker 冷启动要加载 tsx loader + 共享 AI 模块，实测 300-400ms。
+   */
+  warmupTimeoutMs?: number;
 }
 
 export interface AiWorkerStats {
@@ -68,6 +76,15 @@ export interface AiWorkerStats {
 interface Slot {
   worker: Worker;
   busy: string | null;
+  /**
+   * 该 worker 是否已经完成一次预热。
+   *
+   * 冷启动要加载 tsx loader + 共享 AI 模块（实测 300-400ms）。如果**不区分冷热**，
+   * 一个刚被硬超时杀掉的 worker 重建后立刻接业务任务，就会因为冷启动再次超时、
+   * 再被杀、再重建 —— 在硬超时配置偏小时形成活锁（实测 G6 曾因此 0 次 AI 落子）。
+   * 因此：冷槽位只跑预热探针，预热完成后才允许承接业务任务。
+   */
+  warm: boolean;
 }
 
 interface Queued {
@@ -75,6 +92,14 @@ interface Queued {
   resolve: (o: AiTaskOutcome) => void;
   /** 提交时刻（用于统计真实排队时长，而不是恒为 0）。 */
   enqueuedAt: number;
+  /**
+   * 本次派发使用的硬超时。预热必须用独立的宽松值：
+   * 冷启动要加载 tsx + 共享模块（实测 300-400ms），
+   * 若也套用业务硬超时，预热必然超时 —— 那就等于没有预热。
+   */
+  timeoutMs: number;
+  /** 是否为预热探针（预热结果不参与业务统计）。 */
+  warmup?: boolean;
 }
 
 interface InFlight {
@@ -83,6 +108,10 @@ interface InFlight {
   resolve: (o: AiTaskOutcome) => void;
   timer: ReturnType<typeof setTimeout>;
   queuedAt: number;
+  /** 本任务的硬超时（业务与预热使用不同值）。 */
+  timeoutMs: number;
+  /** 是否为预热探针。 */
+  warmup: boolean;
 }
 
 function defaultPoolSize(): number {
@@ -101,6 +130,7 @@ export class AiWorkerHost {
   private readonly poolSize: number;
   private readonly queueLimit: number;
   private readonly hardTimeoutMs: number;
+  private readonly warmupTimeoutMs: number;
   private slots: Slot[] = [];
   private queue: Queued[] = [];
   private inFlight = new Map<string, InFlight>();
@@ -115,6 +145,7 @@ export class AiWorkerHost {
     this.poolSize = Math.max(1, opts.poolSize ?? defaultPoolSize());
     this.queueLimit = Math.max(0, opts.queueLimit ?? 64);
     this.hardTimeoutMs = Math.max(50, opts.hardTimeoutMs ?? 1500);
+    this.warmupTimeoutMs = Math.max(this.hardTimeoutMs, opts.warmupTimeoutMs ?? 15_000);
   }
 
   get stats(): AiWorkerStats {
@@ -128,7 +159,7 @@ export class AiWorkerHost {
 
   private spawnSlot(): Slot {
     const worker = new Worker(fileURLToPath(this.workerUrl), { execArgv: this.execArgv });
-    const slot: Slot = { worker, busy: null };
+    const slot: Slot = { worker, busy: null, warm: false };
     worker.on('message', (res: AiWorkerResponse & { error?: string }) => this.onWorkerMessage(slot, res));
     worker.on('error', (err) => this.onWorkerDown(slot, err instanceof Error ? err.message : String(err)));
     worker.on('exit', (code) => {
@@ -150,6 +181,16 @@ export class AiWorkerHost {
     clearTimeout(flight.timer);
     this.inFlight.delete(taskId);
     slot.busy = null;
+    // 只要这个 worker 回过一条消息，它就热了（模块已加载完）。
+    // 少了这一行，ensureWarm() 会认为槽位永远是冷的，于是每一次 pump()
+    // 都重新派发预热探针 —— 实测形成无限预热循环，真实任务永远排在队列里。
+    if (!res.error) slot.warm = true;
+    if (flight.warmup) {
+      // 预热探针不参与业务统计，也不 resolve 业务 promise（它本来就是个 no-op）。
+      if (res.error) this.counters.failed += 1;
+      this.pump();
+      return;
+    }
     if (res.error) {
       this.counters.failed += 1;
       flight.resolve({ kind: 'failed', taskId, gameId: flight.req.gameId, revision: flight.req.revision, error: res.error });
@@ -186,23 +227,52 @@ export class AiWorkerHost {
     }
   }
 
+  /**
+   * 给每个空闲的冷槽位派一个预热探针（用宽松的 warmupTimeoutMs）。
+   * 返回当前是否还有冷槽位 —— 有的话业务任务就多等一会儿，避免冷启动被误判为超时。
+   */
+  private ensureWarm(): boolean {
+    let anyCold = false;
+    for (const slot of this.slots) {
+      if (slot.warm) continue;
+      anyCold = true;
+      if (slot.busy) continue;
+      const probeId = 'warmup-' + slot.worker.threadId + '-' + Math.random().toString(36).slice(2, 8);
+      slot.busy = probeId;
+      this.dispatch(slot, {
+        req: {
+          taskId: probeId, gameId: '__warmup__', revision: 0,
+          state: WARMUP_STATE, seat: 'A', level: 1, seed: 1, timeBudgetMs: 50,
+        },
+        resolve: () => { /* 预热结果本身不重要，超时/失败由 onWorkerDown 处理 */ },
+        enqueuedAt: Date.now(),
+        timeoutMs: this.warmupTimeoutMs,
+        warmup: true,
+      });
+    }
+    return anyCold;
+  }
+
   private pump(): void {
     if (this.closed) return;
     this.ensurePool();
+    const anyCold = this.ensureWarm();
     for (const slot of this.slots) {
-      if (slot.busy) continue;
+      if (slot.busy || !slot.warm) continue;
       const next = this.queue.shift();
       if (!next) return;
       this.dispatch(slot, next);
     }
+    // 队列里还有业务任务、但槽位都在冷启动：等预热完成回填（onWorkerMessage 会再 pump）。
+    void anyCold;
   }
 
   private dispatch(slot: Slot, item: Queued): void {
     const { req, resolve } = item;
     slot.busy = req.taskId;
-    const timer = setTimeout(() => this.onHardTimeout(req.taskId), this.hardTimeoutMs);
+    const timer = setTimeout(() => this.onHardTimeout(req.taskId), item.timeoutMs);
     timer.unref?.();
-    const flight: InFlight = { slot, req, resolve, timer, queuedAt: item.enqueuedAt };
+    const flight: InFlight = { slot, req, resolve, timer, queuedAt: item.enqueuedAt, timeoutMs: item.timeoutMs, warmup: item.warmup === true };
     this.inFlight.set(req.taskId, flight);
     const payload: AiWorkerRequest = {
       taskId: req.taskId, state: req.state, seat: req.seat, level: req.level,
@@ -224,13 +294,14 @@ export class AiWorkerHost {
     const flight = this.inFlight.get(taskId);
     if (!flight) return;
     this.inFlight.delete(taskId);
+    const limit = flight.timeoutMs;
     this.counters.timedOut += 1;
-    flight.resolve({ kind: 'timeout', taskId, gameId: flight.req.gameId, revision: flight.req.revision, afterMs: this.hardTimeoutMs });
-    this.onWorkerDown(flight.slot, 'hard timeout after ' + this.hardTimeoutMs + 'ms');
+    flight.resolve({ kind: 'timeout', taskId, gameId: flight.req.gameId, revision: flight.req.revision, afterMs: limit });
+    this.onWorkerDown(flight.slot, 'hard timeout after ' + limit + 'ms');
   }
 
-  /** 提交一个 AI 任务。队列满时立刻拒绝，绝不无限排队。 */
-  submit(req: AiTaskRequest): Promise<AiTaskOutcome> {
+  /** 统一入队：业务任务用 hardTimeoutMs，预热用 warmupTimeoutMs。 */
+  private enqueue(req: AiTaskRequest, timeoutMs: number, warmup = false): Promise<AiTaskOutcome> {
     this.counters.submitted += 1;
     if (this.closed) {
       return Promise.resolve({ kind: 'rejected', taskId: req.taskId, gameId: req.gameId, revision: req.revision, reason: 'CLOSED' });
@@ -241,13 +312,22 @@ export class AiWorkerHost {
     }
     this.ensurePool();
     const enqueuedAt = Date.now();
-    const free = this.slots.find((s) => !s.busy);
+    const free = this.slots.find((s) => !s.busy && (warmup || s.warm));
     if (free) {
-      return new Promise<AiTaskOutcome>((resolve) => this.dispatch(free, { req, resolve, enqueuedAt }));
+      return new Promise<AiTaskOutcome>((resolve) => this.dispatch(free, { req, resolve, enqueuedAt, timeoutMs, warmup }));
     }
-    return new Promise<AiTaskOutcome>((resolve) => {
-      this.queue.push({ req, resolve, enqueuedAt });
+    const pending = new Promise<AiTaskOutcome>((resolve) => {
+      this.queue.push({ req, resolve, enqueuedAt, timeoutMs, warmup });
     });
+    // 必须主动踢一次：池里可能只有冷槽位，预热探针只能由 pump() 派发。
+    // 少了这一行，任务会静默躺在队列里永远不执行（实测把整个套件挂死）。
+    this.pump();
+    return pending;
+  }
+
+  /** 提交一个 AI 任务。队列满时立刻拒绝，绝不无限排队。 */
+  submit(req: AiTaskRequest): Promise<AiTaskOutcome> {
+    return this.enqueue(req, this.hardTimeoutMs);
   }
 
   /** 丢弃某局中 revision 落后于 currentRevision 的**仍在排队**的任务。 */
@@ -285,8 +365,11 @@ export class AiWorkerHost {
         // 空棋盘上任何合法座位都可；用 1★ 保证极快
         seat: 'A', level: 1, seed: 1, timeBudgetMs: 50,
       };
-      const timer = setTimeout(() => resolve(false), 10_000);
-      this.submit(req).then((o) => { clearTimeout(timer); resolve(o.kind === 'decided'); }, () => { clearTimeout(timer); resolve(false); });
+      const timer = setTimeout(() => resolve(false), this.warmupTimeoutMs + 1000);
+      this.enqueue(req, this.warmupTimeoutMs).then(
+        (o) => { clearTimeout(timer); resolve(o.kind === 'decided'); },
+        () => { clearTimeout(timer); resolve(false); },
+      );
     })));
     const warmed = results.filter(Boolean).length;
     console.info(JSON.stringify({ event: 'ai_pool_warmed', warmed, poolSize: this.poolSize, timestamp: Date.now() }));

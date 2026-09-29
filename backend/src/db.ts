@@ -19,6 +19,11 @@ export interface RankingRow {
   winRate: number;
 }
 
+/** 账号来源。只有 HUMAN 参与公开排行榜与竞技分。 */
+export type AccountSource = 'HUMAN' | 'SYNTHETIC' | 'TEST' | 'ADMIN_DEMO';
+
+export const ACCOUNT_SOURCES: readonly AccountSource[] = ['HUMAN', 'SYNTHETIC', 'TEST', 'ADMIN_DEMO'];
+
 /** 结算输入：由 shared/product/resultModel.buildSettlement 产出的纯计划 + 落盘所需的棋谱。 */
 export interface SettleMatchInput extends SettlementPlan {
   /** matches 表主键（历史表，保持兼容） */
@@ -160,6 +165,14 @@ export interface Db {
   listGameEvents(gameId: string): Array<{ seq: number; revision: number; type: string; payload: unknown; createdAt: number }>;
   /** 有快照、但尚无终局结果的未完成对局 —— 进程重启后的恢复候选。 */
   loadRecoverableGames(): RecoverableGame[];
+  /** 账号来源标记（规格 4.1：合成/测试/演示账号不进公开排行榜）。 */
+  setUserSource(userId: string, source: AccountSource): void;
+  getUserSource(userId: string): AccountSource;
+  /**
+   * 统计「同一组真人」在 sinceMs 之后已经结算过的局数。
+   * 用于规格 4.2 的重复对手保护：同一三人组合 24 小时内第 4 局起竞技分变动为 0。
+   */
+  countRecentMatchesForUsers(userIds: string[], sinceMs: number): number;
   saveGame(input: { id: string; boardSize: number; mode: string; winner: string | null; movesJson: string; createdAt: number }): void;
   saveMatch(input: {
     id: string;
@@ -342,6 +355,8 @@ export function openDb(path: string): Db {
   ensureColumn('matches', 'end_reason', "end_reason TEXT NOT NULL DEFAULT 'NORMAL_WIN'");
   ensureColumn('matches', 'winner_ids', "winner_ids TEXT NOT NULL DEFAULT '[]'");
   ensureColumn('matches', 'loser_ids', "loser_ids TEXT NOT NULL DEFAULT '[]'");
+  // P1：账号来源标记。老库补列时默认 HUMAN —— 既有真实用户不会被误当成合成账号。
+  ensureColumn('users', 'source', "source TEXT NOT NULL DEFAULT 'HUMAN'");
 
   const mapUser = (r: Record<string, unknown> | undefined): User | null => {
     if (!r) return null;
@@ -404,11 +419,14 @@ export function openDb(path: string): Db {
       raw.prepare('UPDATE users SET tutorial_completed = ? WHERE id = ?').run(done ? 1 : 0, userId);
     },
     ranking(limit, offset = 0) {
+      // 规格 4.1：合成用户、测试账号、管理员演示账号不进入公开排行榜
+      // —— 是「来源标记 + 查询过滤」，不是删用户。
       const rows = raw
         .prepare(
           `SELECT u.id,u.username,u.avatar,u.online_status,u.rating,
                   COALESCE(r.wins,0) AS wins, COALESCE(r.games,0) AS games
            FROM users u LEFT JOIN ranking r ON r.user_id = u.id
+           WHERE COALESCE(u.source,'HUMAN') = 'HUMAN'
            ORDER BY u.rating DESC, u.created_at ASC, u.id ASC LIMIT ? OFFSET ?`,
         )
         .all(limit, offset) as Array<Record<string, unknown>>;
@@ -709,6 +727,31 @@ export function openDb(path: string): Db {
           snapshot,
         };
       });
+    },
+    setUserSource(userId, source) {
+      raw.prepare('UPDATE users SET source = ? WHERE id = ?').run(source, userId);
+    },
+    getUserSource(userId) {
+      const r = raw.prepare('SELECT COALESCE(source, ?, ?) AS source FROM users WHERE id = ?').get('HUMAN', 'HUMAN', userId) as { source?: string } | undefined;
+      return (r?.source ?? 'HUMAN') as AccountSource;
+    },
+    countRecentMatchesForUsers(userIds, sinceMs) {
+      if (userIds.length === 0) return 0;
+      // 统计「恰好包含这一组人」的已结算对局：三名玩家的集合必须完全相同。
+      const placeholders = userIds.map(() => '?').join(',');
+      const r = raw
+        .prepare(
+          `SELECT COUNT(*) AS n FROM (
+             SELECT mr.game_id
+               FROM rating_ledger rl
+               JOIN match_results mr ON mr.game_id = rl.game_id
+              WHERE rl.user_id IN (${placeholders}) AND mr.settled_at >= ?
+              GROUP BY mr.game_id
+             HAVING COUNT(DISTINCT rl.user_id) = ?
+           )`,
+        )
+        .get(...(userIds as never[]), sinceMs, userIds.length) as { n?: number } | undefined;
+      return Number(r?.n ?? 0);
     },
     createInvitation(senderId, receiverId) {
       const id = randomUUID();

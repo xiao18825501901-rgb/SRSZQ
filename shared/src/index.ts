@@ -7,6 +7,7 @@
 export * from './config/featureFlags';
 export * from './product/resultModel';
 export * from './product/protocol';
+export * from './product/ratingPolicy';
 export * from './game/types';
 export * from './game/eligibility';
 export * from './game/legalMoves';
