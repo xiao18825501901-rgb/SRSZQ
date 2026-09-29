@@ -7,6 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./game/*": "./src/game/*",
-    "./ai/*": "./src/ai/*"
+    "./ai/*": "./src/ai/*",
+    "./config/*": "./src/config/*",
+    "./product/*": "./src/product/*"
   }
 }

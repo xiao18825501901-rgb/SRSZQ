@@ -20,3 +20,6 @@ backend/data/
 
 # Netlify local link state
 .netlify/
+
+# P0A：产品测试运行产物（日志与 JSON 报告），不进源码仓库
+evidence/

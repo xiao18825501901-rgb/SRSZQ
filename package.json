@@ -19,6 +19,8 @@
     "test:watch": "vitest",
     "test:backend": "tsx backend/tests/api.integration.ts",
     "test:ws": "tsx backend/tests/ws.integration.ts",
+    "test:results": "tsx backend/tests/results.settlement.ts",
+    "test:product": "node scripts/product/run-tests.mjs",
     "e2e": "node e2e.cjs",
     "e2e:local": "node e2e-local.cjs",
     "e2e:w9": "node e2e-w9.cjs",

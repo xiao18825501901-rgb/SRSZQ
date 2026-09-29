@@ -7,7 +7,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import type { Db } from '../db.js';
+import type { Db, SettledMatch } from '../db.js';
 import { createInitialState, applyMove, forcePass, skipCurrentPlayer } from '../../../shared/src/game/rules.js';
 import type { GameState } from '../../../shared/src/game/types.js';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves.js';
@@ -16,18 +16,31 @@ import { pickOnlineSingleHumanAiDifficulty, pickOnlineTwoHumanAiDifficulty, shuf
 import type { AiDifficulty, MatchPolicyContext } from '../../../shared/src/ai/types.js';
 import { chooseAIMove } from '../../../shared/src/ai/chooseAIMove.js';
 import { MatchmakingQueue, type MatchmakingEntry } from './matchmaking.js';
+import {
+  buildSettlement,
+  broadcastStatusFor,
+  parseFeatureFlags,
+  type FeatureFlags,
+  type EndReason,
+  type SettlementPlan,
+  type SettlementParticipantInput,
+} from '../../../shared/src/index.js';
 
 export type Seat = 'A' | 'B' | 'C';
 const SEATS: Seat[] = ['A', 'B', 'C'];
 
 /**
- * 终局原因（matches.end_reason / MATCH_ENDED.reason）：
- * - NORMAL_WIN        正常终局：有人连成四（或满盘平局）
+ * 终局原因（matches.end_reason / match_results.end_reason / MATCH_ENDED.reason）：
+ * - NORMAL_WIN        本手穿过新棋成 >=4 获胜
+ * - BOARD_DRAW        棋盘下满且无人成四（真平局：任何人不记负）
  * - PLAYER_FORFEIT    玩家主动 Leave（PLAYER_RESIGN）→ 立即判负
- * - PLAYER_DISCONNECT 掉线超过宽限期（DISCONNECTED_TEMPORARY → FORFEIT）
+ * - PLAYER_DISCONNECT 掉线超过**自身**宽限期
  * - TIMEOUT           Online 真人落子超过服务器 30 秒截止时间
+ * - SYSTEM_ABORT      服务器/对局编排中止（全员离开等），零竞技变更
+ *
+ * 定义已迁至 shared/product/resultModel（唯一真源），此处仅转出以保持既有导入路径可用。
  */
-export type EndReason = 'NORMAL_WIN' | 'PLAYER_FORFEIT' | 'PLAYER_DISCONNECT' | 'TIMEOUT';
+export type { EndReason } from '../../../shared/src/product/resultModel.js';
 
 /** 房间内真人座位的连接状态（Online 判负状态机用） */
 type SeatConn = 'connected' | 'disconnected' | 'left';
@@ -60,6 +73,10 @@ export interface GameServerOptions {
   turnTimeoutMs?: number;
   /** Protocol-level heartbeat interval; keeps tunnels alive through idle-killing middleboxes. */
   heartbeatIntervalMs?: number;
+  /** 真实功能开关（默认全关，见 shared/config/featureFlags）。 */
+  featureFlags?: Partial<FeatureFlags>;
+  /** 结算持久化最大尝试次数（默认 3）；失败时不广播成功，房间保留以便重试。 */
+  settlementMaxAttempts?: number;
 }
 
 interface Client {
@@ -109,6 +126,19 @@ function pickAiDifficulty(): AiDifficulty {
   return 5;
 }
 
+/**
+ * 终局输入（P0A）：服务器从房间状态推导，不含客户端声明。
+ *  - boardWinner：引擎给出的获胜棋色（可能是 AI 座位）；平局/中止为 null
+ *  - forfeitedSeats：本次应记 LOSS 的座位（主动离场，或自身断线截止已到）
+ *  - inGraceSeats：仍在自己宽限期内、**不得提前处罚**的座位（记 VOID）
+ */
+interface FinalizeInfo {
+  endReason: EndReason;
+  boardWinner: Seat | null;
+  forfeitedSeats: Seat[];
+  inGraceSeats: Seat[];
+}
+
 /** 邀请会话（好友开房状态机） */
 interface InviteSession {
   sender: string;
@@ -119,7 +149,8 @@ interface InviteSession {
 
 export class GameServer {
   private db: Db;
-  private opts: Required<GameServerOptions>;
+  /** 已填充默认值的时序/容量参数；开关与重试次数单独持有，不参与 Required 展开。 */
+  private opts: Required<Omit<GameServerOptions, 'featureFlags' | 'settlementMaxAttempts'>>;
   private wss: WebSocketServer;
   private clients = new Map<string, Client>();
   private matchmaking: MatchmakingQueue;
@@ -129,9 +160,16 @@ export class GameServer {
   private rooms = new Map<string, Room>();
   private userGame = new Map<string, string>(); // userId -> gameId
   private inviteSessions = new Map<string, InviteSession>();
+  /** 显式功能开关；未传时读环境变量，全部默认 false。 */
+  readonly featureFlags: FeatureFlags;
+  private settlementMaxAttempts: number;
+  /** 结算失败计数（诊断用；不含成功次数）。 */
+  private settlementFailures = 0;
 
   constructor(db: Db, opts: GameServerOptions = {}) {
     this.db = db;
+    this.featureFlags = { ...parseFeatureFlags(process.env), ...(opts.featureFlags ?? {}) };
+    this.settlementMaxAttempts = opts.settlementMaxAttempts ?? 3;
     this.opts = {
       queueTimeoutMs: opts.queueTimeoutMs ?? 60_000,
       aiMoveDelayMs: opts.aiMoveDelayMs ?? 350,
@@ -663,77 +701,129 @@ export class GameServer {
     }
   }
 
-  /**
-   * 终局唯一出口：落盘（games/matches 含 endReason/winnerIds/loserIds）+ 排行
-   * （仅 online 排位：败者 -10、胜者 +30）+ MATCH_ENDED/game.end 广播 + 房间清理。
-   * 胜/败集合全部由服务器按 seats/members 推导，客户端消息不携带任何胜负声明。
-   */
-  private finalizeRoom(
-    room: Room,
-    info: {
-      winnerSeat: Seat | null; // games.winner / matches.result（座位，单胜者时）
-      winnerIds: string[]; // 人类胜者 userId
-      loserIds: string[]; // 人类败者 userId
-      reason: EndReason;
-      status: 'won' | 'draw' | 'forfeit';
-    },
-  ): void {
-    if (room.ended) return;
-    room.ended = true;
-    room.phase = 'FINISHED';
-    this.clearTurnClock(room);
-    room.endReason = info.reason;
-    for (const t of room.disconnectTimers.values()) clearTimeout(t);
-    room.disconnectTimers.clear();
-    const st = room.state;
-    const createdAt = Date.now();
-    this.db.saveGame({
-      id: room.id,
-      boardSize: st.boardSize,
-      mode: room.mode,
-      winner: info.winnerSeat,
-      movesJson: JSON.stringify(st.moves),
-      createdAt,
+  /** 终局输入（服务器权威推导；客户端消息不携带任何胜负声明）。 */
+  private buildPlan(room: Room, info: FinalizeInfo): SettlementPlan {
+    const participants: SettlementParticipantInput[] = SEATS.map((s) => {
+      const si = room.seats[s];
+      return {
+        seat: s,
+        kind: si.kind,
+        userId: si.userId ?? null,
+        forfeited: info.forfeitedSeats.includes(s),
+        inGrace: info.inGraceSeats.includes(s),
+      };
     });
-    const humanPlayers = SEATS.map((s) => {
+    return buildSettlement({
+      gameId: room.id,
+      mode: room.mode,
+      boardSize: room.state.boardSize,
+      status: room.state.status,
+      boardWinner: info.boardWinner,
+      endReason: info.endReason,
+      isRanked: room.mode === 'online',
+      participants,
+    });
+  }
+
+  /**
+   * 原子持久化 + 有限重试。
+   * 事务由 db.settleMatch 负责（BEGIN IMMEDIATE / COMMIT / ROLLBACK）；
+   * 本方法只负责“失败了再来一次”，绝不吞掉异常后假装成功。
+   */
+  private persistSettlement(plan: SettlementPlan, room: Room): SettledMatch {
+    const players = SEATS.map((s) => {
       const si = room.seats[s];
       return si.kind === 'human' && si.userId ? si.userId : null;
     });
-    this.db.saveMatch({
-      id: randomUUID(),
-      gameId: room.id,
-      players: humanPlayers,
-      result: info.winnerSeat,
-      isRanked: room.mode === 'online',
-      createdAt,
-      endReason: info.reason,
-      winnerIds: info.winnerIds,
-      loserIds: info.loserIds,
-    });
-    if (room.mode === 'online') {
-      for (const uid of info.loserIds) this.db.recordMatchResult(uid, -10);
-      for (const uid of info.winnerIds) this.db.recordMatchResult(uid, 30);
+    const movesJson = JSON.stringify(room.state.moves);
+    let lastError: unknown = new Error('settlement not attempted');
+    for (let attempt = 1; attempt <= this.settlementMaxAttempts; attempt++) {
+      try {
+        return this.db.settleMatch({ ...plan, matchId: randomUUID(), movesJson, players });
+      } catch (err) {
+        lastError = err;
+        console.warn(JSON.stringify({
+          event: 'settlement_attempt_failed', gameId: room.id, attempt,
+          maxAttempts: this.settlementMaxAttempts,
+          error: err instanceof Error ? err.message : String(err), timestamp: Date.now(),
+        }));
+      }
     }
-    const winnerSeats = info.winnerIds.map((uid) => room.members[uid]).filter((s): s is Seat => !!s);
-    const loserSeats = info.loserIds.map((uid) => room.members[uid]).filter((s): s is Seat => !!s);
+    throw lastError;
+  }
+
+  /**
+   * 终局唯一出口（P0A 重写）。
+   *
+   * 顺序被刻意固定为：**先原子落库 → 再改内存 → 最后广播**。
+   *  - 事务失败并回滚 → 房间不置 ended、不清理、**不广播任何“已结算”消息**，可重试；
+   *  - 事务成功 → 广播体完全由**已提交的行**构造，客户端看到的胜负与库里逐字一致；
+   *  - 同一 gameId 重复提交 → 数据库 PRIMARY KEY 命中既有行，返回 alreadySettled，
+   *    不再写任何统计/账本，广播沿用既有结果（幂等）。
+   */
+  private finalizeRoom(room: Room, info: FinalizeInfo): void {
+    if (room.ended) return;
+    const plan = this.buildPlan(room, info);
+    let settled: SettledMatch;
+    try {
+      settled = this.persistSettlement(plan, room);
+    } catch (err) {
+      this.settlementFailures++;
+      console.error(JSON.stringify({
+        event: 'settlement_failed', gameId: room.id, reason: plan.endReason,
+        attempts: this.settlementMaxAttempts,
+        error: err instanceof Error ? err.message : String(err), timestamp: Date.now(),
+      }));
+      // 明确不广播成功：只告知可重试的错误，房间保持存活以便下一次终局触发重试。
+      for (const uid of Object.keys(room.members)) {
+        const c = this.clients.get(uid);
+        if (c && c.gameId === room.id) {
+          this.sendTo(c.ws, {
+            type: 'error', error: 'settlement_failed', retryable: true, gameId: room.id,
+          });
+        }
+      }
+      return;
+    }
+
+    room.ended = true;
+    room.phase = 'FINISHED';
+    this.clearTurnClock(room);
+    room.endReason = plan.endReason;
+    for (const t of room.disconnectTimers.values()) clearTimeout(t);
+    room.disconnectTimers.clear();
+
+    const winnerSeats = settled.participants
+      .filter((p) => p.kind === 'human' && p.outcome === 'WIN')
+      .map((p) => p.seat as Seat);
+    const loserSeats = settled.participants
+      .filter((p) => p.kind === 'human' && p.outcome === 'LOSS')
+      .map((p) => p.seat as Seat);
+    const status = broadcastStatusFor(plan);
     const endPayload = {
       matchId: room.id,
       mode: room.mode,
-      reason: info.reason,
-      timestamp: createdAt,
-      winnerIds: info.winnerIds,
-      loserIds: info.loserIds,
+      reason: settled.endReason,
+      timestamp: settled.settledAt,
+      winnerIds: settled.winnerUserIds,
+      loserIds: settled.loserIds,
       winnerSeats,
       loserSeats,
+      winnerSeat: settled.winnerSeat,
+      alreadySettled: settled.alreadySettled,
+      settlementDigest: settled.digest,
+      participants: settled.participants.map((p) => ({
+        seat: p.seat, kind: p.kind, outcome: p.outcome, ratingDelta: p.ratingDelta,
+      })),
     };
-    // 释放全部人类成员（含离场/宽限期者）→ 可立即重新匹配
+    // 释放全部人类成员（含离场者），使其可以立即重新匹配。
     for (const [uid, seat] of Object.entries(room.members) as Array<[string, Seat]>) {
       const si = room.seats[seat];
       if (si.kind !== 'human') continue;
       const c = this.clients.get(uid);
       if (c && c.gameId === room.id && c.ws.readyState === WebSocket.OPEN) {
-        this.sendTo(c.ws, { type: 'game.end', winner: info.winnerSeat, status: info.status, ...endPayload });
-        this.sendTo(c.ws, { type: 'MATCH_ENDED', status: info.status, winner: info.winnerSeat, ...endPayload });
+        this.sendTo(c.ws, { type: 'game.end', winner: settled.winnerSeat, status, ...endPayload });
+        this.sendTo(c.ws, { type: 'MATCH_ENDED', status, winner: settled.winnerSeat, ...endPayload });
         c.gameId = undefined;
       }
       this.userGame.delete(uid);
@@ -742,69 +832,60 @@ export class GameServer {
     this.rooms.delete(room.id);
   }
 
-  /** 正常终局：连成四 / 满盘平局（NORMAL_WIN）。AI 座位获胜时无人类胜者。 */
+  /**
+   * 棋盘决胜终局。
+   * 与旧实现的区别：平局不再走“没有真人胜者 → 全员记负”的分支；
+   * AI 成四时获胜棋色被完整保留（winnerSeat 非空，winnerUserIds 可为空）。
+   */
   private finishNormal(room: Room): void {
     if (room.ended) return;
     const st = room.state;
-    const wSeat: Seat | null = st.status === 'won' && st.winner ? (st.winner as Seat) : null;
-    const winnerIsHuman = !!wSeat && room.seats[wSeat].kind === 'human';
-    const humanSeats = SEATS.filter((s) => room.seats[s].kind === 'human');
-    const loserSeats = humanSeats.filter((s) => !winnerIsHuman || s !== wSeat);
-    const winnerSeat = winnerIsHuman ? wSeat : null;
+    const boardWinner: Seat | null = st.status === 'won' && st.winner ? (st.winner as Seat) : null;
     this.finalizeRoom(room, {
-      winnerSeat,
-      winnerIds: winnerSeat && room.seats[winnerSeat].userId ? [room.seats[winnerSeat].userId!] : [],
-      loserIds: loserSeats.map((s) => room.seats[s].userId!).filter((x): x is string => !!x),
-      reason: 'NORMAL_WIN',
-      status: st.status === 'won' ? 'won' : 'draw',
+      endReason: st.status === 'draw' ? 'BOARD_DRAW' : 'NORMAL_WIN',
+      boardWinner,
+      forfeitedSeats: [],
+      inGraceSeats: [],
     });
   }
 
-  /** 离场判负：PLAYER_RESIGN（主动离开）或掉线宽限到期 → 立即结算，AI 不继续。
-   *  败者 = 离开者 + 仍在宽限期内的其他离场人类；胜者 = 其余（在场）人类座位。
-   *  （1H+2AI 人类离场时无人获胜，仅记离场者败。） */
+  /**
+   * 离场判负：PLAYER_FORFEIT（主动） / TIMEOUT / PLAYER_DISCONNECT（自身宽限到期）。
+   *
+   * 只有**已经越过自己截止时间**的座位记 LOSS。
+   * 其他仍处于自身宽限期内的断线座位记 VOID —— 不被别人的超时提前连坐。
+   */
   private forfeitSeat(room: Room, seat: Seat, reason: EndReason): void {
     if (room.ended || room.mode !== 'online') return;
     const si = room.seats[seat];
     if (!si || si.kind !== 'human' || !si.userId) return;
-    si.conn = 'left';
-    if (room.phase !== 'FINISHED') room.phase = 'PLAYER_LEFT';
-    const loserSeats = SEATS.filter(
-      (s) => room.seats[s].kind === 'human' && (s === seat || room.seats[s].conn === 'disconnected'),
-    );
-    for (const s of loserSeats) if (room.seats[s].conn === 'disconnected') room.seats[s].conn = 'left';
-    const winnerIds = SEATS.filter((s) => room.seats[s].kind === 'human' && !loserSeats.includes(s))
-      .map((s) => room.seats[s].userId!)
-      .filter(Boolean);
-    const loserIds = loserSeats.map((s) => room.seats[s].userId!).filter((x): x is string => !!x);
+    const inGraceSeats: Seat[] = [];
+    for (const s of SEATS) {
+      if (s === seat) continue;
+      const other = room.seats[s];
+      if (other.kind === 'human' && other.conn === 'disconnected') inGraceSeats.push(s);
+    }
     this.finalizeRoom(room, {
-      winnerSeat: winnerIds.length === 1 ? room.members[winnerIds[0]] ?? null : null,
-      winnerIds,
-      loserIds,
-      reason,
-      status: 'forfeit',
+      endReason: reason,
+      boardWinner: null,
+      forfeitedSeats: [seat],
+      inGraceSeats,
     });
   }
 
-  /** 全员离开（好友局）：中止房间（不落盘、不计排行），释放用户 */
+  /**
+   * 编排中止（好友局全员离开、房间被放弃）→ SYSTEM_ABORT。
+   * 旧实现完全不落盘；P0A 起写一条 end_reason='SYSTEM_ABORT' 的结果，
+   * 全员 VOID，零竞技变更（不扣分、不计名次）。
+   */
   private abortRoom(room: Room): void {
     if (room.ended) return;
-    room.ended = true;
-    room.phase = 'FINISHED';
-    this.clearTurnClock(room);
-    for (const t of room.disconnectTimers.values()) clearTimeout(t);
-    room.disconnectTimers.clear();
-    for (const [uid] of Object.entries(room.members) as Array<[string, Seat]>) {
-      this.userGame.delete(uid);
-      const c = this.clients.get(uid);
-      if (c) c.gameId = undefined;
-      this.db.touchOnline(uid, 'online');
-    }
-    for (const id of [...room.humanIds]) {
-      const c = this.clients.get(id);
-      if (c) this.sendTo(c.ws, { type: 'game.end', status: 'aborted', winner: null });
-    }
-    this.rooms.delete(room.id);
+    this.finalizeRoom(room, {
+      endReason: 'SYSTEM_ABORT',
+      boardWinner: null,
+      forfeitedSeats: [],
+      inGraceSeats: [],
+    });
   }
 
   /** 在线判负宽限（DISCONNECTED_TEMPORARY → 超时 FORFEIT）：

@@ -4,6 +4,8 @@
  * 消费方（frontend/backend/scripts）通过本包公共导出或
  * '@srszq/shared/game|ai/*' 子路径引用。
  */
+export * from './config/featureFlags';
+export * from './product/resultModel';
 export * from './game/types';
 export * from './game/eligibility';
 export * from './game/legalMoves';

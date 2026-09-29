@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Db } from './db.js';
 import { avatarFor, createSessionToken, hashPassword, makeSalt, sessionExpiry, validateEmail, validatePassword, validateUsername, verifyPassword } from './auth.js';
 import type { PublicUser, User } from './models.js';
+import { featureFlagEvidence, parseFeatureFlags, SCORE_POLICY_ID } from '../../shared/src/index.js';
 
 export interface ApiContext {
   db: Db;
@@ -153,6 +154,15 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
             }
           }
           return send(res, 200, {});
+        }
+        case 'GET /api/config/features': {
+          // 只读、非机密：暴露开关的**实际解析值**与原始环境变量字符串，
+          // 使“默认关闭”可以被第三方复核，而不是靠声明。
+          return send(res, 200, {
+            flags: parseFeatureFlags(process.env),
+            evidence: featureFlagEvidence(process.env),
+            scorePolicy: SCORE_POLICY_ID,
+          });
         }
         case 'GET /api/me': {
           const user = ctx.authUser(req);

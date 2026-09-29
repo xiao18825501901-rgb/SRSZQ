@@ -89,14 +89,24 @@ export interface GameSnapshot {
   serverNow?: number;
 }
 
+/** 本座位在服务器权威名次中的结果；VOID = 本局无竞技后果（不记胜负、不扣分）。 */
+export type MyOutcome = 'WIN' | 'LOSS' | 'DRAW' | 'VOID';
+
 /** 终局详情（来自服务器 MATCH_ENDED / game.end —— 胜负由服务器权威裁决） */
 export interface EndInfo {
   status: string; // 'won' | 'draw' | 'forfeit' | 'aborted'
-  reason: string; // NORMAL_WIN | PLAYER_FORFEIT | PLAYER_DISCONNECT | TIMEOUT
+  /** NORMAL_WIN | BOARD_DRAW | PLAYER_FORFEIT | PLAYER_DISCONNECT | TIMEOUT | SYSTEM_ABORT */
+  reason: string;
   winnerSeats: Player[];
   loserSeats: Player[];
   winnerIds: string[];
   loserIds: string[];
+  /** 服务器写入数据库的获胜棋色（AI 获胜时非空，winnerIds 为空是正常情况） */
+  winnerSeat: Player | null;
+  /** 本座位的名次结果，直接取自服务器已提交的参与者行 */
+  myOutcome: MyOutcome | null;
+  /** 本次对本人的积分变化（VOID / 平局 / 非排位恒为 0） */
+  myRatingDelta: number;
 }
 
 export interface SeatStatusEvent {
@@ -166,43 +176,63 @@ class GameLink {
 
   private applyEnd(msg: Record<string, any>): void {
     this.phase = 'end';
-    if (msg.status === 'aborted') {
-      this.endInfo = {
-        status: 'aborted',
-        reason: msg.reason ?? 'ABORTED',
-        winnerSeats: msg.winnerSeats ?? [],
-        loserSeats: msg.loserSeats ?? [],
-        winnerIds: msg.winnerIds ?? [],
-        loserIds: msg.loserIds ?? [],
-      };
-      this.result = '对局已中止（玩家离开）';
-      return;
-    }
+    const mySeat = this.game?.mySeat;
+    const rawParts = Array.isArray(msg.participants) ? (msg.participants as any[]) : [];
+    const parts = rawParts as Array<{ seat: Player; outcome: MyOutcome; ratingDelta: number }>;
+    const mine = mySeat ? parts.find((x) => x.seat === mySeat) : undefined;
+    const myOutcome: MyOutcome | null = mine?.outcome ?? null;
+    const myRatingDelta = mine?.ratingDelta ?? 0;
     const winnerSeats: Player[] = msg.winnerSeats ?? (msg.winner ? [msg.winner as Player] : []);
     const loserSeats: Player[] = msg.loserSeats ?? [];
+    const reason = String(msg.reason ?? 'NORMAL_WIN');
+    const winnerSeat = (msg.winnerSeat ?? msg.winner ?? null) as Player | null;
+    const winnerLabel = winnerSeat ? colorName(winnerSeat) + '棋获胜' : 'AI 获胜';
+
+    if (msg.status === 'aborted' || reason === 'SYSTEM_ABORT') {
+      this.endInfo = {
+        status: 'aborted',
+        reason,
+        winnerSeats: [],
+        loserSeats: [],
+        winnerIds: [],
+        loserIds: [],
+        winnerSeat: null,
+        myOutcome: myOutcome ?? 'VOID',
+        myRatingDelta,
+      };
+      this.result = '对局已中止（不计胜负）';
+      return;
+    }
     this.endInfo = {
       status: String(msg.status ?? 'won'),
-      reason: String(msg.reason ?? 'NORMAL_WIN'),
+      reason,
       winnerSeats,
       loserSeats,
       winnerIds: Array.isArray(msg.winnerIds) ? (msg.winnerIds as string[]) : [],
       loserIds: Array.isArray(msg.loserIds) ? (msg.loserIds as string[]) : [],
+      winnerSeat,
+      myOutcome,
+      myRatingDelta,
     };
-    // 兜底文案（具体结算文案由对局页按 reason/座位组合）
-    const mySeat = this.game?.mySeat;
-    const iLost = mySeat ? loserSeats.includes(mySeat) : false;
-    const iWon = mySeat ? winnerSeats.includes(mySeat) : false;
-    const isLeaveEnd = msg.reason === 'PLAYER_FORFEIT' || msg.reason === 'PLAYER_DISCONNECT';
-    if (isLeaveEnd) {
-      this.result = iLost ? 'You left the match. Result: Loss' : 'Opponent left. You win!';
-    } else if (msg.status === 'draw') {
-      this.result = '和棋';
+    // 文案一律以服务器**已提交**的名次为准；VOID 与 DRAW 都不得显示成失败。
+    const iLost = myOutcome === 'LOSS' || (myOutcome === null && !!mySeat && loserSeats.includes(mySeat));
+    const iWon = myOutcome === 'WIN' || (myOutcome === null && !!mySeat && winnerSeats.includes(mySeat));
+    if (myOutcome === 'VOID') {
+      this.result = '本局对你不计胜负';
+    } else if (reason === 'BOARD_DRAW' || msg.status === 'draw' || myOutcome === 'DRAW') {
+      this.result = '和棋（双方均不计负）';
+    } else if (reason === 'TIMEOUT') {
+      this.result = iLost ? '落子超时，本局判负' : '对手落子超时，你获胜';
+    } else if (reason === 'PLAYER_DISCONNECT') {
+      this.result = iLost ? '连接中断，本局判负' : '对手离线，你获胜';
+    } else if (reason === 'PLAYER_FORFEIT') {
+      this.result = iLost ? '你退出了对局，本局判负' : '对手退出，你获胜';
     } else if (iWon) {
       this.result = '你赢了';
     } else if (iLost) {
-      this.result = winnerSeats.length > 0 ? `${colorName(winnerSeats[0])}棋获胜` : 'AI 获胜';
+      this.result = winnerLabel;
     } else {
-      this.result = msg.winner ? `${colorName(msg.winner as Player)}棋获胜` : '和棋';
+      this.result = winnerSeat ? winnerLabel : '对局结束';
     }
   }
 

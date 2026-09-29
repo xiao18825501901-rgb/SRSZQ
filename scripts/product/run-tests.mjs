@@ -1,0 +1,246 @@
+#!/usr/bin/env node
+/**
+ * SRSZQ 产品测试编排入口（P0A **新增产物**）。
+ *
+ * 这不是前置门禁，也不是“只要跑起来就 PASS”的占位脚本：
+ *  - 每个套件都真实 spawn 一个测试文件，并把该进程的真实退出码与日志原样透出；
+ *  - 未实现的套件明确记为 NOT_IMPLEMENTED，绝不因“没有匹配到文件”而算通过；
+ *  - --all 只要包含未实现套件，整体就是 PARTIAL（退出码 2），不宣称全通过。
+ *
+ * 退出码：
+ *   0 = PASS      所选套件全部已实现且全部通过
+ *   1 = FAIL      至少一个已实现套件失败
+ *   2 = PARTIAL   至少一个所选套件尚未实现（NOT_IMPLEMENTED / NOT_RUN）
+ *   3 = 用法错误
+ *
+ * 用法：
+ *   node scripts/product/run-tests.mjs --suite results
+ *   node scripts/product/run-tests.mjs --all
+ *   node scripts/product/run-tests.mjs --list
+ *   node scripts/product/run-tests.mjs --suite results --out evidence/p0a
+ */
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, '..', '..');
+
+/**
+ * implemented=false 的套件属于**尚未实现**的产品化批次；
+ * 它们会出现在报告里，但永远不会被算作 PASS。
+ */
+const SUITES = {
+  results: {
+    title: 'P0A 可信结果与事务结算（原子/幂等/回滚/宽限/开关）',
+    entry: 'backend/tests/results.settlement.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['G01', 'G02', 'G03', 'G04', 'G05', 'G06', 'G07', 'G08', 'G10(结算部分)'],
+    phase: 'P0A',
+  },
+  baseline: {
+    title: '基线回归（147+ 单测 / 后端 API / WS / build），与产品化新增分开记录',
+    entry: null,
+    runner: null,
+    implemented: true,
+    covers: ['REGRESSION'],
+    phase: 'BASELINE',
+  },
+  recovery: {
+    title: 'P0B 命令幂等 / revision / 持久事件 / ACK / 快照 / 60 秒恢复',
+    entry: null,
+    runner: null,
+    implemented: false,
+    covers: ['G10', 'G11', 'G12', 'G13', 'G14', 'G15', 'G16', 'O06'],
+    phase: 'P0B',
+    blocker: '尚未实现：等待 B1 批次编写',
+  },
+  security: {
+    title: 'P0C 有界 AI Worker / 过期任务 / WS ticket / Origin / 限流 / 会话撤销',
+    entry: null,
+    runner: null,
+    implemented: false,
+    covers: ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09', 'S10'],
+    phase: 'P0C',
+    blocker: '尚未实现：等待 B2 批次编写',
+  },
+  features: {
+    title: 'P1/P2 游客 / 教学 / 匹配 / 排位 / 历史 / 复盘 / 分享 / 题库',
+    entry: null,
+    runner: null,
+    implemented: false,
+    covers: ['U01', 'U12', 'R01', 'R10'],
+    phase: 'P1/P2',
+    blocker: '尚未实现：等待 B3/B4 批次编写',
+  },
+};
+
+function parseArgs(argv) {
+  const opts = { suites: [], all: false, list: false, out: null, only: null };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--suite') {
+      const v = argv[i + 1];
+      if (!v) throw new Error('--suite 需要取值');
+      opts.suites.push(v);
+      i += 1;
+    } else if (arg.startsWith('--suite=')) {
+      opts.suites.push(arg.slice('--suite='.length));
+    } else if (arg === '--all') {
+      opts.all = true;
+    } else if (arg === '--list') {
+      opts.list = true;
+    } else if (arg === '--out') {
+      opts.out = argv[i + 1] ?? null;
+      i += 1;
+    } else if (arg === '--only') {
+      opts.only = argv[i + 1] ?? null;
+      i += 1;
+    } else {
+      throw new Error('未知参数: ' + arg);
+    }
+  }
+  if (!opts.all && opts.suites.length === 0 && !opts.list) opts.all = true;
+  const selected = opts.all ? Object.keys(SUITES) : opts.suites;
+  const unknown = selected.filter((s) => !(s in SUITES));
+  if (unknown.length) throw new Error('未知套件: ' + unknown.join(', '));
+  return { ...opts, selected: [...new Set(selected)] };
+}
+
+const IS_WIN = process.platform === 'win32';
+
+/**
+ * 真实子进程执行。Windows 上 npx/npm 是 .cmd 垫片，必须经 shell 才能被 CreateProcess 解析，
+ * 否则会得到 spawn ENOENT 而不是测试结果 —— 那会把“工具没跑起来”误报成“测试失败”。
+ */
+function run(command, args, env) {
+  return new Promise((resolvePromise) => {
+    const started = Date.now();
+    const child = spawn(command, args, { cwd: ROOT, env, shell: IS_WIN, stdio: ['ignore', 'pipe', 'pipe'] });
+    const out = [];
+    const err = [];
+    child.stdout.on('data', (b) => { out.push(b); process.stdout.write(b); });
+    child.stderr.on('data', (b) => { err.push(b); process.stderr.write(b); });
+    child.on('error', (e) => resolvePromise({ code: 127, error: String(e), ms: Date.now() - started, stdout: '', stderr: String(e) }));
+    child.on('close', (code) => resolvePromise({
+      code: code === null ? 1 : code,
+      ms: Date.now() - started,
+      stdout: Buffer.concat(out).toString('utf8'),
+      stderr: Buffer.concat(err).toString('utf8'),
+    }));
+  });
+}
+
+const BASELINE_STEPS = [
+  { name: 'typecheck', cmd: ['npm', 'run', 'typecheck'] },
+  { name: 'unit', cmd: ['npm', 'test'] },
+  { name: 'backend-api', cmd: ['npm', 'run', 'test:backend'] },
+  { name: 'ws-integration', cmd: ['npm', 'run', 'test:ws'] },
+  { name: 'build', cmd: ['npm', 'run', 'build'] },
+];
+
+async function main() {
+  let opts;
+  try {
+    opts = parseArgs(process.argv.slice(2));
+  } catch (e) {
+    console.error(String(e.message ?? e));
+    console.error('用法: node scripts/product/run-tests.mjs [--suite <name>]... [--all] [--list] [--out <dir>]');
+    process.exit(3);
+  }
+
+  if (opts.list) {
+    for (const [key, s] of Object.entries(SUITES)) {
+      console.log((s.implemented ? '[READY] ' : '[NOT_IMPLEMENTED] ').padEnd(20) + key.padEnd(12) + s.title);
+    }
+    process.exit(0);
+  }
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const outDir = opts.out ? resolve(ROOT, opts.out) : join(ROOT, 'evidence', 'product', stamp);
+  mkdirSync(outDir, { recursive: true });
+
+  const report = {
+    schemaVersion: 1,
+    runner: 'scripts/product/run-tests.mjs',
+    startedAt: new Date().toISOString(),
+    cwd: ROOT,
+    node: process.version,
+    selected: opts.selected,
+    suites: [],
+  };
+
+  console.log('[product] root=' + ROOT);
+  console.log('[product] suites=' + opts.selected.join(','));
+  console.log('[product] evidence=' + outDir);
+
+  for (const key of opts.selected) {
+    const suite = SUITES[key];
+    const record = { suite: key, phase: suite.phase, title: suite.title, covers: suite.covers, status: 'NOT_RUN', steps: [] };
+    console.log('');
+    console.log('=== [' + key + '] ' + suite.title);
+    if (!suite.implemented) {
+      record.status = 'NOT_IMPLEMENTED';
+      record.blocker = suite.blocker ?? '未实现';
+      console.log('NOT_IMPLEMENTED  ' + record.blocker);
+      report.suites.push(record);
+      continue;
+    }
+
+    let suiteOk = true;
+    if (key === 'results') {
+      const entryPath = join(ROOT, suite.entry);
+      if (!existsSync(entryPath)) {
+        record.status = 'FAIL';
+        record.blocker = '入口文件不存在: ' + suite.entry;
+        console.log('FAIL  ' + record.blocker);
+        report.suites.push(record);
+        continue;
+      }
+      const env = { ...process.env, SRSZQ_PRODUCT_SUITE: key };
+      if (opts.only) env.ONLY = opts.only;
+      const r = await run('npx', ['tsx', suite.entry], env);
+      const logName = key + '.log';
+      writeFileSync(join(outDir, logName), r.stdout + (r.stderr ? '\n[stderr]\n' + r.stderr : ''), 'utf8');
+      record.steps.push({ name: suite.entry, exitCode: r.code, ms: r.ms, log: logName });
+      if (r.code !== 0) suiteOk = false;
+    } else if (key === 'baseline') {
+      for (const step of BASELINE_STEPS) {
+        const r = await run(step.cmd[0], step.cmd.slice(1), process.env);
+        const logName = 'baseline-' + step.name + '.log';
+        writeFileSync(join(outDir, logName), r.stdout + (r.stderr ? '\n[stderr]\n' + r.stderr : ''), 'utf8');
+        record.steps.push({ name: step.name, exitCode: r.code, ms: r.ms, log: logName });
+        if (r.code !== 0) suiteOk = false;
+      }
+    }
+
+    record.status = suiteOk ? 'PASS' : 'FAIL';
+    report.suites.push(record);
+    console.log('=> ' + key + ': ' + record.status);
+  }
+
+  const failed = report.suites.filter((s) => s.status === 'FAIL');
+  const missing = report.suites.filter((s) => s.status === 'NOT_IMPLEMENTED' || s.status === 'NOT_RUN');
+  const passed = report.suites.filter((s) => s.status === 'PASS');
+  report.finishedAt = new Date().toISOString();
+  report.summary = {
+    pass: passed.map((s) => s.suite),
+    fail: failed.map((s) => s.suite),
+    notImplemented: missing.map((s) => s.suite),
+    overall: failed.length ? 'FAIL' : (missing.length ? 'PARTIAL' : 'PASS'),
+  };
+  writeFileSync(join(outDir, 'product-report.json'), JSON.stringify(report, null, 2) + '\n', 'utf8');
+
+  console.log('');
+  console.log('=== SUMMARY ===');
+  for (const s of report.suites) {
+    const detail = s.status === 'NOT_IMPLEMENTED' ? '  (' + (s.blocker ?? '') + ')' : '';
+    console.log('  ' + s.status.padEnd(16) + s.suite + detail);
+  }
+  console.log('  overall=' + report.summary.overall + '  report=' + join(outDir, 'product-report.json'));
+  process.exit(failed.length ? 1 : (missing.length ? 2 : 0));
+}
+
+main().catch((e) => { console.error('FATAL', e); process.exit(1); });

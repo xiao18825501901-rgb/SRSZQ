@@ -30,8 +30,15 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
  </main>;
  if(!g||!view)return <main className="simple-state panel"><h1>对局已结束</h1><button className="btn" onClick={exit}>返回大厅</button></main>;
  const isOnline=g.mode==='online',ended=phase==='end';
- const info=gameLink.endInfo,iWon=info?.winnerSeats.includes(g.mySeat),iLost=info?.loserSeats.includes(g.mySeat);
- const result=info?.reason==='TIMEOUT'?(iLost?'落子超时，本局判负':'对手落子超时，你获胜'):info?.status==='draw'?'本局和棋':info?.reason==='PLAYER_FORFEIT'?(iLost?'已退出，本局判负':'对手退出，你获胜'):info?.reason==='PLAYER_DISCONNECT'?(iLost?'连接中断，本局判负':'对手离线，你获胜'):iWon?'你获胜了':g.state.winner?`${colorName(g.state.winner)}棋获胜`:'对局结束';
+ const info=gameLink.endInfo,myOutcome=info?.myOutcome??null,iWon=myOutcome==='WIN',iLost=myOutcome==='LOSS',wonByColor=info?.winnerSeat??g.state.winner;
+ const result=myOutcome==='VOID'?'本局对你不计胜负'
+  :(info?.reason==='BOARD_DRAW'||info?.status==='draw'||myOutcome==='DRAW')?'本局和棋（双方均不计负）'
+  :iWon?'你获胜了'
+  :info?.reason==='TIMEOUT'?(iLost?'落子超时，本局判负':'对手落子超时，你获胜')
+  :info?.reason==='PLAYER_FORFEIT'?(iLost?'已退出，本局判负':'对手退出，你获胜')
+  :info?.reason==='PLAYER_DISCONNECT'?(iLost?'连接中断，本局判负':'对手离线，你获胜')
+  :iLost?(wonByColor?`${colorName(wonByColor)}棋获胜`:'AI 获胜')
+  :(wonByColor?`${colorName(wonByColor)}棋获胜`:'对局结束');
  const myTurn=!ended&&g.state.status==='playing'&&currentPlayerOf(g.state)===g.mySeat;
  const ms=gameLink.turnRemainingMs();
  const seconds=ms===null?null:Math.ceil(ms/1000);
