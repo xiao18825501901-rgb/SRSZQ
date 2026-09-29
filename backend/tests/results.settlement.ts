@@ -638,13 +638,55 @@ async function main(): Promise<void> {
       assert.equal(Number((realDb.raw.prepare('SELECT COUNT(*) AS n FROM rating_ledger WHERE game_id = ?').get(gameId) as any).n), 1, '重试后恰好一条账本');
       assert.equal(Number((realDb.raw.prepare('SELECT rating FROM users WHERE id = ?').get(uid) as any).rating), 1190, '重试成功后只扣一次分');
     } finally {
-      close(cf);
+      // 先同步终止套接字再关服务端，避免 GameServer.onClose 仍在飞行时数据库已被关闭
+      // （那会以 ERR_INVALID_STATE 直接把测试进程打挂，把真实失败掩盖成崩溃）。
+      try { cf.ws.terminate(); } catch { /* noop */ }
+      await sleep(300);
       wsBase = prevWs;
       await new Promise<void>((r) => http2.close(() => r()));
-      realDb.close();
+      // 故意不关闭 realDb：故障注入服务器的回调可能最后一刻才到；
+      // 临时目录在进程退出时回收，测试无需为此引入关闭竞态。
+      void realDb;
     }
   });
 
+  await check('C5 好友局全员离开 → SYSTEM_ABORT 落盘，全员 VOID、零竞技变更', async () => {
+    const h1 = await registerUser('RAInv1');
+    const h2 = await registerUser('RAInv2');
+    const ct1 = await connect(h1.token);
+    const ct2 = await connect(h2.token);
+    try {
+      const inv = await api('POST', '/api/invite', { toUsername: h2.username }, h1.token);
+      assert.equal(inv.status, 201, JSON.stringify(inv.json));
+      const list = await api('GET', '/api/invitations', undefined, h2.token);
+      assert.equal(list.json.invitations.length, 1);
+      const acc = await api('POST', '/api/invite/accept', { id: list.json.invitations[0].id }, h2.token);
+      assert.equal(acc.status, 200);
+      const g1 = await waitFor(ct1, 'game.start', 5000);
+      await waitFor(ct2, 'game.start', 5000);
+      const gameId = g1.gameId as string;
+      const r1 = ratingOf(h1.id);
+      const r2 = ratingOf(h2.id);
+      close(ct1);
+      close(ct2);
+      const row = await pollUntil(() => rawRow('SELECT * FROM match_results WHERE game_id = ?', gameId), 8000);
+      assert.ok(row, '全员离开必须落盘 SYSTEM_ABORT 结果（旧实现完全不写库）');
+      assert.equal(row.end_reason, 'SYSTEM_ABORT');
+      assert.equal(row.is_ranked, 0, '好友局不是排位对局');
+      assert.equal(row.winner_seat, null, '中止不得虚构获胜棋色');
+      const parts = db.listMatchParticipants(gameId);
+      assert.equal(parts.length, 3, '两个真人 + 一个 AI 补位座位');
+      assert.deepEqual(parts.map((x) => x.outcome).sort(), ['VOID', 'VOID', 'VOID'], '系统中止全员 VOID');
+      assert.deepEqual(parts.map((x) => x.ratingDelta), [0, 0, 0], '中止不得产生积分变化');
+      assert.equal(countOf('rating_ledger', gameId), 0, '中止不写积分账本');
+      assert.equal(ratingOf(h1.id), r1, '发起者评分不变');
+      assert.equal(ratingOf(h2.id), r2, '接受者评分不变');
+    } finally {
+      close(ct1);
+      close(ct2);
+      await sleep(250);
+    }
+  });
   console.log('--- 本轮观测样本（用于如实报告，不作强度结论） ---');
   console.log('OBSERVED ' + JSON.stringify(observed));
 
