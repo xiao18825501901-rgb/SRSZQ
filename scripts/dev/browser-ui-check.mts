@@ -188,9 +188,11 @@ async function main(): Promise<void> {
 
     console.log('=== 桌面 1440x900：历史页 ===');
     ok(await page.waitFor('[data-testid="history-page"]'), '历史页渲染成功（url=' + String(await page.evaluate('location.href')) + '）');
-    // 列表行是**异步**取回的：必须等它出现（或等到明确的空态），
-    // 否则 "0 行" 只是断言跑在数据到达之前 —— 本地因为快而侥幸通过，生产上必现。
-    await page.waitFor('[data-testid="history-row"], [data-testid="history-empty"]', 20000);
+    // 列表行是**异步**取回的：必须等**真实行**出现。
+    // 注意不能把空态写进等待条件：空态在首帧就会渲染（items 初始为空），
+    // 于是等待会立刻满足、断言在数据到达前就跑了 —— 本地快所以侥幸通过，生产慢必现。
+    const gotRow = await page.waitFor('[data-testid="history-row"]', 25000);
+    ok(gotRow, '历史数据返回后表格出现真实行（等待真实行，而不是等空态）');
     const rows = await page.evaluate(`document.querySelectorAll('[data-testid="history-row"]').length`);
     if (rows === 0) {
       const diag = await page.evaluate(`(async () => {
