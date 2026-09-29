@@ -9,8 +9,10 @@ import {
   featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID,
   asBoardSize, moveListOf, replayGame, reviewKeyMoves, stateDigest, threatWindows,
   PLAYER_LABELS, RULESET_VERSION, RELEASE_ID,
-  type PersistedEvent, type GameState, type Player, type ReplayOutcome, type ReviewMove, type ThreatWindow,
+  dailyPuzzleId, expandTrails, gradeAnswer,
+  type PersistedEvent, type GameState, type Player, type Puzzle, type ReplayOutcome, type ReviewMove, type ThreatWindow,
 } from '../../shared/src/index.js';
+import { PUZZLE_BANK, PUZZLE_BANK_META, PUZZLE_TRAJECTORIES_PACKED } from '../../shared/src/product/puzzleBank.generated.js';
 
 export interface ApiContext {
   db: Db;
@@ -23,6 +25,18 @@ const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Phase A 复盘的分析口径标识：只做精确一步事实，绝不产生搜索估计。 */
 const REVIEW_ANALYSIS_MODE = 'phase-a-exact-one-ply';
+
+/**
+ * 题库在进程启动时装载一次：题目是静态产物，不需要每次请求重新解析。
+ * 只有 status=PUBLISHED 的题会进入索引 —— 未验证/未收录的题连查都查不到。
+ */
+const PUZZLE_TRAILS = expandTrails(PUZZLE_TRAJECTORIES_PACKED);
+const PUZZLE_TRAIL_INDEX = new Map(PUZZLE_TRAILS.map((t) => [t.gameId, t]));
+const PUZZLE_INDEX = new Map<string, Puzzle>(
+  PUZZLE_BANK.filter((x) => x.status === 'PUBLISHED').map((x) => [x.puzzleId, x]),
+);
+/** 答错第几次之后直接给出完整答案与解析（规格只要求“可重试”，不给死循环）。 */
+const PUZZLE_REVEAL_AFTER_ATTEMPTS = 3;
 
 /**
  * 公开分享视图是**未认证**的，而每次请求都要真跑一遍重放（O(棋盘² × 手数)）。
@@ -91,6 +105,49 @@ export function requireTutorialDone(res: ServerResponse, user: User | null): boo
     return false;
   }
   return true;
+}
+
+/* ---- P2 题库接口（R07/R08）：每日一题、作答幂等、进度与错题本 ---- */
+
+/** 题面：只给起始局面与题类，**不给答案**、也不给威胁数量提示。 */
+function puzzleView(puzzle: Puzzle, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  const trail = PUZZLE_TRAIL_INDEX.get(puzzle.sourceGameId);
+  const moves = trail ? trail.moves.slice(0, puzzle.startPly) : [];
+  return {
+    puzzleId: puzzle.puzzleId,
+    schema: puzzle.schema,
+    acceptanceType: puzzle.acceptanceType,
+    boardSize: puzzle.boardSize,
+    actorSeat: puzzle.actorSeat,
+    round: puzzle.round,
+    eligiblePlayer: puzzle.eligiblePlayer,
+    startMoves: moves.length,
+    moves,
+    sourceKind: puzzle.sourceKind,
+    split: puzzle.split,
+    status: puzzle.status,
+    ...extra,
+  };
+}
+
+/** 解析：只在答对、或同一题答错达到阈值后下发（含完整答案集）。 */
+function puzzleSolution(puzzle: Puzzle): Record<string, unknown> {
+  return {
+    answers: puzzle.answers,
+    answerCount: puzzle.answers.length,
+    answerSetComplete: puzzle.answerSetComplete,
+    threatsBefore: puzzle.threatsBefore,
+    threatsAfter: puzzle.threatsAfter,
+    excludedByForbidden: puzzle.excludedByForbidden,
+    threatenedSeat: puzzle.threatenedSeat,
+    explanation: puzzle.explanation,
+    solver: puzzle.solver,
+  };
+}
+
+/** 今天的日期（按服务器时区，格式 YYYY-MM-DD）。 */
+function dayKey(now = Date.now()): string {
+  return new Date(now).toISOString().slice(0, 10);
 }
 
 /* ---- P2 复盘视图（R02/R03/R04）：单一实现，供本人重放与公开分享共用 ---- */
@@ -279,6 +336,67 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
         return send(res, 200, { revoked: true, token: seg[2] });
       }
 
+      // R08：单题视图（错题重练用）。只允许已发布的题，未发布/不存在一律 404。
+      if (isApi && seg[1] === 'puzzles' && seg.length === 3 && req.method === 'GET' && seg[2] !== 'daily' && seg[2] !== 'progress') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const puzzle = PUZZLE_INDEX.get(seg[2]);
+        if (!puzzle) return send(res, 404, { error: 'not found' });
+        const prog = db.raw
+          .prepare('SELECT status, attempts FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
+          .get(user.id, puzzle.puzzleId) as { status?: string; attempts?: number } | undefined;
+        return send(res, 200, {
+          puzzle: puzzleView(puzzle, { myStatus: prog?.status ?? null, myAttempts: Number(prog?.attempts ?? 0) }),
+        });
+      }
+
+      // R08：作答。attemptId 幂等；正式题用完整答案集判题；答对或达到阈值才下发解析。
+      if (isApi && seg[1] === 'puzzles' && seg.length === 4 && seg[3] === 'attempt' && req.method === 'POST') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const puzzle = PUZZLE_INDEX.get(seg[2]);
+        if (!puzzle) return send(res, 404, { error: 'not found' });
+        const body = await readJson(req);
+        const attemptId = typeof body.attemptId === 'string' ? body.attemptId.trim() : '';
+        const row = Number(body.row);
+        const col = Number(body.col);
+        if (!attemptId || attemptId.length > 128 || !Number.isInteger(row) || !Number.isInteger(col)) {
+          return send(res, 400, { error: 'attempt requires attemptId(string<=128), row(int), col(int)' });
+        }
+        const prior = db.findPuzzleAttempt(user.id, attemptId);
+        if (prior) {
+          // 同一 attemptId 换答案：明确拒绝，不覆盖历史（否则幂等就名存实亡）。
+          if (prior.puzzleId !== puzzle.puzzleId || prior.row !== row || prior.col !== col) {
+            return send(res, 409, { error: 'ATTEMPT_ID_CONFLICT', prior: { puzzleId: prior.puzzleId, row: prior.row, col: prior.col, verdict: prior.verdict } });
+          }
+          const rec = db.recordPuzzleAttempt({ userId: user.id, puzzleId: puzzle.puzzleId, attemptId, row, col, verdict: prior.verdict });
+          return send(res, 200, {
+            verdict: prior.verdict,
+            duplicate: true,
+            attempts: rec.attempts,
+            solved: rec.solved,
+            ...(prior.verdict === 'CORRECT' ? puzzleSolution(puzzle) : {}),
+          });
+        }
+        const trail = PUZZLE_TRAIL_INDEX.get(puzzle.sourceGameId);
+        if (!trail) return send(res, 500, { error: 'puzzle source trajectory missing' });
+        const graded = gradeAnswer(puzzle, trail, row, col);
+        const rec = db.recordPuzzleAttempt({ userId: user.id, puzzleId: puzzle.puzzleId, attemptId, row, col, verdict: graded.verdict });
+        const reveal = graded.verdict === 'CORRECT' || rec.attempts >= PUZZLE_REVEAL_AFTER_ATTEMPTS;
+        // 进度持久化后复核一次：客户端拿到的是落库之后的真实状态。
+        const progRow = db.raw
+          .prepare('SELECT status, attempts FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
+          .get(user.id, puzzle.puzzleId) as { status?: string; attempts?: number } | undefined;
+        return send(res, 200, {
+          verdict: graded.verdict,
+          duplicate: rec.duplicate,
+          attempts: Number(progRow?.attempts ?? rec.attempts),
+          solved: progRow?.status === 'SOLVED',
+          reveal,
+          ...(reveal ? puzzleSolution(puzzle) : {}),
+        });
+      }
+
       // R02：本人全谱重放（含关键片段与跨轮防守窗口）。
       if (isApi && seg[1] === 'games' && seg.length === 4 && seg[3] === 'replay' && req.method === 'GET') {
         const user = ctx.authUser(req);
@@ -419,6 +537,42 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           const offset = Number.isFinite(o) ? Math.max(0, Math.floor(o)) : 0;
           const total = Number((db.raw.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n);
           return send(res, 200, { ranking: db.ranking(limit, offset), total, offset, limit });
+        }
+        case 'GET /api/puzzles/daily': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          const day = url.searchParams.get('day') ?? dayKey();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return send(res, 400, { error: 'day 必须是 YYYY-MM-DD' });
+          const published = PUZZLE_BANK.filter((x) => x.status === 'PUBLISHED');
+          const id = dailyPuzzleId(published, day);
+          const puzzle = id ? PUZZLE_INDEX.get(id) : undefined;
+          if (!puzzle) return send(res, 503, { error: 'puzzle bank empty' });
+          const prog = db.raw
+            .prepare('SELECT status, attempts FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
+            .get(user.id, puzzle.puzzleId) as { status?: string; attempts?: number } | undefined;
+          return send(res, 200, {
+            day,
+            puzzle: puzzleView(puzzle, {
+              myStatus: prog?.status ?? null,
+              myAttempts: Number(prog?.attempts ?? 0),
+            }),
+            bank: { total: PUZZLE_BANK_META.total, byType: PUZZLE_BANK_META.byType, solverVersion: PUZZLE_BANK_META.solverVersion },
+          });
+        }
+        case 'GET /api/puzzles/progress': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          const progress = db.puzzleProgress(user.id);
+          return send(res, 200, {
+            progress: {
+              ...progress,
+              totalPublished: PUZZLE_BANK_META.total,
+              wrong: progress.wrong.map((w) => {
+                const pz = PUZZLE_INDEX.get(w.puzzleId);
+                return { ...w, acceptanceType: pz?.acceptanceType ?? null, boardSize: pz?.boardSize ?? null, round: pz?.round ?? null };
+              }),
+            },
+          });
         }
         case 'GET /api/history': {
           // R01：本人各模式终局的分页历史。分页参数与 /api/ranking 同口径（上限 50）。

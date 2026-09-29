@@ -223,7 +223,11 @@ export interface ReviewMove {
   args: Record<string, string | number>;
 }
 
-function futureTurnOf(actor: Player, turnIndex: number, target: Player): number {
+/**
+ * 某玩家在 actor 之后**真实行动顺序**中的下一个回合序号（规格 5.1：前瞻不能只数本轮剩余玩家）。
+ * puzzleBank 与 reviewKeyMoves 共用这一条判定，避免两处各写一份而不一致。
+ */
+export function nextActionTurnIndex(actor: Player, turnIndex: number, target: Player): number {
   const seats: Player[] = ['A', 'B', 'C'];
   const delta = (seats.indexOf(target) - seats.indexOf(actor) + 3) % 3;
   return turnIndex + (delta === 0 ? 3 : delta);
@@ -310,7 +314,7 @@ export function reviewKeyMoves(outcome: ReplayOutcome, limit = 3): ReviewMove[] 
     } else {
       for (const other of ['A', 'B', 'C'] as Player[]) {
         if (other === step.seat) continue;
-        const nextTurn = futureTurnOf(step.seat, step.turnIndex, other);
+        const nextTurn = nextActionTurnIndex(step.seat, step.turnIndex, other);
         const nextRound = roundFromTurn(nextTurn);
         if (getEligiblePlayer(nextRound) !== other) continue;
         const threatened = getWinningPoints(frame.before.board, other);

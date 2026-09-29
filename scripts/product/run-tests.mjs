@@ -74,6 +74,15 @@ const SUITES = {
     phase: 'P2',
     deferred: ['R07 题库 30-60 道', 'R08 每日题/错题', 'R09/R10 UI 与真实浏览器截图'],
   },
+  puzzles: {
+    title: 'P2 题库 V1 / 每日题 / attempt 幂等 / 进度与错题本',
+    entry: 'backend/tests/puzzles.bank.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['R07', 'R08'],
+    phase: 'P2',
+    deferred: ['R09/R10 前端界面与真实浏览器截图'],
+  },
   features: {
     title: 'P1 排位资格 / V1 评分算法 / 重复对手保护 / 排行榜过滤',
     entry: 'backend/tests/rating.policy.ts',

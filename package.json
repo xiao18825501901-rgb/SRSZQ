@@ -24,6 +24,8 @@
     "test:security": "tsx backend/tests/security.worker.ts",
     "test:rating": "tsx backend/tests/rating.policy.ts",
     "test:history": "tsx backend/tests/history.replay.ts",
+    "test:puzzles": "tsx backend/tests/puzzles.bank.ts",
+    "build:puzzles": "tsx scripts/product/build-puzzle-bank.mts",
     "test:product": "node scripts/product/run-tests.mjs",
     "e2e": "node e2e.cjs",
     "e2e:local": "node e2e-local.cjs",

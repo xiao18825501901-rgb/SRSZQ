@@ -1,0 +1,434 @@
+{
+ "capturedAt": "2026-09-29T21:04:06.127Z",
+ "source": "production srszq.sqlite game_events（只读导出；含 3 局 3 真人 20 手对局）",
+ "note": "这些是真实生产对局的持久事件流，不是构造出来的。humanSeats=3 标为 HUMAN_ONLINE，其余（AI 补位快速局）标为 SYNTHETIC_SELFPLAY。",
+ "trails": [
+  {
+   "gameId": "0274e9a3-b66a-473a-afdb-c61c2aba5adb",
+   "boardSize": 13,
+   "sourceKind": "HUMAN_ONLINE",
+   "humanSeats": 3,
+   "mode": "online",
+   "endReason": "NORMAL_WIN",
+   "winnerSeat": "B",
+   "moves": [
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 5
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 1
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 1
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 10
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 2
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 2
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 11
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 3
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 3
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 12
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 11
+    },
+    {
+     "seat": "C",
+     "row": 12,
+     "col": 12
+    },
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 6
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 12
+    },
+    {
+     "seat": "C",
+     "row": 12,
+     "col": 11
+    },
+    {
+     "seat": "A",
+     "row": 0,
+     "col": 0
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 10
+    },
+    {
+     "seat": "C",
+     "row": 2,
+     "col": 2
+    },
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 7
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 4
+    }
+   ]
+  },
+  {
+   "gameId": "4660fad4-a636-4769-bf58-697c16169ed1",
+   "boardSize": 13,
+   "sourceKind": "SYNTHETIC_SELFPLAY",
+   "humanSeats": 1,
+   "mode": "online",
+   "endReason": "PLAYER_FORFEIT",
+   "winnerSeat": null,
+   "moves": [
+    {
+     "seat": "A",
+     "row": 6,
+     "col": 6
+    },
+    {
+     "seat": "B",
+     "row": 0,
+     "col": 0
+    }
+   ]
+  },
+  {
+   "gameId": "5a642a58-05ff-42aa-a9f5-5ea300c449b8",
+   "boardSize": 13,
+   "sourceKind": "HUMAN_ONLINE",
+   "humanSeats": 3,
+   "mode": "online",
+   "endReason": "NORMAL_WIN",
+   "winnerSeat": "B",
+   "moves": [
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 5
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 1
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 1
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 10
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 2
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 2
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 11
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 3
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 3
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 12
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 11
+    },
+    {
+     "seat": "C",
+     "row": 12,
+     "col": 12
+    },
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 6
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 12
+    },
+    {
+     "seat": "C",
+     "row": 12,
+     "col": 11
+    },
+    {
+     "seat": "A",
+     "row": 0,
+     "col": 0
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 10
+    },
+    {
+     "seat": "C",
+     "row": 2,
+     "col": 2
+    },
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 7
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 4
+    }
+   ]
+  },
+  {
+   "gameId": "b9fdbef8-6157-4eab-9242-906866453054",
+   "boardSize": 13,
+   "sourceKind": "SYNTHETIC_SELFPLAY",
+   "humanSeats": 1,
+   "mode": "online",
+   "endReason": "PLAYER_FORFEIT",
+   "winnerSeat": null,
+   "moves": [
+    {
+     "seat": "A",
+     "row": 6,
+     "col": 6
+    },
+    {
+     "seat": "B",
+     "row": 0,
+     "col": 0
+    }
+   ]
+  },
+  {
+   "gameId": "c8c23bb3-26e3-420b-b823-78dcbfd0813f",
+   "boardSize": 13,
+   "sourceKind": "SYNTHETIC_SELFPLAY",
+   "humanSeats": 1,
+   "mode": "online",
+   "endReason": "PLAYER_FORFEIT",
+   "winnerSeat": null,
+   "moves": [
+    {
+     "seat": "A",
+     "row": 6,
+     "col": 6
+    },
+    {
+     "seat": "B",
+     "row": 5,
+     "col": 6
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 0
+    }
+   ]
+  },
+  {
+   "gameId": "e7fe9b59-0851-4471-84da-5e9f0b590f10",
+   "boardSize": 13,
+   "sourceKind": "SYNTHETIC_SELFPLAY",
+   "humanSeats": 1,
+   "mode": "online",
+   "endReason": "PLAYER_FORFEIT",
+   "winnerSeat": null,
+   "moves": [
+    {
+     "seat": "A",
+     "row": 6,
+     "col": 6
+    },
+    {
+     "seat": "B",
+     "row": 5,
+     "col": 6
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 0
+    }
+   ]
+  },
+  {
+   "gameId": "fa20fdf9-db8c-41a5-9189-0b9dd57fcadf",
+   "boardSize": 13,
+   "sourceKind": "HUMAN_ONLINE",
+   "humanSeats": 3,
+   "mode": "online",
+   "endReason": "NORMAL_WIN",
+   "winnerSeat": "B",
+   "moves": [
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 5
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 1
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 1
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 10
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 2
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 2
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 11
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 3
+    },
+    {
+     "seat": "C",
+     "row": 0,
+     "col": 3
+    },
+    {
+     "seat": "A",
+     "row": 10,
+     "col": 12
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 11
+    },
+    {
+     "seat": "C",
+     "row": 12,
+     "col": 12
+    },
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 6
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 12
+    },
+    {
+     "seat": "C",
+     "row": 12,
+     "col": 11
+    },
+    {
+     "seat": "A",
+     "row": 0,
+     "col": 0
+    },
+    {
+     "seat": "B",
+     "row": 11,
+     "col": 10
+    },
+    {
+     "seat": "C",
+     "row": 2,
+     "col": 2
+    },
+    {
+     "seat": "A",
+     "row": 5,
+     "col": 7
+    },
+    {
+     "seat": "B",
+     "row": 6,
+     "col": 4
+    }
+   ]
+  }
+ ]
+}

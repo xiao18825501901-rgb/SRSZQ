@@ -217,6 +217,18 @@ export interface Db {
    * 否则“进行中的对局不能分享/不能分析”会退化成 404，把“不是你的”和“还没结束”混为一谈。
    */
   seatInLiveGame(userId: string, gameId: string): string | null;
+  /** R08：按 attemptId 查一次尝试（幂等重发时回放既有结论）。 */
+  findPuzzleAttempt(userId: string, attemptId: string): { puzzleId: string; row: number; col: number; verdict: string; createdAt: number } | null;
+  /** R08：记录一次尝试并更新进度（同一事务；(user_id, attempt_id) 唯一，重发不重复计数）。 */
+  recordPuzzleAttempt(input: { userId: string; puzzleId: string; attemptId: string; row: number; col: number; verdict: string }): { duplicate: boolean; attempts: number; solved: boolean; firstSolvedAt: number | null };
+  /** R08：本人题目进度（含错题本）。 */
+  puzzleProgress(userId: string): {
+    solved: number;
+    failed: number;
+    totalAttempts: number;
+    firstSolvedAt: number | null;
+    wrong: Array<{ puzzleId: string; attempts: number; lastVerdict: string; updatedAt: number }>;
+  };
   /** R01/R06：某局参与者的脱敏视图（座位/名次/来源），**不含** user_id 与用户名。 */
   matchParticipantViews(gameId: string): Array<{ seat: string; outcome: ParticipantOutcome; kind: string; source: AccountSource; ratingDelta: number }>;
   /** R02：某局最新权威快照（默认只含已结算局；includeUnsettled 供恢复路径使用）。 */
@@ -419,6 +431,37 @@ export function openDb(path: string): Db {
     );
 
     CREATE INDEX IF NOT EXISTS idx_share_links_game ON share_links (game_id, owner_id);
+
+    /* ---- P2 题库：尝试与进度（R08） ---- */
+
+    -- 每一次作答一行。(user_id, attempt_id) 唯一 = 客户端重发不会重复计数，
+    -- 也让“同一次尝试”可以被明确回放，而不是靠时间窗口猜。
+    CREATE TABLE IF NOT EXISTS puzzle_attempts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      puzzle_id TEXT NOT NULL,
+      attempt_id TEXT NOT NULL,
+      row INTEGER NOT NULL,
+      col INTEGER NOT NULL,
+      verdict TEXT NOT NULL CHECK (verdict IN ('CORRECT','INCORRECT','ILLEGAL','OPEN')),
+      created_at INTEGER NOT NULL,
+      UNIQUE (user_id, attempt_id)
+    );
+
+    -- 每题一行进度：SOLVED 一旦达成不会被后来的答错覆盖（进度是成绩，不是最近一次状态）。
+    CREATE TABLE IF NOT EXISTS puzzle_progress (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      puzzle_id TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('SOLVED','FAILED')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      first_solved_at INTEGER,
+      last_verdict TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, puzzle_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_puzzle_attempts_user ON puzzle_attempts (user_id, puzzle_id);
+    CREATE INDEX IF NOT EXISTS idx_puzzle_progress_status ON puzzle_progress (user_id, status);
 
     -- 进行中对局的座位归属（终局即删除）。没有它，API 就无法区分
     -- “这局不是你的”（404）与“这局还没结束”（409）。
@@ -948,6 +991,96 @@ export function openDb(path: string): Db {
       } catch {
         return null;
       }
+    },
+    findPuzzleAttempt(userId, attemptId) {
+      const r = raw
+        .prepare('SELECT puzzle_id, row, col, verdict, created_at FROM puzzle_attempts WHERE user_id = ? AND attempt_id = ?')
+        .get(userId, attemptId) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      return { puzzleId: String(r.puzzle_id), row: Number(r.row), col: Number(r.col), verdict: String(r.verdict), createdAt: Number(r.created_at) };
+    },
+    recordPuzzleAttempt(input) {
+      const existing = db.findPuzzleAttempt(input.userId, input.attemptId);
+      if (existing) {
+        const cur = raw
+          .prepare('SELECT attempts, first_solved_at FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
+          .get(input.userId, existing.puzzleId) as { attempts?: number; first_solved_at?: number | null } | undefined;
+        return {
+          duplicate: true,
+          attempts: Number(cur?.attempts ?? 0),
+          solved: existing.verdict === 'CORRECT',
+          firstSolvedAt: cur?.first_solved_at === null || cur?.first_solved_at === undefined ? null : Number(cur.first_solved_at),
+        };
+      }
+      const now = Date.now();
+      raw.exec('BEGIN IMMEDIATE');
+      try {
+        raw
+          .prepare('INSERT INTO puzzle_attempts (id,user_id,puzzle_id,attempt_id,row,col,verdict,created_at) VALUES (?,?,?,?,?,?,?,?)')
+          .run(randomUUID(), input.userId, input.puzzleId, input.attemptId, input.row, input.col, input.verdict, now);
+        const prev = raw
+          .prepare('SELECT status, attempts, first_solved_at FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
+          .get(input.userId, input.puzzleId) as { status?: string; attempts?: number; first_solved_at?: number | null } | undefined;
+        const solvedBefore = prev?.status === 'SOLVED';
+        const solvedNow = solvedBefore || input.verdict === 'CORRECT';
+        const firstSolvedAt = prev?.first_solved_at ?? (input.verdict === 'CORRECT' ? now : null);
+        const attempts = Number(prev?.attempts ?? 0) + 1;
+        raw
+          .prepare(
+            `INSERT INTO puzzle_progress (user_id,puzzle_id,status,attempts,first_solved_at,last_verdict,updated_at)
+             VALUES (?,?,?,?,?,?,?)
+             ON CONFLICT (user_id, puzzle_id) DO UPDATE SET
+               status = excluded.status, attempts = excluded.attempts,
+               first_solved_at = excluded.first_solved_at, last_verdict = excluded.last_verdict,
+               updated_at = excluded.updated_at`,
+          )
+          .run(input.userId, input.puzzleId, solvedNow ? 'SOLVED' : 'FAILED', attempts, firstSolvedAt, input.verdict, now);
+        raw.exec('COMMIT');
+        return { duplicate: false, attempts, solved: solvedNow, firstSolvedAt };
+      } catch (err) {
+        try { raw.exec('ROLLBACK'); } catch { /* 事务已不在：原始错误更重要 */ }
+        // 并发下同一 attemptId 被另一个写入者抢先 —— 按重发处理，不重复计数。
+        const raced = db.findPuzzleAttempt(input.userId, input.attemptId);
+        if (raced) {
+          const cur = raw
+            .prepare('SELECT attempts, first_solved_at FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
+            .get(input.userId, raced.puzzleId) as { attempts?: number; first_solved_at?: number | null } | undefined;
+          return {
+            duplicate: true,
+            attempts: Number(cur?.attempts ?? 0),
+            solved: raced.verdict === 'CORRECT',
+            firstSolvedAt: cur?.first_solved_at === null || cur?.first_solved_at === undefined ? null : Number(cur.first_solved_at),
+          };
+        }
+        throw err;
+      }
+    },
+    puzzleProgress(userId) {
+      const agg = raw
+        .prepare(
+          `SELECT
+             SUM(CASE WHEN status = 'SOLVED' THEN 1 ELSE 0 END) AS solved,
+             SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed,
+             SUM(attempts) AS attempts,
+             MIN(first_solved_at) AS first_solved_at
+           FROM puzzle_progress WHERE user_id = ?`,
+        )
+        .get(userId) as Record<string, unknown> | undefined;
+      const wrong = raw
+        .prepare("SELECT puzzle_id, attempts, last_verdict, updated_at FROM puzzle_progress WHERE user_id = ? AND status = 'FAILED' ORDER BY attempts DESC, updated_at DESC")
+        .all(userId) as Array<Record<string, unknown>>;
+      return {
+        solved: Number(agg?.solved ?? 0),
+        failed: Number(agg?.failed ?? 0),
+        totalAttempts: Number(agg?.attempts ?? 0),
+        firstSolvedAt: agg?.first_solved_at === null || agg?.first_solved_at === undefined ? null : Number(agg.first_solved_at),
+        wrong: wrong.map((x) => ({
+          puzzleId: String(x.puzzle_id),
+          attempts: Number(x.attempts),
+          lastVerdict: String(x.last_verdict),
+          updatedAt: Number(x.updated_at),
+        })),
+      };
     },
     matchParticipantViews(gameId) {
       const rows = raw
