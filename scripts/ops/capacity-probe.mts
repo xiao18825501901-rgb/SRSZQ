@@ -54,7 +54,12 @@ async function freePort(): Promise<number> {
 function killTree(pid: number | undefined): void {
   if (!pid) return;
   try {
-    spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    if (process.platform === 'win32') {
+      spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
+    } else {
+      // Linux：npx 会再套一层 shell，只杀外层会留下孤儿监听端口 —— 按进程组杀。
+      try { process.kill(-pid, 'SIGKILL'); } catch { process.kill(pid, 'SIGKILL'); }
+    }
   } catch { /* 已经退出 */ }
 }
 
@@ -109,7 +114,11 @@ async function main(): Promise<void> {
   const serverLog = join(dir, 'server.log');
   const { openSync } = await import('node:fs');
   const logFd = openSync(serverLog, 'a');
-  const child: ChildProcess = spawn('npx', ['tsx', 'backend/src/server.ts'], { env, shell: true, stdio: ['ignore', logFd, logFd] });
+  const child: ChildProcess = spawn('npx', ['tsx', 'backend/src/server.ts'], {
+    env, shell: true, stdio: ['ignore', logFd, logFd],
+    // Linux 上单独开进程组，便于整组回收（Windows 用 taskkill /T）。
+    detached: process.platform !== 'win32',
+  });
 
   const apiBase = 'http://127.0.0.1:' + API_PORT;
   const wsBase = 'ws://127.0.0.1:' + WS_PORT + '/ws';
@@ -257,6 +266,16 @@ async function main(): Promise<void> {
     totalMemBytes: totalmem(),
     note: '这是**本机实测环境**，不是规格里的 2vCPU/4GB 隔离基准。未在目标基准上实测就不能宣称那里的容量。',
   };
+  // 基准逐维度比对：规格写的是 2vCPU/4GB。达标与否必须给出依据，不能只写一句结论。
+  const BASELINE = { cpu: 2, memBytes: 4 * 1024 ** 3 };
+  const cpuMeets = environment.cpuCount >= BASELINE.cpu;
+  const memMeets = environment.totalMemBytes >= BASELINE.memBytes;
+  const baselineDims = [
+    { name: 'CPU>=2', met: cpuMeets, actual: environment.cpuCount + ' vCPU' },
+    { name: 'RAM>=4GB', met: memMeets, actual: Math.round(environment.totalMemBytes / 1073741824 * 10) / 10 + ' GB' },
+    { name: 'ISOLATED_HOST', met: false, actual: '与被测线上服务同机（测试窗口内线上无活跃对局）' },
+  ];
+  const holdsTarget = baselineDims.every((d) => d.met);
   const report = {
     schemaVersion: 1,
     kind: 'capacity-probe',
@@ -277,9 +296,12 @@ async function main(): Promise<void> {
       clockOffsetMs: pct(offsets, 0.5),
     },
     verdict: {
-      holdsTarget: false,
-      reason: '未在 2vCPU/4GB 隔离基准上运行；本报告只是本机实测，不能代表目标基准容量。',
-      illegalMoves: 0,
+      holdsTarget,
+      baseline: BASELINE,
+      dimensions: baselineDims,
+      reason: holdsTarget
+        ? '规格逐维度达标。'
+        : '未完全达标：' + baselineDims.filter((d) => !d.met).map((d) => d.name + '(实际 ' + d.actual + ')').join('，') + '。因此这些数字只代表本次实测环境。',
     },
   };
 
@@ -294,7 +316,8 @@ async function main(): Promise<void> {
   console.log('  服务端 RSS=' + Math.round((metrics.rssBytes ?? 0) / 1048576) + 'MB heap=' + Math.round((metrics.heapUsedBytes ?? 0) / 1048576) + 'MB');
   console.log('  时钟漂移(中位)=' + report.results.clockOffsetMs + 'ms');
   console.log('  环境：' + environment.cpuCount + ' 核 · ' + Math.round(environment.totalMemBytes / 1073741824) + 'GB · ' + environment.cpuModel);
-  console.log('  目标基准声明：' + (report.verdict.holdsTarget ? '达标' : '**不宣称**') + '（' + report.verdict.reason + '）');
+  console.log('  基准逐项：' + baselineDims.map((d) => d.name + '=' + (d.met ? 'OK' : 'NO') + '(' + d.actual + ')').join(' · '));
+  console.log('  目标基准声明：' + (holdsTarget ? '达标' : '**不达标/不宣称**') + '（' + report.verdict.reason + '）');
   console.log('  artifact=' + path);
 
   for (const c of clients) { try { c.ws.close(); } catch { /* noop */ } }

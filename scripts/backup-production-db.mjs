@@ -22,6 +22,11 @@ export async function backupDatabase(databasePath, backupRoot) {
       if (results.length !== 1 || results[0].integrity_check !== 'ok') throw Error('Backup integrity check failed');
     } finally { restored.close(); }
     await rename(temporary, destination);
+    // 收尾：SQLite 在线备份会在临时库旁留下 -shm/-wal 边车文件，重命名后它们就成了孤儿。
+    // 生产恢复演练时发现的（备份目录里躺着 32KB 的 .partial-shm），清掉以免被误认为备份的一部分。
+    for (const suffix of ['-shm', '-wal']) {
+      await unlink(temporary + suffix).catch(() => {});
+    }
     temporary = undefined;
     // Only files created by this script expire. Legacy/migration backups stay untouched.
     const cutoff = Date.now() - 7 * 86400000;
