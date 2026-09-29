@@ -491,3 +491,65 @@ C) scripts/dev/public-puzzle-check.mts     -> PUBLIC PUZZLE CHECK: ALL PASS 0（
 
 - 未合并、未检出、未改写 `research/invitus`；未训练任何模型；未开启评分 Beta 或 shadow。
 - 未做：O05 备份恢复演练、O07 容量实测、`/ready` 探针、管理界面、68 项封版（B7）。
+
+---
+
+## P4 上线（B7：就绪探针 / 备份恢复演练 / 容量实测 / 管理台 / 封版）
+
+P4 分两批发布，两批都走完整的 `scripts/deploy-production.sh`（validate → 备份 → pm2 stop → ff-merge →
+node_modules 提升 → pm2 reload → 5 项冒烟 → 失败自动回滚）。
+
+| 批次 | 生产提交 | 发布脚本结论 | 回滚点 |
+|---|---|---|---|
+| P4a（就绪/备份/容量） | `d30db7fdac0e24c7d7209ae79d60408e6128b69f` | `RELEASE PASS: d30db7fd…` | `/var/backups/srszq/release-20260929T222017Z-f4KXGu` 之后的一次 |
+| P4b（管理台） | `1a53a9d854e3af26b5c6e5d8386e08353ae06bd3` | `RELEASE PASS: 1a53a9d8…` | `/var/backups/srszq/release-20260929T225449Z-DcN06L` |
+| P4b.2（发布标识 + 前端构建提交） | `c45c5ef45aede15b23e72109c3ad153ffffd5777` | `RELEASE PASS: c45c5ef4…` | `/var/backups/srszq/release-20260929T230006Z-LjHJGM` |
+
+当前生产：`releaseId=p4b-20260930`，`/api/version.source.backendSourceSha=c45c5ef45aede15b23e72109c3ad153ffffd5777`。
+5 项冒烟全部 PASS：API / WS（未认证在升级前被 401 拒绝）/ PM2 / DB（quick_check）/ NGINX。
+
+### 三层同提交（这次能机器对账，不靠比对文件名）
+
+前端在构建期把源码提交烘焙进 bundle（`vite define __SRSZQ_SOURCE_SHA__`，取 Netlify 的 `COMMIT_REF`），
+管理台把“前端产物构建提交”和“后端自报提交”并排显示并给出判定。实测：
+
+```
+node scripts/dev/frontend-commit-probe.mjs --expect c45c5ef45aede15b23e72109c3ad153ffffd5777
+  bundle index-DryVRTlb.js（289,300 bytes）内嵌 sha = c45c5ef45aede15b23e72109c3ad153ffffd5777  -> FRONTEND COMMIT MATCH
+管理台「构建对账」面板：前端产物由 c45c5ef4… 构建 · 判定 与后端同提交
+```
+
+### 管理台（O03/O10 收口）
+
+- 服务端：9 个管理端点统一走 `adminUser()`，普通账号一律 403（不是隐藏按钮）；`role` 打通
+  `models -> db 映射 -> PublicUser -> 前端`。
+- 前端：`AdminPage`（健康/队列/活跃房间/版本/举报队列/数据请求/数据集/审计），导航入口只对 ADMIN 显示。
+- 授予管理员只走受控 CLI：`npx tsx scripts/ops/grant-admin.mts <user> [--revoke]`，写 `admin_audit`，不创建账号。
+
+真实浏览器验收（CDP 驱动本机 Edge 无头实例，打 `https://srszq.com`）：`PUBLIC ADMIN CHECK: ALL PASS 0`（25 项）。
+关键几条：
+
+```
+GET /api/admin/{live,reports,audit,data-tasks,dataset/runs,metrics/events} => 匿名 401 / 普通 403 / 管理员 200
+POST /api/admin/reports/<id>                                  => 匿名 401 / 普通 403 / 管理员 404（按业务拒绝）
+管理台 /ready：就绪（MIGRATIONS=ok · DB_WRITABLE=ok · AI_WORKER=ok）
+审计面板 14 条（含刚才 CLI 授权的记录）· 举报队列 1 行 3 个按钮 · 导航“管理”入口 1 个
+普通账号访问 /admin：出现“非管理员”，管理面板 0 个、导航入口 0 个
+管理台桌面 1440x900 / 手机 390x844 截图由浏览器渲染（PNG 尺寸校验，非 HTML 拼图），手机无横向溢出
+```
+
+**测试账号披露（可撤销）**：为完成上述验收，在生产注册了一个明确标记为测试的账号
+`dshadmin090310`（用户名以 `dsh` 开头 => `source=TEST`，页面按 DEMO 处理，随机 24 位密码），
+并用受控 CLI 授予 ADMIN（`admin_audit` 有记录）。**没有改动任何真实用户角色**。
+不需要时可执行：`ssh srszq-hk` 后 `cd /var/www/SRSZQ && SRSZQ_DB=/var/www/SRSZQ/data/srszq.sqlite npx tsx scripts/ops/grant-admin.mts dshadmin090310 --revoke`。
+站主自己的账号要成为管理员同样用这条 CLI（把用户名换掉即可）。
+
+### 本次发布修掉的两个**验收脚本自身**缺陷（否则会给出假证据）
+
+1. `Page.addScriptToEvaluateOnNewDocument` 注册的脚本会在**每个新文档**重放：换账号时它把令牌改回管理员，
+   于是“普通账号应被挡住”这条永远拿到管理员页面。必须先 `Page.removeScriptToEvaluateOnNewDocument`。
+2. 数据是异步取的：只等容器出现就断言，会读到空面板（症状是审计 0 条）。改为等待真实数据（后端 sha 落到面板）落位。
+   同一类教训在 R09 浏览器验收里出现过一次（等空态），这次是第二次，已写进脚本注释。
+
+另外两条：改分入口检查最初扫全页 `innerText`，被页面自己的说明文字“不做改分”误判，改为只扫交互控件；
+浏览器调试端口固定会让上一次没清掉的实例被当成本次实例，已改为随机端口 + `taskkill /T` 清进程树。
