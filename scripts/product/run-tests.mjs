@@ -83,6 +83,15 @@ const SUITES = {
     phase: 'P2',
     deferred: ['R09/R10 前端界面与真实浏览器截图'],
   },
+  privacy: {
+    title: 'P3A 训练许可 / 数据集切分与对称去重 / 事件表 / 导出删除 / 举报屏蔽审计',
+    entry: 'backend/tests/privacy.dataset.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['D01', 'D02', 'D03', 'D04', 'D06(分层计数)', 'O01', 'O03', 'O04'],
+    phase: 'P3A',
+    deferred: ['D07/D08 续训声明与模型卡', 'O02 留存口径', 'O05 备份恢复演练'],
+  },
   features: {
     title: 'P1 排位资格 / V1 评分算法 / 重复对手保护 / 排行榜过滤',
     entry: 'backend/tests/rating.policy.ts',

@@ -593,6 +593,7 @@ export class GameServer {
     };
     this.rooms.set(room.id, room);
     this.db.openLiveGame(room.id, room.members);
+    this.recordProductEvent('match_start', room, { humanCount: Object.keys(room.members).length });
     this.ensureTurnClock(room);
     this.logMatchmaking('ai_fill_complete', {
       queueId, roomId: room.id, humanCount: humans.length, aiCount: 3 - humans.length,
@@ -957,6 +958,34 @@ export class GameServer {
     void this.maybeRunAI(room);
   }
 
+  /**
+   * 第一方产品事件（规格 7.1）。失败绝不影响对局：事件是观测，不是权威状态。
+   * source 为 HUMAN 只在“全部座位都是真人且账号来源都是 HUMAN”时成立，
+   * 于是 AI 补位局与测试账号局不会混进真人留存口径。
+   */
+  private recordProductEvent(name: string, room: Room, payload: Record<string, unknown>): void {
+    try {
+      const humanUserIds = SEATS
+        .map((s) => room.seats[s])
+        .filter((s) => s.kind === 'human' && !!s.userId)
+        .map((s) => s.userId as string);
+      const anyAI = SEATS.some((s) => room.seats[s].kind !== 'human');
+      const anyNonHumanAccount = humanUserIds.some((uid) => this.db.getUserSource(uid) !== 'HUMAN');
+      this.db.insertProductEvent({
+        eventId: name + ':' + room.id,
+        name,
+        userId: humanUserIds[0] ?? null,
+        gameId: room.id,
+        source: anyAI || anyNonHumanAccount ? 'SYNTHETIC' : 'HUMAN',
+        isBot: anyAI,
+        isSample: false,
+        payload,
+      });
+    } catch (err) {
+      console.error(JSON.stringify({ event: 'product_event_failed', name, roomId: room.id, error: err instanceof Error ? err.message : String(err), timestamp: Date.now() }));
+    }
+  }
+
   /** 房间快照：进程被强杀后据此重建房间（含座位归属与 revision/seq）。 */
   private buildRoomSnapshot(room: Room, state: GameState, revision = room.revision, seq = room.seq): RoomSnapshot {
     const seats = {} as RoomSnapshot['seats'];
@@ -1313,6 +1342,14 @@ export class GameServer {
     room.phase = 'FINISHED';
     // 终局已结算：进行中记录退场，分享/分析改走已结算归属判定。
     this.db.closeLiveGame(room.id);
+    // 规格 7.1：对局事实只由服务器写事件，客户端 UI 事件不能冒充。
+    this.recordProductEvent('match_finish', room, {
+      endReason: plan.endReason,
+      winnerSeat: settled.winnerSeat,
+      isRanked: settled.isRanked,
+      moveCount: room.state.moves.length,
+      boardSize: room.state.boardSize,
+    });
     this.clearTurnClock(room);
     room.endReason = plan.endReason;
     for (const t of room.disconnectTimers.values()) clearTimeout(t);

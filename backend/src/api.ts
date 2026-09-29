@@ -10,6 +10,7 @@ import {
   asBoardSize, moveListOf, replayGame, reviewKeyMoves, stateDigest, threatWindows, classifyAccountSource,
   PLAYER_LABELS, RULESET_VERSION, RELEASE_ID,
   dailyPuzzleId, expandTrails, gradeAnswer,
+  TRAINING_CONSENT_VERSION, TRAINING_CONSENT_NOTICE, decideTrainingConsent, buildDataset, DEFAULT_DATASET_POLICY,
   type PersistedEvent, type GameState, type Player, type Puzzle, type ReplayOutcome, type ReviewMove, type ThreatWindow,
 } from '../../shared/src/index.js';
 import { PUZZLE_BANK, PUZZLE_BANK_META, PUZZLE_TRAJECTORIES_PACKED } from '../../shared/src/product/puzzleBank.generated.js';
@@ -25,6 +26,15 @@ const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Phase A 复盘的分析口径标识：只做精确一步事实，绝不产生搜索估计。 */
 const REVIEW_ANALYSIS_MODE = 'phase-a-exact-one-ply';
+
+/**
+ * 客户端可以上报的 UI 事件白名单。对局事实（开局/终局/首次落子）只由服务器写入，
+ * 客户端即使伪造这些名字也不会被接受 —— 规格 7.1：UI 事件不能冒充对局事实。
+ */
+const CLIENT_EVENT_ALLOWLIST = new Set([
+  'guest_play_start', 'tutorial_step_complete', 'queue_cancel', 'review_open',
+  'retry_move', 'invite_create', 'invite_join', 'puzzle_attempt', 'rematch_start',
+]);
 
 /**
  * 题库在进程启动时装载一次：题目是静态产物，不需要每次请求重新解析。
@@ -334,6 +344,244 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
         const revoked = db.revokeShareLink(seg[2], user.id);
         if (!revoked) return send(res, 404, { error: 'not found or already revoked' });
         return send(res, 200, { revoked: true, token: seg[2] });
+      }
+
+      /* ---- P3A：训练许可 / 数据导出删除 / 举报屏蔽 / 管理端 ---- */
+
+      const adminUser = (): { ok: true; user: NonNullable<ReturnType<typeof ctx.authUser>> } | { ok: false } => {
+        const user = ctx.authUser(req);
+        if (!user) { send(res, 401, { error: 'unauthorized' }); return { ok: false }; }
+        if (db.getUserRole(user.id) !== 'ADMIN') { send(res, 403, { error: 'admin only' }); return { ok: false }; }
+        return { ok: true, user };
+      };
+
+      // 训练许可：默认不纳入；撤回只阻止新纳入，并保留原版本以便审计。
+      if (isApi && seg[1] === 'consent' && seg[2] === 'training' && seg.length === 3) {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        if (req.method === 'GET') {
+          const record = db.getConsent(user.id, 'TRAINING');
+          return send(res, 200, {
+            version: TRAINING_CONSENT_VERSION,
+            consent: record,
+            decision: decideTrainingConsent(record),
+            notice: TRAINING_CONSENT_NOTICE,
+          });
+        }
+        if (req.method === 'POST') {
+          const body = await readJson(req);
+          if (typeof body.grant !== 'boolean') return send(res, 400, { error: 'grant(boolean) 必填' });
+          const record = body.grant
+            ? db.grantConsent({ userId: user.id, kind: 'TRAINING', version: TRAINING_CONSENT_VERSION })
+            : db.revokeConsent({ userId: user.id, kind: 'TRAINING', version: TRAINING_CONSENT_VERSION });
+          db.appendAudit({
+            actorId: user.id, actorRole: db.getUserRole(user.id),
+            action: body.grant ? 'CONSENT_GRANT' : 'CONSENT_REVOKE',
+            targetKind: 'CONSENT', targetId: 'TRAINING',
+            detail: { version: TRAINING_CONSENT_VERSION },
+          });
+          return send(res, 200, { consent: record, decision: decideTrainingConsent(record) });
+        }
+        return send(res, 405, { error: 'method not allowed' });
+      }
+
+      // 客户端 UI 事件：只接受白名单名字，一律打 CLIENT_UI 标签。
+      if (isApi && seg[1] === 'events' && seg.length === 2 && req.method === 'POST') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const body = await readJson(req);
+        const eventId = typeof body.eventId === 'string' ? body.eventId.trim() : '';
+        const name = typeof body.name === 'string' ? body.name.trim() : '';
+        if (!eventId || eventId.length > 128 || !CLIENT_EVENT_ALLOWLIST.has(name)) {
+          return send(res, 400, { error: 'eventId 必填且 name 必须在 UI 事件白名单内', allowed: [...CLIENT_EVENT_ALLOWLIST] });
+        }
+        const rec = db.insertProductEvent({
+          eventId, name, userId: user.id,
+          gameId: typeof body.gameId === 'string' ? body.gameId : null,
+          source: 'CLIENT_UI', isBot: false, isSample: false,
+          payload: { clientKind: 'ui' },
+        });
+        return send(res, 200, { recorded: rec.inserted, duplicate: rec.duplicate });
+      }
+
+      // 数据任务列表 / 导出 / 删除（规格 7.2：本人可导出自己的数据、删除账号、撤销分享）。
+      if (isApi && seg[1] === 'me' && seg[2] === 'data-tasks' && seg.length === 3 && req.method === 'GET') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        return send(res, 200, { tasks: db.listDataTasks(user.id) });
+      }
+      if (isApi && seg[1] === 'me' && seg[2] === 'export' && req.method === 'POST' && seg.length === 3) {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const task = db.createDataTask({ userId: user.id, kind: 'EXPORT' });
+        db.finishDataTask({ taskId: task.taskId, status: 'RUNNING' });
+        try {
+          const data = db.exportUserData(user.id);
+          db.finishDataTask({ taskId: task.taskId, status: 'DONE', result: data });
+          db.appendAudit({ actorId: user.id, actorRole: db.getUserRole(user.id), action: 'DATA_EXPORT', targetKind: 'USER', targetId: user.id, detail: { taskId: task.taskId } });
+        } catch (e) {
+          db.finishDataTask({ taskId: task.taskId, status: 'FAILED', error: e instanceof Error ? e.message : String(e) });
+          return send(res, 500, { error: 'export failed', taskId: task.taskId });
+        }
+        return send(res, 201, { task: db.findDataTask(user.id, task.taskId) });
+      }
+      if (isApi && seg[1] === 'me' && seg[2] === 'export' && seg.length === 4 && req.method === 'GET') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const task = db.findDataTask(user.id, seg[3]);
+        if (!task) return send(res, 404, { error: 'not found' });
+        return send(res, 200, { task });
+      }
+      if (isApi && seg[1] === 'me' && seg[2] === 'data' && seg.length === 3 && req.method === 'DELETE') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const body = await readJson(req);
+        if (body.confirm !== 'DELETE_MY_DATA') {
+          return send(res, 400, { error: '需要 confirm="DELETE_MY_DATA" 才执行，避免误删' });
+        }
+        const task = db.createDataTask({ userId: user.id, kind: 'DELETE' });
+        db.finishDataTask({ taskId: task.taskId, status: 'RUNNING' });
+        try {
+          const result = db.anonymizeUser(user.id);
+          const payload = {
+            ...result,
+            policy: '多人记录去标识（不删除他人合法记录）；已撤销全部分享链接；账号本体改为已注销占位',
+            taskId: task.taskId,
+          };
+          db.finishDataTask({ taskId: task.taskId, status: 'DONE', result: payload });
+          db.appendAudit({ actorId: user.id, actorRole: 'USER', action: 'ACCOUNT_DELETE', targetKind: 'USER', targetId: user.id, detail: payload });
+          hooks.onSessionRevoked?.(user.id, 'LOGOUT');
+          return send(res, 200, { task: db.findDataTask(user.id, task.taskId) });
+        } catch (e) {
+          db.finishDataTask({ taskId: task.taskId, status: 'FAILED', error: e instanceof Error ? e.message : String(e) });
+          return send(res, 500, { error: 'delete failed', taskId: task.taskId });
+        }
+      }
+
+      // 举报与屏蔽：只登记，不自动处罚（规格 7.2）。
+      if (isApi && seg[1] === 'report' && seg.length === 2 && req.method === 'POST') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const body = await readJson(req);
+        const targetKind = String(body.targetKind ?? '').trim();
+        const targetId = String(body.targetId ?? '').trim();
+        const reason = String(body.reason ?? '').trim();
+        if (!['USER', 'GAME', 'SHARE'].includes(targetKind) || !targetId || !reason) {
+          return send(res, 400, { error: 'targetKind(USER|GAME|SHARE)/targetId/reason 必填' });
+        }
+        if (targetKind === 'USER' && targetId === user.id) return send(res, 400, { error: '不能举报自己' });
+        const created = db.createReport({ reporterId: user.id, targetKind, targetId, reason, detail: String(body.detail ?? '').slice(0, 2000) });
+        db.appendAudit({ actorId: user.id, actorRole: db.getUserRole(user.id), action: 'REPORT_CREATE', targetKind, targetId, detail: { reportId: created.reportId, reason } });
+        return send(res, 201, {
+          report: { reportId: created.reportId, status: 'PENDING', createdAt: created.createdAt },
+          note: '举报进入人工复核队列；本产品不会依据举报自动封禁或改分。',
+        });
+      }
+      if (isApi && seg[1] === 'blocks' && seg.length === 2 && req.method === 'GET') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        return send(res, 200, { blocks: db.listBlocks(user.id) });
+      }
+      if (isApi && seg[1] === 'block' && seg.length === 2 && req.method === 'POST') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const body = await readJson(req);
+        const target = String(body.userId ?? '').trim();
+        if (!target) return send(res, 400, { error: 'userId 必填' });
+        if (target === user.id) return send(res, 400, { error: '不能屏蔽自己' });
+        db.blockUser(user.id, target);
+        db.appendAudit({ actorId: user.id, actorRole: db.getUserRole(user.id), action: 'BLOCK_ADD', targetKind: 'USER', targetId: target, detail: {} });
+        return send(res, 200, { blocks: db.listBlocks(user.id) });
+      }
+      if (isApi && seg[1] === 'block' && seg.length === 3 && req.method === 'DELETE') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const removed = db.unblockUser(user.id, seg[2]);
+        if (!removed) return send(res, 404, { error: 'not found' });
+        db.appendAudit({ actorId: user.id, actorRole: db.getUserRole(user.id), action: 'BLOCK_REMOVE', targetKind: 'USER', targetId: seg[2], detail: {} });
+        return send(res, 200, { blocks: db.listBlocks(user.id) });
+      }
+
+      // 管理端：事件聚合 / 数据集 / 举报队列 / 审计。全部要求 ADMIN 角色且写审计。
+      if (isApi && seg[1] === 'admin' && seg[2] === 'metrics' && seg[3] === 'events' && req.method === 'GET') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        const name = url.searchParams.get('name') ?? 'match_finish';
+        const days = Number(url.searchParams.get('days') ?? 1);
+        const sinceMs = Date.now() - (Number.isFinite(days) ? Math.max(1, days) : 1) * 24 * 3600 * 1000;
+        return send(res, 200, {
+          name, sinceMs,
+          humanOnly: db.countProductEvents({ name, sinceMs }),
+          includingBotsAndSynthetic: db.countProductEvents({ name, sinceMs, excludeBot: false, excludeSynthetic: false }),
+          rule: '默认口径排除 bot 与合成/测试来源（规格 7.1）',
+        });
+      }
+      if (isApi && seg[1] === 'admin' && seg[2] === 'dataset' && seg[3] === 'build' && req.method === 'POST') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        const candidates = db.listDatasetCandidates();
+        const consentOf = (userId: string) => decideTrainingConsent(db.getConsent(userId, 'TRAINING'));
+        const manifest = buildDataset(candidates, consentOf, DEFAULT_DATASET_POLICY);
+        db.appendAudit({
+          actorId: gate.user.id, actorRole: 'ADMIN', action: 'DATASET_BUILD', targetKind: 'DATASET', targetId: manifest.datasetHash,
+          detail: { entries: manifest.entries.length, excluded: manifest.excluded.length, bySplit: manifest.bySplit },
+        });
+        return send(res, 200, {
+          manifest: {
+            ...manifest,
+            entries: manifest.entries.map((e) => ({ ...e })),
+          },
+          candidates: candidates.length,
+          rule: '默认不纳入未授权的人类棋谱；test 分片不得用于选权重；空间 8 对称去重且不置换红绿白。',
+        });
+      }
+      if (isApi && seg[1] === 'admin' && seg[2] === 'dataset' && seg[3] === 'runs' && req.method === 'POST') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        const body = await readJson(req);
+        const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
+        const rec = db.registerDatasetRun({
+          runId: String(body.runId ?? randomUUID()),
+          seedFrom: num(body.seedFrom), seedTo: num(body.seedTo),
+          sourceSha: String(body.sourceSha ?? ''), engineVersion: String(body.engineVersion ?? ''),
+          budget: String(body.budget ?? ''), trajectoryHash: String(body.trajectoryHash ?? ''),
+          configHash: String(body.configHash ?? ''), uniqueSampleCount: num(body.uniqueSampleCount),
+        });
+        db.appendAudit({ actorId: gate.user.id, actorRole: 'ADMIN', action: 'DATASET_RUN_REGISTER', targetKind: 'DATASET_RUN', targetId: rec.runId, detail: rec });
+        return send(res, 201, rec);
+      }
+      if (isApi && seg[1] === 'admin' && seg[2] === 'dataset' && seg[3] === 'runs' && req.method === 'GET') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        return send(res, 200, { runs: db.listDatasetRuns(100) });
+      }
+      if (isApi && seg[1] === 'admin' && seg[2] === 'reports' && seg.length === 4 && req.method === 'POST') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        const body = await readJson(req);
+        const status = String(body.status ?? '').trim();
+        if (!['REVIEWED', 'DISMISSED', 'ACTIONED'].includes(status)) {
+          return send(res, 400, { error: 'status 必须是 REVIEWED|DISMISSED|ACTIONED' });
+        }
+        const okReviewed = db.reviewReport({
+          reportId: seg[3], reviewerId: gate.user.id,
+          status: status as 'REVIEWED' | 'DISMISSED' | 'ACTIONED',
+          note: String(body.note ?? '').slice(0, 1000),
+        });
+        if (!okReviewed) return send(res, 404, { error: 'not found' });
+        db.appendAudit({ actorId: gate.user.id, actorRole: 'ADMIN', action: 'REPORT_REVIEW', targetKind: 'REPORT', targetId: seg[3], detail: { status } });
+        return send(res, 200, { reviewed: true, status });
+      }
+      if (isApi && seg[1] === 'admin' && seg[2] === 'reports' && seg.length === 3 && req.method === 'GET') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        const status = url.searchParams.get('status');
+        return send(res, 200, { reports: db.listReports(status) });
+      }
+      if (isApi && seg[1] === 'admin' && seg[2] === 'audit' && seg.length === 3 && req.method === 'GET') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        return send(res, 200, { audit: db.listAudit(100) });
       }
 
       // R08：单题视图（错题重练用）。只允许已发布的题，未发布/不存在一律 404。

@@ -6,6 +6,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import type { User } from './models.js';
 import { settlementDigest, type SettlementPlan, type ParticipantOutcome } from '../../shared/src/product/resultModel.js';
+import { type ConsentKind, type ConsentRecord } from '../../shared/src/product/consent.js';
+import { type DatasetCandidate } from '../../shared/src/product/dataset.js';
+import { RULESET_VERSION } from '../../shared/src/product/protocol.js';
 import { commandPayloadDigest } from '../../shared/src/product/protocol.js';
 
 export interface RankingRow {
@@ -217,6 +220,46 @@ export interface Db {
    * 否则“进行中的对局不能分享/不能分析”会退化成 404，把“不是你的”和“还没结束”混为一谈。
    */
   seatInLiveGame(userId: string, gameId: string): string | null;
+  /* ---- P3A：许可 / 事件 / 数据集运行 / 数据任务 / 举报屏蔽审计 ---- */
+  getUserRole(userId: string): 'USER' | 'ADMIN';
+  setUserRole(userId: string, role: 'USER' | 'ADMIN'): void;
+  /** 许可记录（不存在返回 null —— 调用方必须把“没有记录”当作不允许）。 */
+  getConsent(userId: string, kind: ConsentKind): ConsentRecord | null;
+  grantConsent(input: { userId: string; kind: ConsentKind; version: string }): ConsentRecord;
+  revokeConsent(input: { userId: string; kind: ConsentKind; version: string }): ConsentRecord;
+  /** 事件写入：eventId 主键天然去重；返回是否真的新写入。 */
+  insertProductEvent(input: {
+    eventId: string; name: string; userId?: string | null; gameId?: string | null;
+    source: string; isBot?: boolean; isSample?: boolean; payload?: unknown;
+  }): { inserted: boolean; duplicate: boolean };
+  /** 事件聚合：默认排除 bot 与合成/测试来源（规格 7.1）。 */
+  countProductEvents(input: {
+    name: string; sinceMs?: number; excludeBot?: boolean; excludeSynthetic?: boolean;
+  }): { total: number; distinctUsers: number; samples: number };
+  /** D04：相同 seed 区间 + 配置 + 轨迹哈希的阶段重跑不算新增独立样本。 */
+  registerDatasetRun(input: {
+    runId: string; seedFrom: number; seedTo: number; sourceSha: string; engineVersion: string;
+    budget: string; trajectoryHash: string; configHash: string; uniqueSampleCount: number;
+  }): { runId: string; isNewIndependentSample: boolean; duplicateOf: string | null };
+  listDatasetRuns(limit?: number): Array<{ runId: string; seedFrom: number; seedTo: number; sourceSha: string; engineVersion: string; budget: string; trajectoryHash: string; configHash: string; uniqueSampleCount: number; createdAt: number }>;
+  createDataTask(input: { userId: string; kind: 'EXPORT' | 'DELETE' }): { taskId: string; status: string; requestedAt: number };
+  finishDataTask(input: { taskId: string; status: 'RUNNING' | 'DONE' | 'FAILED'; result?: unknown; error?: string }): void;
+  findDataTask(userId: string, taskId: string): { taskId: string; kind: string; status: string; requestedAt: number; finishedAt: number | null; result: unknown; error: string | null } | null;
+  listDataTasks(userId: string): Array<{ taskId: string; kind: string; status: string; requestedAt: number; finishedAt: number | null }>;
+  createReport(input: { reporterId: string; targetKind: string; targetId: string; reason: string; detail: string }): { reportId: string; createdAt: number };
+  listReports(status: string | null, limit?: number): Array<{ reportId: string; reporterId: string; targetKind: string; targetId: string; reason: string; detail: string; status: string; createdAt: number; reviewedAt: number | null; reviewNote: string | null }>;
+  reviewReport(input: { reportId: string; reviewerId: string; status: 'REVIEWED' | 'DISMISSED' | 'ACTIONED'; note: string }): boolean;
+  blockUser(userId: string, blockedId: string): void;
+  unblockUser(userId: string, blockedId: string): boolean;
+  listBlocks(userId: string): string[];
+  appendAudit(input: { actorId: string; actorRole: string; action: string; targetKind?: string | null; targetId?: string | null; detail?: unknown }): void;
+  listAudit(limit?: number): Array<{ id: string; actorId: string; actorRole: string; action: string; targetKind: string | null; targetId: string | null; detail: unknown; createdAt: number }>;
+  /** 数据集候选：真实已结算对局的完整轨迹 + 参与者身份（仅供许可判定，不导出）。 */
+  listDatasetCandidates(): DatasetCandidate[];
+  /** 导出本人数据（不含其它用户的身份信息）。 */
+  exportUserData(userId: string): Record<string, unknown>;
+  /** 删除账号：去标识本人记录，**不**物理删除他人合法记录。 */
+  anonymizeUser(userId: string): { deidentifiedParticipants: number; revokedShares: number; deletedSessions: number };
   /** R08：按 attemptId 查一次尝试（幂等重发时回放既有结论）。 */
   findPuzzleAttempt(userId: string, attemptId: string): { puzzleId: string; row: number; col: number; verdict: string; createdAt: number } | null;
   /** R08：记录一次尝试并更新进度（同一事务；(user_id, attempt_id) 唯一，重发不重复计数）。 */
@@ -461,6 +504,105 @@ export function openDb(path: string): Db {
     );
 
     CREATE INDEX IF NOT EXISTS idx_puzzle_attempts_user ON puzzle_attempts (user_id, puzzle_id);
+
+    /* ---- P3A 数据与隐私（规格 6.1 / 7.1 / 7.2，表名对齐 §8 建议） ---- */
+
+    -- 训练许可：默认无记录 = 不纳入；版本不符 = 不纳入；撤回写 revoked_at 并保留版本以便审计。
+    CREATE TABLE IF NOT EXISTS user_consents (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      kind TEXT NOT NULL,
+      version TEXT NOT NULL,
+      granted_at INTEGER NOT NULL,
+      revoked_at INTEGER,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, kind)
+    );
+
+    -- 第一方产品事件：eventId 主键 = 天然去重；带 sample/test/source 标签，聚合时排除 bot 与合成。
+    CREATE TABLE IF NOT EXISTS product_events (
+      event_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      user_id TEXT,
+      game_id TEXT,
+      source TEXT NOT NULL,
+      is_bot INTEGER NOT NULL DEFAULT 0,
+      is_sample INTEGER NOT NULL DEFAULT 0,
+      payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_product_events_name_time ON product_events (name, created_at);
+    CREATE INDEX IF NOT EXISTS idx_product_events_user ON product_events (user_id, created_at);
+
+    -- 数据集运行登记（规格 6.3 / D04）：相同 seed 区间 + 配置 + 轨迹哈希的阶段重跑不算新增独立样本。
+    CREATE TABLE IF NOT EXISTS dataset_runs (
+      run_id TEXT PRIMARY KEY,
+      seed_from INTEGER NOT NULL,
+      seed_to INTEGER NOT NULL,
+      source_sha TEXT NOT NULL,
+      engine_version TEXT NOT NULL,
+      budget TEXT NOT NULL,
+      trajectory_hash TEXT NOT NULL,
+      config_hash TEXT NOT NULL,
+      seed_key TEXT NOT NULL,
+      unique_sample_count INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_dataset_runs_identity ON dataset_runs (seed_key, config_hash, trajectory_hash);
+
+    -- 数据导出/删除任务（异步登记 + 结果落库）。
+    CREATE TABLE IF NOT EXISTS data_tasks (
+      task_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      kind TEXT NOT NULL CHECK (kind IN ('EXPORT','DELETE')),
+      status TEXT NOT NULL CHECK (status IN ('PENDING','RUNNING','DONE','FAILED')),
+      requested_at INTEGER NOT NULL,
+      finished_at INTEGER,
+      result_json TEXT,
+      error TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_data_tasks_user ON data_tasks (user_id, requested_at);
+
+    -- 举报：先人工复核（PENDING），不做任何自动封禁。
+    CREATE TABLE IF NOT EXISTS reports (
+      report_id TEXT PRIMARY KEY,
+      reporter_id TEXT NOT NULL REFERENCES users(id),
+      target_kind TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      detail TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'PENDING',
+      created_at INTEGER NOT NULL,
+      reviewed_at INTEGER,
+      reviewer_id TEXT,
+      review_note TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_reports_status ON reports (status, created_at);
+
+    -- 屏蔽：只有用户主动屏蔽，没有系统自动拉黑。
+    CREATE TABLE IF NOT EXISTS blocks (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      blocked_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, blocked_id)
+    );
+
+    -- 管理员审计：谁在什么时候对什么做了什么。
+    CREATE TABLE IF NOT EXISTS admin_audit (
+      id TEXT PRIMARY KEY,
+      actor_id TEXT NOT NULL,
+      actor_role TEXT NOT NULL,
+      action TEXT NOT NULL,
+      target_kind TEXT,
+      target_id TEXT,
+      detail_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_time ON admin_audit (created_at);
     CREATE INDEX IF NOT EXISTS idx_puzzle_progress_status ON puzzle_progress (user_id, status);
 
     -- 进行中对局的座位归属（终局即删除）。没有它，API 就无法区分
@@ -482,6 +624,9 @@ export function openDb(path: string): Db {
   ensureColumn('matches', 'loser_ids', "loser_ids TEXT NOT NULL DEFAULT '[]'");
   // P1：账号来源标记。老库补列时默认 HUMAN —— 既有真实用户不会被误当成合成账号。
   ensureColumn('users', 'source', "source TEXT NOT NULL DEFAULT 'HUMAN'");
+  // P3A：角色由受控 CLI 授予（不硬编码邮箱）；注销只做去标识，不物理删除他人相关记录。
+  ensureColumn('users', 'role', "role TEXT NOT NULL DEFAULT 'USER'");
+  ensureColumn('users', 'deleted_at', 'deleted_at INTEGER');
 
   const mapUser = (r: Record<string, unknown> | undefined): User | null => {
     if (!r) return null;
@@ -1151,6 +1296,302 @@ export function openDb(path: string): Db {
     },
     countShareView(token) {
       raw.prepare('UPDATE share_links SET views = views + 1 WHERE token = ?').run(token);
+    },
+    /* ---- P3A：许可 / 事件 / 数据集运行 / 数据任务 / 举报屏蔽审计 ---- */
+    getUserRole(userId) {
+      const r = raw.prepare("SELECT COALESCE(role, 'USER') AS role FROM users WHERE id = ?").get(userId) as { role?: string } | undefined;
+      return r?.role === 'ADMIN' ? 'ADMIN' : 'USER';
+    },
+    setUserRole(userId, role) {
+      raw.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+    },
+    getConsent(userId, kind) {
+      const r = raw
+        .prepare('SELECT user_id, kind, version, granted_at, revoked_at FROM user_consents WHERE user_id = ? AND kind = ?')
+        .get(userId, kind) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      return {
+        userId: String(r.user_id),
+        kind: String(r.kind) as ConsentKind,
+        version: String(r.version),
+        grantedAt: Number(r.granted_at),
+        revokedAt: r.revoked_at === null || r.revoked_at === undefined ? null : Number(r.revoked_at),
+      };
+    },
+    grantConsent(input) {
+      const now = Date.now();
+      raw
+        .prepare(
+          `INSERT INTO user_consents (user_id,kind,version,granted_at,revoked_at,updated_at) VALUES (?,?,?,?,NULL,?)
+           ON CONFLICT (user_id, kind) DO UPDATE SET
+             version = excluded.version, granted_at = excluded.granted_at,
+             revoked_at = NULL, updated_at = excluded.updated_at`,
+        )
+        .run(input.userId, input.kind, input.version, now, now);
+      return db.getConsent(input.userId, input.kind)!;
+    },
+    revokeConsent(input) {
+      const now = Date.now();
+      const existing = db.getConsent(input.userId, input.kind);
+      if (!existing) {
+        // 撤回一条本来就不存在的许可：同样落一行（可追踪），而不是静默什么都不做。
+        raw
+          .prepare('INSERT INTO user_consents (user_id,kind,version,granted_at,revoked_at,updated_at) VALUES (?,?,?,?,?,?)')
+          .run(input.userId, input.kind, input.version, now, now, now);
+      } else {
+        raw
+          .prepare('UPDATE user_consents SET revoked_at = ?, updated_at = ? WHERE user_id = ? AND kind = ?')
+          .run(now, now, input.userId, input.kind);
+      }
+      return db.getConsent(input.userId, input.kind)!;
+    },
+    insertProductEvent(input) {
+      const res = raw
+        .prepare(
+          'INSERT OR IGNORE INTO product_events (event_id,name,user_id,game_id,source,is_bot,is_sample,payload_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+        )
+        .run(
+          input.eventId, input.name, input.userId ?? null, input.gameId ?? null, input.source,
+          input.isBot ? 1 : 0, input.isSample ? 1 : 0, JSON.stringify(input.payload ?? {}), Date.now(),
+        );
+      const inserted = Number(res.changes ?? 0) > 0;
+      return { inserted, duplicate: !inserted };
+    },
+    countProductEvents(input) {
+      const clauses = ['name = ?', 'created_at >= ?'];
+      if (input.excludeBot !== false) clauses.push('is_bot = 0');
+      if (input.excludeSynthetic !== false) clauses.push("source NOT IN ('SYNTHETIC','TEST','BOT')");
+      const row = raw
+        .prepare(`SELECT COUNT(*) AS n, COUNT(DISTINCT user_id) AS users, COALESCE(SUM(is_sample),0) AS samples FROM product_events WHERE ${clauses.join(' AND ')}`)
+        .get(input.name, input.sinceMs ?? 0) as Record<string, unknown> | undefined;
+      return { total: Number(row?.n ?? 0), distinctUsers: Number(row?.users ?? 0), samples: Number(row?.samples ?? 0) };
+    },
+    registerDatasetRun(input) {
+      const seedKey = input.seedFrom + '-' + input.seedTo;
+      const existing = raw
+        .prepare('SELECT run_id FROM dataset_runs WHERE seed_key = ? AND config_hash = ? AND trajectory_hash = ? LIMIT 1')
+        .get(seedKey, input.configHash, input.trajectoryHash) as { run_id?: string } | undefined;
+      if (existing) {
+        // D04：相同 seed/配置/轨迹的阶段重跑 —— 记账，但不当作新增独立样本。
+        return { runId: input.runId, isNewIndependentSample: false, duplicateOf: String(existing.run_id) };
+      }
+      raw
+        .prepare(
+          `INSERT INTO dataset_runs (run_id,seed_from,seed_to,source_sha,engine_version,budget,trajectory_hash,config_hash,seed_key,unique_sample_count,created_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        )
+        .run(
+          input.runId, input.seedFrom, input.seedTo, input.sourceSha, input.engineVersion, input.budget,
+          input.trajectoryHash, input.configHash, seedKey, input.uniqueSampleCount, Date.now(),
+        );
+      return { runId: input.runId, isNewIndependentSample: true, duplicateOf: null };
+    },
+    listDatasetRuns(limit = 50) {
+      const rows = raw
+        .prepare('SELECT * FROM dataset_runs ORDER BY created_at DESC LIMIT ?')
+        .all(limit) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        runId: String(r.run_id), seedFrom: Number(r.seed_from), seedTo: Number(r.seed_to),
+        sourceSha: String(r.source_sha), engineVersion: String(r.engine_version), budget: String(r.budget),
+        trajectoryHash: String(r.trajectory_hash), configHash: String(r.config_hash),
+        uniqueSampleCount: Number(r.unique_sample_count), createdAt: Number(r.created_at),
+      }));
+    },
+    createDataTask(input) {
+      const taskId = randomUUID();
+      const requestedAt = Date.now();
+      raw.prepare("INSERT INTO data_tasks (task_id,user_id,kind,status,requested_at) VALUES (?,?,?,'PENDING',?)").run(taskId, input.userId, input.kind, requestedAt);
+      return { taskId, status: 'PENDING', requestedAt };
+    },
+    finishDataTask(input) {
+      raw
+        .prepare('UPDATE data_tasks SET status = ?, finished_at = ?, result_json = ?, error = ? WHERE task_id = ?')
+        .run(input.status, Date.now(), input.result === undefined ? null : JSON.stringify(input.result), input.error ?? null, input.taskId);
+    },
+    findDataTask(userId, taskId) {
+      const r = raw.prepare('SELECT * FROM data_tasks WHERE user_id = ? AND task_id = ?').get(userId, taskId) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      return {
+        taskId: String(r.task_id), kind: String(r.kind), status: String(r.status),
+        requestedAt: Number(r.requested_at),
+        finishedAt: r.finished_at === null || r.finished_at === undefined ? null : Number(r.finished_at),
+        result: r.result_json === null || r.result_json === undefined ? null : JSON.parse(String(r.result_json)),
+        error: r.error === null || r.error === undefined ? null : String(r.error),
+      };
+    },
+    listDataTasks(userId) {
+      const rows = raw.prepare('SELECT task_id,kind,status,requested_at,finished_at FROM data_tasks WHERE user_id = ? ORDER BY requested_at DESC').all(userId) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        taskId: String(r.task_id), kind: String(r.kind), status: String(r.status),
+        requestedAt: Number(r.requested_at),
+        finishedAt: r.finished_at === null || r.finished_at === undefined ? null : Number(r.finished_at),
+      }));
+    },
+    createReport(input) {
+      const reportId = randomUUID();
+      const createdAt = Date.now();
+      raw
+        .prepare('INSERT INTO reports (report_id,reporter_id,target_kind,target_id,reason,detail,status,created_at) VALUES (?,?,?,?,?,?,?,?)')
+        .run(reportId, input.reporterId, input.targetKind, input.targetId, input.reason, input.detail, 'PENDING', createdAt);
+      return { reportId, createdAt };
+    },
+    listReports(status, limit = 100) {
+      const rows = (status
+        ? raw.prepare('SELECT * FROM reports WHERE status = ? ORDER BY created_at ASC LIMIT ?').all(status, limit)
+        : raw.prepare('SELECT * FROM reports ORDER BY created_at ASC LIMIT ?').all(limit)) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        reportId: String(r.report_id), reporterId: String(r.reporter_id),
+        targetKind: String(r.target_kind), targetId: String(r.target_id),
+        reason: String(r.reason), detail: String(r.detail), status: String(r.status),
+        createdAt: Number(r.created_at),
+        reviewedAt: r.reviewed_at === null || r.reviewed_at === undefined ? null : Number(r.reviewed_at),
+        reviewNote: r.review_note === null || r.review_note === undefined ? null : String(r.review_note),
+      }));
+    },
+    reviewReport(input) {
+      const res = raw
+        .prepare('UPDATE reports SET status = ?, reviewed_at = ?, reviewer_id = ?, review_note = ? WHERE report_id = ?')
+        .run(input.status, Date.now(), input.reviewerId, input.note, input.reportId);
+      return Number(res.changes ?? 0) > 0;
+    },
+    blockUser(userId, blockedId) {
+      raw.prepare('INSERT OR IGNORE INTO blocks (user_id,blocked_id,created_at) VALUES (?,?,?)').run(userId, blockedId, Date.now());
+    },
+    unblockUser(userId, blockedId) {
+      const res = raw.prepare('DELETE FROM blocks WHERE user_id = ? AND blocked_id = ?').run(userId, blockedId);
+      return Number(res.changes ?? 0) > 0;
+    },
+    listBlocks(userId) {
+      const rows = raw.prepare('SELECT blocked_id FROM blocks WHERE user_id = ? ORDER BY created_at DESC').all(userId) as Array<{ blocked_id: string }>;
+      return rows.map((r) => String(r.blocked_id));
+    },
+    appendAudit(input) {
+      raw
+        .prepare('INSERT INTO admin_audit (id,actor_id,actor_role,action,target_kind,target_id,detail_json,created_at) VALUES (?,?,?,?,?,?,?,?)')
+        .run(randomUUID(), input.actorId, input.actorRole, input.action, input.targetKind ?? null, input.targetId ?? null, JSON.stringify(input.detail ?? {}), Date.now());
+    },
+    listAudit(limit = 100) {
+      const rows = raw.prepare('SELECT * FROM admin_audit ORDER BY created_at DESC LIMIT ?').all(limit) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        id: String(r.id), actorId: String(r.actor_id), actorRole: String(r.actor_role), action: String(r.action),
+        targetKind: r.target_kind === null || r.target_kind === undefined ? null : String(r.target_kind),
+        targetId: r.target_id === null || r.target_id === undefined ? null : String(r.target_id),
+        detail: JSON.parse(String(r.detail_json ?? '{}')),
+        createdAt: Number(r.created_at),
+      }));
+    },
+    listDatasetCandidates() {
+      // 只取已结算对局；轨迹来自持久事件流；来源由参与者账号来源与 AI 座位共同决定。
+      const games = raw
+        .prepare('SELECT game_id, board_size, mode, end_reason, settled_at FROM match_results ORDER BY settled_at ASC')
+        .all() as Array<Record<string, unknown>>;
+      const out: DatasetCandidate[] = [];
+      for (const g of games) {
+        const gameId = String(g.game_id);
+        const parts = raw
+          .prepare(
+            `SELECT mp.user_id, mp.kind, COALESCE(u.source, 'HUMAN') AS source
+               FROM match_participants mp LEFT JOIN users u ON u.id = mp.user_id
+              WHERE mp.game_id = ? ORDER BY mp.seat`,
+          )
+          .all(gameId) as Array<Record<string, unknown>>;
+        const events = db.listGameEvents(gameId);
+        const moves = events
+          .filter((e) => e.type === 'move.applied')
+          .map((e) => {
+            const p = (e.payload ?? {}) as { seat?: string; row?: number; col?: number };
+            return { seat: String(p.seat ?? 'A') as 'A' | 'B' | 'C', row: Number(p.row), col: Number(p.col) };
+          })
+          .filter((m) => Number.isInteger(m.row) && Number.isInteger(m.col));
+        const anyAI = parts.some((p) => String(p.kind) !== 'human');
+        const anyNonHumanSource = parts.some((p) => String(p.source) !== 'HUMAN');
+        const endReason = String(g.end_reason);
+        out.push({
+          gameId,
+          rulesetVersion: RULESET_VERSION,
+          boardSize: (Number(g.board_size) === 17 ? 17 : 13) as 13 | 17,
+          mode: String(g.mode),
+          source: anyAI || anyNonHumanSource ? 'SYNTHETIC' : 'HUMAN',
+          moves,
+          terminal: endReason === 'NORMAL_WIN' ? 'win' : endReason === 'BOARD_DRAW' ? 'draw' : 'open',
+          participantUserIds: parts.map((p) => (p.user_id === null || p.user_id === undefined ? '' : String(p.user_id))).filter(Boolean),
+          createdAt: Number(g.settled_at),
+        });
+      }
+      return out;
+    },
+    exportUserData(userId) {
+      const user = db.findUserById(userId);
+      const ranking = raw.prepare('SELECT wins,games,score FROM ranking WHERE user_id = ?').get(userId) as Record<string, unknown> | undefined;
+      const shares = raw
+        .prepare('SELECT token,game_id,created_at,expires_at,revoked_at,views FROM share_links WHERE owner_id = ? ORDER BY created_at DESC')
+        .all(userId) as Array<Record<string, unknown>>;
+      const attempts = raw
+        .prepare('SELECT puzzle_id,attempt_id,row,col,verdict,created_at FROM puzzle_attempts WHERE user_id = ? ORDER BY created_at ASC')
+        .all(userId) as Array<Record<string, unknown>>;
+      const consents = raw.prepare('SELECT kind,version,granted_at,revoked_at FROM user_consents WHERE user_id = ?').all(userId) as Array<Record<string, unknown>>;
+      const blocks = db.listBlocks(userId);
+      return {
+        // 明确不含：密码哈希、盐、会话令牌、他人身份信息。
+        exportedAt: new Date().toISOString(),
+        profile: user ? {
+          userId: user.id, username: user.username, email: user.email, rating: user.rating,
+          createdAt: user.createdAt, tutorialCompleted: user.tutorialCompleted,
+          role: db.getUserRole(userId), source: db.getUserSource(userId),
+        } : null,
+        ranking: ranking ? { wins: Number(ranking.wins), games: Number(ranking.games), score: Number(ranking.score) } : null,
+        matches: db.historyFor(userId, 200, 0).map((h) => ({
+          gameId: h.gameId, seat: h.seat, outcome: h.outcome, ratingDelta: h.ratingDelta,
+          mode: h.mode, boardSize: h.boardSize, endReason: h.endReason, settledAt: h.settledAt, moveCount: h.moveCount,
+        })),
+        puzzleAttempts: attempts.map((a) => ({
+          puzzleId: String(a.puzzle_id), attemptId: String(a.attempt_id), row: Number(a.row), col: Number(a.col),
+          verdict: String(a.verdict), createdAt: Number(a.created_at),
+        })),
+        puzzleProgress: db.puzzleProgress(userId),
+        consents: consents.map((c) => ({
+          kind: String(c.kind), version: String(c.version), grantedAt: Number(c.granted_at),
+          revokedAt: c.revoked_at === null || c.revoked_at === undefined ? null : Number(c.revoked_at),
+        })),
+        shares: shares.map((s) => ({
+          token: String(s.token), gameId: String(s.game_id), createdAt: Number(s.created_at),
+          expiresAt: Number(s.expires_at),
+          revokedAt: s.revoked_at === null || s.revoked_at === undefined ? null : Number(s.revoked_at),
+          views: Number(s.views),
+        })),
+        blockedUserIds: blocks,
+        note: '导出物不包含他人身份信息、邮箱以外的凭据、会话令牌或密码材料。',
+      };
+    },
+    anonymizeUser(userId) {
+      const now = Date.now();
+      raw.exec('BEGIN IMMEDIATE');
+      try {
+        // 多人记录去标识：把自己的 user_id 从名次行里摘掉，**不删除**这一局（他人的合法记录保留）。
+        const parts = raw.prepare('UPDATE match_participants SET user_id = NULL WHERE user_id = ?').run(userId);
+        const shares = raw.prepare('UPDATE share_links SET revoked_at = ? WHERE owner_id = ? AND revoked_at IS NULL').run(now, userId);
+        const sessions = raw.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+        raw.prepare('DELETE FROM user_consents WHERE user_id = ?').run(userId);
+        raw.prepare('DELETE FROM puzzle_attempts WHERE user_id = ?').run(userId);
+        raw.prepare('DELETE FROM puzzle_progress WHERE user_id = ?').run(userId);
+        raw.prepare('DELETE FROM ranking WHERE user_id = ?').run(userId);
+        raw.prepare('DELETE FROM friends WHERE user_id = ? OR friend_id = ?').run(userId, userId);
+        raw.prepare('DELETE FROM invitations WHERE sender = ? OR receiver = ?').run(userId, userId);
+        raw.prepare('DELETE FROM blocks WHERE user_id = ? OR blocked_id = ?').run(userId, userId);
+        // 账号本体只做去标识（保留 id 让历史证据的引用仍然成立），不改动他人的任何行。
+        raw
+          .prepare("UPDATE users SET email = ?, username = ?, avatar = '', password_hash = '', salt = '', source = 'TEST', deleted_at = ?, online_status = 'offline', tutorial_completed = 0 WHERE id = ?")
+          .run('deleted+' + userId + '@deleted.invalid', ('已注销用户' + userId.slice(0, 8)).slice(0, 24), now, userId);
+        raw.exec('COMMIT');
+        return {
+          deidentifiedParticipants: Number(parts.changes ?? 0),
+          revokedShares: Number(shares.changes ?? 0),
+          deletedSessions: Number(sessions.changes ?? 0),
+        };
+      } catch (err) {
+        try { raw.exec('ROLLBACK'); } catch { /* 事务已不在：原始错误更重要 */ }
+        throw err;
+      }
     },
     close() {
       raw.close();
