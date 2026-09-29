@@ -6,6 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import type { User } from './models.js';
 import { settlementDigest, type SettlementPlan, type ParticipantOutcome } from '../../shared/src/product/resultModel.js';
+import { commandPayloadDigest } from '../../shared/src/product/protocol.js';
 
 export interface RankingRow {
   id: string;
@@ -64,6 +65,64 @@ export interface SettledMatch {
   participants: SettledParticipant[];
 }
 
+/** 一条已生效的命令（幂等表）。同一 (gameId, commandId) 只允许一行。 */
+export interface GameCommandRow {
+  gameId: string;
+  commandId: string;
+  seat: string;
+  payloadDigest: string;
+  revisionBefore: number;
+  revisionAfter: number;
+  seq: number;
+  ackJson: string;
+  createdAt: number;
+}
+
+/** 追加一条已生效命令的结果。持久化与事件/快照在同一事务内完成。 */
+export interface AppendCommandInput {
+  gameId: string;
+  commandId: string;
+  seat: string;
+  /** 用于幂等冲突判定的应用层 payload（不含 commandId/expectedRevision 本身） */
+  payload: unknown;
+  revisionBefore: number;
+  revisionAfter: number;
+  seq: number;
+  /** 写入 game_events 的事件类型，例如 'move.applied' */
+  eventType: string;
+  /** 写入 game_events 的事件体 */
+  eventPayload: unknown;
+  /** 写入 game_snapshots 的权威状态快照 */
+  snapshot: unknown;
+  /** 回给客户端的 ACK 体 */
+  ack: unknown;
+  createdAt: number;
+}
+
+export interface AppendCommandResult {
+  /** true = 本次真正写入；false = 命中已有命令 */
+  appended: boolean;
+  /** 命中已有命令且 payload 相同 → 幂等重放 */
+  duplicate: boolean;
+  /** 命中已有命令但 payload 不同 → 必须拒绝 */
+  conflict: boolean;
+  revision: number;
+  seq: number;
+  ack: unknown;
+  row: GameCommandRow | null;
+}
+
+/** 一局恢复所需的快照 + 元数据。 */
+export interface RecoverableGame {
+  gameId: string;
+  revision: number;
+  seq: number;
+  mode: string;
+  boardSize: number;
+  /** appendGameCommand 写入的原始快照（含 state + 座位归属 + revision/seq）。 */
+  snapshot: unknown;
+}
+
 export interface Db {
   raw: DatabaseSync;
   createUser(input: { email: string; username: string; passwordHash: string; salt: string }): User;
@@ -90,6 +149,17 @@ export interface Db {
   listMatchParticipants(gameId: string): SettledParticipant[];
   /** 某局积分账本行。 */
   listRatingLedger(gameId: string): RatingLedgerRow[];
+  /**
+   * 追加一条已生效命令：事件 + 快照 + 幂等记录在同一事务内写入（P0B）。
+   * 命中已有 (gameId, commandId) 时不写任何东西，直接返回既有结果。
+   */
+  appendGameCommand(input: AppendCommandInput): AppendCommandResult;
+  /** 按 commandId 查已生效命令（幂等查询）。 */
+  findGameCommand(gameId: string, commandId: string): GameCommandRow | null;
+  /** 某局事件流（按 seq 升序），用于审计与重放。 */
+  listGameEvents(gameId: string): Array<{ seq: number; revision: number; type: string; payload: unknown; createdAt: number }>;
+  /** 有快照、但尚无终局结果的未完成对局 —— 进程重启后的恢复候选。 */
+  loadRecoverableGames(): RecoverableGame[];
   saveGame(input: { id: string; boardSize: number; mode: string; winner: string | null; movesJson: string; createdAt: number }): void;
   saveMatch(input: {
     id: string;
@@ -222,6 +292,46 @@ export function openDb(path: string): Db {
 
     CREATE INDEX IF NOT EXISTS idx_match_participants_user ON match_participants (user_id);
     CREATE INDEX IF NOT EXISTS idx_rating_ledger_user ON rating_ledger (user_id, created_at);
+
+    /* ---- P0B 命令信封 / 持久事件 / 快照 ---- */
+
+    -- 已生效命令。PRIMARY KEY (game_id, command_id) 是“同一命令只生效一次”的数据库级保证：
+    -- 客户端在 ACK 丢失后重发，只会命中这一行，不会二次落子、不会重置落子时钟。
+    CREATE TABLE IF NOT EXISTS game_commands (
+      game_id TEXT NOT NULL,
+      command_id TEXT NOT NULL,
+      seat TEXT NOT NULL,
+      payload_digest TEXT NOT NULL,
+      revision_before INTEGER NOT NULL,
+      revision_after INTEGER NOT NULL,
+      seq INTEGER NOT NULL,
+      ack_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (game_id, command_id)
+    );
+
+    -- 持久事件流：每一步一次，seq 连续递增，是“状态从哪来”的可重放凭据。
+    CREATE TABLE IF NOT EXISTS game_events (
+      game_id TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      revision INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (game_id, seq)
+    );
+
+    -- 权威状态快照：进程被强杀后据此恢复，不必重放全部事件。
+    CREATE TABLE IF NOT EXISTS game_snapshots (
+      game_id TEXT NOT NULL,
+      revision INTEGER NOT NULL,
+      state_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (game_id, revision)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_game_events_game ON game_events (game_id, seq);
+    CREATE INDEX IF NOT EXISTS idx_game_snapshots_game ON game_snapshots (game_id, revision);
   `);
 
   // 轻量迁移：老库 matches 表补 Player Leave System 列（幂等）
@@ -484,6 +594,121 @@ export function openDb(path: string): Db {
           input.isRanked ? 1 : 0,
           input.createdAt,
         );
+    },
+    appendGameCommand(input) {
+      const digest = commandPayloadDigest(input.payload);
+      // 快路径：命中已有命令直接返回，不进事务、不写任何行。
+      const existing = db.findGameCommand(input.gameId, input.commandId);
+      if (existing) {
+        return {
+          appended: false,
+          duplicate: existing.payloadDigest === digest,
+          conflict: existing.payloadDigest !== digest,
+          revision: existing.revisionAfter,
+          seq: existing.seq,
+          ack: JSON.parse(existing.ackJson) as unknown,
+          row: existing,
+        };
+      }
+      raw.exec('BEGIN IMMEDIATE');
+      try {
+        raw
+          .prepare('INSERT INTO game_events (game_id,seq,revision,type,payload_json,created_at) VALUES (?,?,?,?,?,?)')
+          .run(input.gameId, input.seq, input.revisionAfter, input.eventType, JSON.stringify(input.eventPayload ?? null), input.createdAt);
+        raw
+          .prepare('INSERT OR REPLACE INTO game_snapshots (game_id,revision,state_json,created_at) VALUES (?,?,?,?)')
+          .run(input.gameId, input.revisionAfter, JSON.stringify(input.snapshot ?? null), input.createdAt);
+        // 幂等闸门：并发/重复提交在这里被 PRIMARY KEY 拒绝。
+        raw
+          .prepare(
+            'INSERT INTO game_commands (game_id,command_id,seat,payload_digest,revision_before,revision_after,seq,ack_json,created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+          )
+          .run(
+            input.gameId, input.commandId, input.seat, digest,
+            input.revisionBefore, input.revisionAfter, input.seq,
+            JSON.stringify(input.ack ?? null), input.createdAt,
+          );
+        raw.exec('COMMIT');
+        return {
+          appended: true, duplicate: false, conflict: false,
+          revision: input.revisionAfter, seq: input.seq, ack: input.ack ?? null, row: null,
+        };
+      } catch (err) {
+        try {
+          raw.exec('ROLLBACK');
+        } catch {
+          /* 事务已不在：原始错误更重要 */
+        }
+        // 并发下另一个写入者赢了 PK —— 回滚后按“已生效命令”返回既有结果。
+        const raced = db.findGameCommand(input.gameId, input.commandId);
+        if (raced) {
+          return {
+            appended: false,
+            duplicate: raced.payloadDigest === digest,
+            conflict: raced.payloadDigest !== digest,
+            revision: raced.revisionAfter,
+            seq: raced.seq,
+            ack: JSON.parse(raced.ackJson) as unknown,
+            row: raced,
+          };
+        }
+        throw err;
+      }
+    },
+    findGameCommand(gameId, commandId) {
+      const r = raw
+        .prepare('SELECT * FROM game_commands WHERE game_id = ? AND command_id = ?')
+        .get(gameId, commandId) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      return {
+        gameId: String(r.game_id),
+        commandId: String(r.command_id),
+        seat: String(r.seat),
+        payloadDigest: String(r.payload_digest),
+        revisionBefore: Number(r.revision_before),
+        revisionAfter: Number(r.revision_after),
+        seq: Number(r.seq),
+        ackJson: String(r.ack_json),
+        createdAt: Number(r.created_at),
+      };
+    },
+    listGameEvents(gameId) {
+      const rows = raw
+        .prepare('SELECT seq,revision,type,payload_json,created_at FROM game_events WHERE game_id = ? ORDER BY seq ASC')
+        .all(gameId) as Array<Record<string, unknown>>;
+      return rows.map((x) => ({
+        seq: Number(x.seq),
+        revision: Number(x.revision),
+        type: String(x.type),
+        payload: JSON.parse(String(x.payload_json)) as unknown,
+        createdAt: Number(x.created_at),
+      }));
+    },
+    loadRecoverableGames() {
+      // 注意：不能 JOIN games —— games 行只在**终局结算**时写入，
+      // 进行中的对局在 games 表里还不存在。mode/boardSize 一律从快照本身读取。
+      const rows = raw
+        .prepare(
+          `SELECT s.game_id, s.revision, s.state_json
+             FROM game_snapshots s
+             JOIN (SELECT game_id, MAX(revision) AS r FROM game_snapshots GROUP BY game_id) m
+               ON m.game_id = s.game_id AND m.r = s.revision
+             LEFT JOIN match_results mr ON mr.game_id = s.game_id
+            WHERE mr.game_id IS NULL
+            ORDER BY s.created_at ASC`,
+        )
+        .all() as Array<Record<string, unknown>>;
+      return rows.map((x) => {
+        const snapshot = JSON.parse(String(x.state_json)) as { mode?: string; state?: { boardSize?: number } } | null;
+        return {
+          gameId: String(x.game_id),
+          revision: Number(x.revision),
+          seq: Number((raw.prepare('SELECT COALESCE(MAX(seq),0) AS s FROM game_events WHERE game_id = ?').get(String(x.game_id)) as any)?.s ?? 0),
+          mode: String(snapshot?.mode ?? 'online'),
+          boardSize: Number(snapshot?.state?.boardSize ?? 0),
+          snapshot,
+        };
+      });
     },
     createInvitation(senderId, receiverId) {
       const id = randomUUID();

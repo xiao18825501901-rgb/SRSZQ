@@ -50,12 +50,11 @@ const SUITES = {
   },
   recovery: {
     title: 'P0B 命令幂等 / revision / 持久事件 / ACK / 快照 / 60 秒恢复',
-    entry: null,
-    runner: null,
-    implemented: false,
+    entry: 'backend/tests/commands.protocol.ts',
+    runner: 'tsx',
+    implemented: true,
     covers: ['G10', 'G11', 'G12', 'G13', 'G14', 'G15', 'G16', 'O06'],
     phase: 'P0B',
-    blocker: '尚未实现：等待 B1 批次编写',
   },
   security: {
     title: 'P0C 有界 AI Worker / 过期任务 / WS ticket / Origin / 限流 / 会话撤销',
@@ -190,7 +189,7 @@ async function main() {
     }
 
     let suiteOk = true;
-    if (key === 'results') {
+    if (key === 'results' || key === 'recovery') {
       const entryPath = join(ROOT, suite.entry);
       if (!existsSync(entryPath)) {
         record.status = 'FAIL';

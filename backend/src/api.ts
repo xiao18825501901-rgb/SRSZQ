@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Db } from './db.js';
 import { avatarFor, createSessionToken, hashPassword, makeSalt, sessionExpiry, validateEmail, validatePassword, validateUsername, verifyPassword } from './auth.js';
 import type { PublicUser, User } from './models.js';
-import { featureFlagEvidence, parseFeatureFlags, SCORE_POLICY_ID } from '../../shared/src/index.js';
+import { featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID } from '../../shared/src/index.js';
 
 export interface ApiContext {
   db: Db;
@@ -154,6 +154,10 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
             }
           }
           return send(res, 200, {});
+        }
+        case 'GET /api/version': {
+          // O06：让第三方可以直接核查前后端规则/协议版本，而不是靠声明。
+          return send(res, 200, { protocol: { ...PROTOCOL_INFO }, serverTime: Date.now() });
         }
         case 'GET /api/config/features': {
           // 只读、非机密：暴露开关的**实际解析值**与原始环境变量字符串，

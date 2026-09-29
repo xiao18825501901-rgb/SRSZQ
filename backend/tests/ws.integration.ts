@@ -17,6 +17,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -25,6 +26,7 @@ import { openDb, type Db } from '../src/db.js';
 import { createApi } from '../src/api.js';
 import { GameServer } from '../src/ws/gameServer.js';
 import { getLegalMoves, currentPlayerOf } from '../../shared/src/game/legalMoves.js';
+import { PROTOCOL_VERSION, RULESET_VERSION } from '../../shared/src/product/protocol.js';
 
 let db: Db;
 let apiBase = '';
@@ -57,16 +59,25 @@ interface TestClient {
   msgs: Array<{ type: string; [k: string]: any }>;
 }
 
+/**
+ * P0B：每个连接最近一次看到的服务器 revision。
+ * game.start / game.state / ack 都携带 revision，落子命令必须带着它提交，
+ * 否则服务器会按 STALE_REVISION 拒绝（这正是我们要测的行为）。
+ */
+const clientRevisions = new WeakMap<TestClient, number>();
+
 function connect(token: string): Promise<TestClient> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`${wsBase}?token=${token}`);
+    const ws = new WebSocket(`${wsBase}?token=${token}&protocol=${PROTOCOL_VERSION}&ruleset=${RULESET_VERSION}`);
     const msgs: TestClient['msgs'] = [];
+    const client: TestClient = { ws, msgs };
     ws.on('message', (raw) => {
       const m = JSON.parse(String(raw));
+      if (typeof m.revision === 'number') clientRevisions.set(client, m.revision);
       msgs.push(m);
       if (process.env.SRSZQ_WS_DEBUG) console.log(`  [cli:${token.slice(0, 4)}] << ${m.type}`);
     });
-    ws.on('open', () => resolve({ ws, msgs }));
+    ws.on('open', () => resolve(client));
     ws.on('error', reject);
   });
 }
@@ -188,7 +199,8 @@ function maybeMove(c: TestClient, state: any, seat: string): void {
   const legal = getLegalMoves(state);
   if (legal.length === 0) return;
   const m = legal[Math.floor(Math.random() * Math.min(8, legal.length))];
-  send(c, { type: 'move', row: m.row, col: m.col });
+  // P0B 命令信封：每次落子一个新 commandId + 当前看到的 revision
+  send(c, { type: 'move', commandId: randomUUID(), expectedRevision: clientRevisions.get(c) ?? 0, row: m.row, col: m.col });
 }
 
 /**
@@ -607,7 +619,7 @@ async function main(): Promise<void> {
       // 行动顺序恒为 A→B→C：先由座位 A 走一手（无论 A 是谁）
       const seatA = seatOf.get('A')!;
       const m0 = getLegalMoves(state)[5];
-      send(seatA, { type: 'move', row: m0.row, col: m0.col });
+      send(seatA, { type: 'move', commandId: randomUUID(), expectedRevision: clientRevisions.get(seatA) ?? 0, row: m0.row, col: m0.col });
       await Promise.all(others.map((c) => waitFor(c, 'game.state', 3000)));
       // Alice（无论其在 A/B/C）掉线 → 其他人收到 player.status
       close(aliceClient);

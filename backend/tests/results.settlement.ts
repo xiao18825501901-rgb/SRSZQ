@@ -26,6 +26,7 @@ import { getLegalMoves, currentPlayerOf } from '../../shared/src/game/legalMoves
 import { applyMove, createInitialState } from '../../shared/src/game/rules.js';
 import { buildSettlement, settlementDigest } from '../../shared/src/product/resultModel.js';
 import { parseFeatureFlags, featureFlagEvidence } from '../../shared/src/config/featureFlags.js';
+import { PROTOCOL_VERSION, RULESET_VERSION } from '../../shared/src/product/protocol.js';
 
 let db: Db;
 let apiBase = '';
@@ -61,12 +62,20 @@ async function api(method: string, path: string, body?: unknown, token?: string)
 
 interface TestClient { ws: WebSocket; msgs: Array<{ type: string; [k: string]: any }>; }
 
+/** P0B：每个连接最近一次看到的服务器 revision（game.start / game.state / ack）。 */
+const clientRevisions = new WeakMap<TestClient, number>();
+
 function connect(token: string): Promise<TestClient> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(wsBase + '?token=' + token);
+    const ws = new WebSocket(wsBase + '?token=' + token + '&protocol=' + PROTOCOL_VERSION + '&ruleset=' + encodeURIComponent(RULESET_VERSION));
     const msgs: TestClient['msgs'] = [];
-    ws.on('message', (raw) => msgs.push(JSON.parse(String(raw))));
-    ws.on('open', () => resolve({ ws, msgs }));
+    const client: TestClient = { ws, msgs };
+    ws.on('message', (raw) => {
+      const m = JSON.parse(String(raw));
+      if (typeof m.revision === 'number') clientRevisions.set(client, m.revision);
+      msgs.push(m);
+    });
+    ws.on('open', () => resolve(client));
     ws.on('error', reject);
   });
 }
@@ -425,7 +434,8 @@ async function main(): Promise<void> {
     const legal = getLegalMoves(state);
     if (legal.length === 0) return;
     const m = legal[Math.floor(Math.random() * legal.length)];
-    send(cl, { type: 'move', row: m.row, col: m.col });
+    // P0B 命令信封：commandId 幂等键 + 当前 revision
+    send(cl, { type: 'move', commandId: randomUUID(), expectedRevision: clientRevisions.get(cl) ?? 0, row: m.row, col: m.col });
   }
 
   /**

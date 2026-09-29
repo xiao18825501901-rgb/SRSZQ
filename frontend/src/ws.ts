@@ -3,8 +3,16 @@ import { WS_URL, getToken } from './api';
 import { colorName } from './playerPresentation';
 import type { GameState, Player } from '../../shared/src/game/types';
 import type { QualificationView } from '../../shared/src/game/qualification';
+import { PROTOCOL_VERSION, RULESET_VERSION } from '../../shared/src/product/protocol';
 
 export type WSHandler = (msg: Record<string, any>) => void;
+
+/** 生成命令幂等键；环境没有 crypto.randomUUID 时退回时间戳+随机串。 */
+function newCommandId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  return 'cmd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+}
 
 class SrszqSocket {
   private ws: WebSocket | null = null;
@@ -15,7 +23,11 @@ class SrszqSocket {
   connect(): void {
     if (this.ws) return;
     this.closed = false;
-    this.ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(getToken() ?? '')}`);
+    // O06：连接时显式声明协议/规则版本。服务端版本不一致会直接拒绝，而不是静默降级。
+    this.ws = new WebSocket(
+      `${WS_URL}?token=${encodeURIComponent(getToken() ?? '')}` +
+      `&protocol=${PROTOCOL_VERSION}&ruleset=${encodeURIComponent(RULESET_VERSION)}`,
+    );
     this.ws.onmessage = (ev) => {
       let msg: Record<string, any>;
       try {
@@ -129,6 +141,15 @@ class GameLink {
   result = '';
   endInfo: EndInfo | null = null;
   seatStatus: SeatStatusEvent | null = null;
+  /**
+   * P0B：服务器权威 revision。每次提交落子都必须带上“我看到的那个 revision”，
+   * 服务器据此拒绝基于旧状态的命令；ACK / game.state 都会把它推进。
+   */
+  revision = 0;
+  /** 已发出但还没被 ACK 的命令：用于幂等重发与状态核对。 */
+  private pendingCommands = new Map<string, { row: number; col: number }>();
+  /** 最近一次被服务器拒绝的命令码（供 UI 提示与诊断）。 */
+  lastCommandError = '';
   private listeners = new Set<() => void>();
   private off: (() => void) | null = null;
   private wantsQueue = false;
@@ -171,6 +192,9 @@ class GameLink {
     this.deadlineAt = 0;
     this.serverOffsetMs = 0;
     this.wantsQueue = false;
+    this.revision = 0;
+    this.pendingCommands.clear();
+    this.lastCommandError = '';
     this.emit();
   }
 
@@ -271,6 +295,9 @@ class GameLink {
       case 'game.start': {
         this.wantsQueue = false;
         this.phase = 'game';
+        this.revision = Number(msg.revision ?? 0);
+        this.pendingCommands.clear();
+        this.lastCommandError = '';
         this.game = {
           gameId: String(msg.gameId),
           mode: String(msg.mode ?? ''),
@@ -289,6 +316,7 @@ class GameLink {
       }
       case 'game.state':
         this.serverOffsetMs = Number(msg.serverNow ?? Date.now()) - Date.now();
+        if (typeof msg.revision === 'number' && msg.revision > this.revision) this.revision = msg.revision;
         if (this.game)
           this.game = {
             ...this.game,
@@ -298,6 +326,33 @@ class GameLink {
             serverNow: msg.serverNow ?? Date.now(),
           };
         break;
+      case 'ack': {
+        // 服务器确认这条命令已生效（并且已经落库）。清掉待确认记录。
+        this.pendingCommands.delete(String(msg.commandId ?? ''));
+        if (typeof msg.revision === 'number' && msg.revision > this.revision) this.revision = msg.revision;
+        this.lastCommandError = '';
+        break;
+      }
+      case 'command.rejected': {
+        const code = String(msg.code ?? '');
+        this.pendingCommands.delete(String(msg.commandId ?? ''));
+        this.lastCommandError = code;
+        if (typeof msg.revision === 'number' && msg.revision > this.revision) this.revision = msg.revision;
+        if (code === 'STALE_REVISION') {
+          // 我们基于旧状态提交：不重试，直接拉回服务器权威状态。
+          this.error = '棋局已推进，正在同步最新状态…';
+          if (this.game?.gameId) getSocket().send({ type: 'resume', gameId: this.game.gameId });
+        } else if (code === 'IDEMPOTENCY_CONFLICT') {
+          this.error = '检测到重复的命令编号，本次操作已被忽略';
+          if (this.game?.gameId) getSocket().send({ type: 'resume', gameId: this.game.gameId });
+        } else if (code === 'RECOVERY_PAUSED') {
+          this.error = '对局正在恢复中，请稍候…';
+        } else {
+          this.error = String(msg.error ?? code);
+        }
+        this.emit();
+        break;
+      }
       case 'game.end':
       case 'MATCH_ENDED':
         this.applyEnd(msg);
@@ -341,7 +396,18 @@ class GameLink {
   }
 
   move(row: number, col: number): void {
-    getSocket().send({ type: 'move', row, col });
+    // P0B 命令信封：commandId 是幂等键，expectedRevision 是乐观并发控制。
+    // 断线重连/ACK 丢失后重发同一个 commandId，服务器只会回放既有结果，
+    // 不会二次落子，也不会重置 30 秒落子时钟。
+    const commandId = newCommandId();
+    this.pendingCommands.set(commandId, { row, col });
+    getSocket().send({
+      type: 'move',
+      commandId,
+      expectedRevision: this.revision,
+      row,
+      col,
+    });
   }
 
   turnRemainingMs(): number | null {

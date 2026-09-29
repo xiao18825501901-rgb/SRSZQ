@@ -20,6 +20,12 @@ import {
   buildSettlement,
   broadcastStatusFor,
   parseFeatureFlags,
+  PROTOCOL_INFO,
+  PROTOCOL_VERSION,
+  RULESET_VERSION,
+  COMMAND_ERRORS,
+  commandPayloadDigest,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 见下方 O06 校验
   type FeatureFlags,
   type EndReason,
   type SettlementPlan,
@@ -44,8 +50,12 @@ export type { EndReason } from '../../../shared/src/product/resultModel.js';
 
 /** 房间内真人座位的连接状态（Online 判负状态机用） */
 type SeatConn = 'connected' | 'disconnected' | 'left';
-/** 房间阶段：PLAYING → PLAYER_LEFT(宽限) → FINISHED */
-type RoomPhase = 'PLAYING' | 'PLAYER_LEFT' | 'FINISHED';
+/**
+ * 房间阶段：
+ *   PLAYING → PLAYER_LEFT(宽限) → FINISHED
+ *   RECOVERY_PAUSED：进程重启后从快照恢复出来的对局，等待玩家在 60 秒窗口内回来。
+ */
+type RoomPhase = 'PLAYING' | 'PLAYER_LEFT' | 'FINISHED' | 'RECOVERY_PAUSED';
 
 interface SeatInfo {
   kind: 'human' | 'ai';
@@ -77,6 +87,8 @@ export interface GameServerOptions {
   featureFlags?: Partial<FeatureFlags>;
   /** 结算持久化最大尝试次数（默认 3）；失败时不广播成功，房间保留以便重试。 */
   settlementMaxAttempts?: number;
+  /** 进程重启后，恢复出来的对局等待玩家回来的窗口（默认 60_000ms）。 */
+  recoveryGraceMs?: number;
 }
 
 interface Client {
@@ -106,6 +118,27 @@ interface Room {
   disconnectTimers: Map<Seat, ReturnType<typeof setTimeout>>; // online=判负宽限；invite=自动跳过
   /** 内部 AI 策略上下文（NOT PLAYER-FACING）：online 1H+2AI 保护偏好 */
   policy: MatchPolicyContext | null;
+  /** P0B：每次成功生效的命令 +1。客户端必须带着它认识的 revision 提交命令。 */
+  revision: number;
+  /** P0B：持久事件序号，与 game_events.seq 一一对应。 */
+  seq: number;
+  /** P0B：房间级串行队列 —— 同一房间的命令严格按到达顺序执行，不并发交叉。 */
+  commandQueue: Promise<void>;
+  /** P0B：恢复暂停窗口的截止时间（仅 RECOVERY_PAUSED 期间有意义）。 */
+  recoveryDeadlineAt?: number;
+  recoveryTimer?: ReturnType<typeof setTimeout>;
+}
+
+/** 可持久化的房间快照（P0B）。只含恢复必需的信息，不含任何连接对象。 */
+export interface RoomSnapshot {
+  state: GameState;
+  mode: 'online' | 'invite';
+  boardSize: number;
+  seats: Record<Seat, { kind: 'human'; userId: string | null; username: string | null } | { kind: 'ai'; aiLevel: AiDifficulty | null; stars: number | null }>;
+  members: Record<string, Seat>;
+  policy: MatchPolicyContext | null;
+  revision: number;
+  seq: number;
 }
 
 const AI_WEIGHTS: Array<{ difficulty: AiDifficulty; w: number }> = [
@@ -151,6 +184,8 @@ export class GameServer {
   private db: Db;
   /** 已填充默认值的时序/容量参数；开关与重试次数单独持有，不参与 Required 展开。 */
   private opts: Required<Omit<GameServerOptions, 'featureFlags' | 'settlementMaxAttempts'>>;
+  /** 进程重启后从快照恢复出来的对局（gameId），用于诊断与证据。 */
+  readonly recoveredGameIds: string[] = [];
   private wss: WebSocketServer;
   private clients = new Map<string, Client>();
   private matchmaking: MatchmakingQueue;
@@ -180,6 +215,7 @@ export class GameServer {
       queueSweepMs: opts.queueSweepMs ?? 500,
       turnTimeoutMs: opts.turnTimeoutMs ?? 30_000,
       heartbeatIntervalMs: opts.heartbeatIntervalMs ?? 25_000,
+      recoveryGraceMs: opts.recoveryGraceMs ?? 60_000,
     };
     this.matchmaking = new MatchmakingQueue(this.opts.queueTimeoutMs);
     this.wss = new WebSocketServer({ noServer: true });
@@ -224,11 +260,29 @@ export class GameServer {
       ws.close(4001, 'unauthorized');
       return;
     }
+    // O06：客户端若显式声明协议/规则版本，必须完全一致才允许继续；
+    // 不做“静默降级”，否则旧客户端会用一个它不理解的 revision 语义去下棋。
+    const declaredProtocol = url.searchParams.get('protocol');
+    const declaredRuleset = url.searchParams.get('ruleset');
+    if (declaredProtocol !== null && Number(declaredProtocol) !== PROTOCOL_VERSION) {
+      ws.send(JSON.stringify({ type: 'error', error: COMMAND_ERRORS.PROTOCOL_MISMATCH, expected: { ...PROTOCOL_INFO } }));
+      ws.close(4002, 'protocol mismatch');
+      return;
+    }
+    if (declaredRuleset !== null && declaredRuleset !== RULESET_VERSION) {
+      ws.send(JSON.stringify({ type: 'error', error: COMMAND_ERRORS.PROTOCOL_MISMATCH, expected: { ...PROTOCOL_INFO } }));
+      ws.close(4002, 'ruleset mismatch');
+      return;
+    }
     const client: Client = { ws, connectionId: randomUUID(), userId: user.id, username: user.username, isAlive: true };
     this.clients.set(user.id, client);
     ws.on('pong', () => { client.isAlive = true; });
     this.db.touchOnline(user.id, 'online');
-    ws.send(JSON.stringify({ type: 'hello', user: { id: user.id, username: user.username, tutorialCompleted: user.tutorialCompleted } }));
+    ws.send(JSON.stringify({
+      type: 'hello',
+      user: { id: user.id, username: user.username, tutorialCompleted: user.tutorialCompleted },
+      protocol: { ...PROTOCOL_INFO },
+    }));
 
     ws.on('message', (raw) => {
       let msg: { type?: string; [k: string]: unknown };
@@ -298,15 +352,7 @@ export class GameServer {
         break;
       }
       case 'move': {
-        const room = client.gameId ? this.rooms.get(client.gameId) : undefined;
-        if (!room || room.ended) return sendErr('no active game');
-        const seat = room.members[client.userId];
-        if (!seat) return sendErr('not in game');
-        if (currentPlayerOf(room.state) !== seat) return sendErr('not your turn');
-        const row = Number(msg.row);
-        const col = Number(msg.col);
-        if (!Number.isInteger(row) || !Number.isInteger(col)) return sendErr('invalid move');
-        await this.applyAndBroadcast(room, row, col);
+        await this.handleMoveCommand(client, msg);
         break;
       }
       case 'resume': {
@@ -454,6 +500,9 @@ export class GameServer {
       phase: 'PLAYING',
       disconnectTimers: new Map(),
       policy,
+      revision: 0,
+      seq: 0,
+      commandQueue: Promise.resolve(),
     };
     this.rooms.set(room.id, room);
     this.ensureTurnClock(room);
@@ -479,6 +528,10 @@ export class GameServer {
           qualification: qualificationFromState(room.state),
           turnDeadlineAt: room.turnDeadlineAt ?? null,
           serverNow: Date.now(),
+          revision: room.revision,
+          seq: room.seq,
+          phase: room.phase,
+          protocol: { ...PROTOCOL_INFO },
         });
         this.logMatchmaking('broadcast_start', {
           queueId, roomId: room.id, userId: h.userId, humanCount: humans.length, aiCount: 3 - humans.length,
@@ -620,41 +673,300 @@ export class GameServer {
         }));
         const res = applyMove(room.state, decision.row, decision.col);
         if (res.rejected) break;
-        room.state = res.state;
-        this.broadcastRoom(room);
-        if (res.state.status !== 'playing') {
-          this.finishNormal(room);
-          return;
-        }
+        // AI 落子与人类落子走同一条提交路径：先持久化，再改内存，最后广播。
+        // commandId 由服务器生成 —— 服务器是权威，AI 没有客户端信封。
+        this.commitAppliedMove(room, cur, 'ai-' + randomUUID(), { row: decision.row, col: decision.col }, res.state);
+        if (room.ended || room.state.status !== 'playing') return;
       }
     } finally {
       room.running = false;
     }
   }
 
-  private async applyAndBroadcast(room: Room, row: number, col: number): Promise<void> {
-    if (room.ended) return;
-    // Validate the absolute server deadline BEFORE accepting a move, even if the
-    // timer callback was delayed by CPU work. Illegal moves never reset it.
+  /** 命令被拒绝时统一回执：带稳定错误码 + 当前 revision，客户端据此决定丢弃或重取状态。 */
+  private sendCmdError(client: Client, room: Room | null, code: string, error: string, commandId?: string): void {
+    this.sendTo(client.ws, {
+      type: 'command.rejected',
+      commandId: commandId ?? null,
+      code,
+      error,
+      revision: room ? room.revision : null,
+    });
+  }
+
+  /**
+   * 落子命令入口（P0B）。
+   *
+   * 信封：{ type:'move', commandId, expectedRevision, row, col }
+   *  - 房间级串行：同一房间的命令严格按到达顺序执行，人类与 AI 落子不交叉；
+   *  - 幂等：同一 commandId 重发只回放既有 ACK，不二次落子、不重置落子时钟；
+   *  - 冲突：同一 commandId 不同 payload 一律拒绝，绝不覆盖已生效命令；
+   *  - revision：expectedRevision 必须等于房间当前 revision，否则按 STALE_REVISION 丢弃；
+   *  - 顺序：先在一个事务里持久化（事件 + 快照 + 幂等行）→ 再改内存 → 最后广播。
+   */
+  private async handleMoveCommand(client: Client, msg: Record<string, unknown>): Promise<void> {
+    const room = client.gameId ? this.rooms.get(client.gameId) : undefined;
+    if (!room || room.ended) return this.sendCmdError(client, null, 'NO_ACTIVE_GAME', 'no active game');
+    const seat = room.members[client.userId];
+    if (!seat) return this.sendCmdError(client, room, 'NOT_IN_GAME', 'not in game');
+    const commandId = typeof msg.commandId === 'string' ? msg.commandId.trim() : '';
+    const expectedRevision = msg.expectedRevision === undefined ? null : Number(msg.expectedRevision);
+    if (!commandId || commandId.length > 128 || (expectedRevision !== null && !Number.isInteger(expectedRevision))) {
+      return this.sendCmdError(client, room, COMMAND_ERRORS.BAD_ENVELOPE,
+        'move requires commandId (string <=128) and expectedRevision (integer)', commandId);
+    }
+    if (room.phase === 'RECOVERY_PAUSED') {
+      return this.sendCmdError(client, room, COMMAND_ERRORS.RECOVERY_PAUSED, 'game is recovering; resume first', commandId);
+    }
+    const row = Number(msg.row);
+    const col = Number(msg.col);
+    if (!Number.isInteger(row) || !Number.isInteger(col)) {
+      return this.sendCmdError(client, room, 'INVALID_MOVE', 'invalid move', commandId);
+    }
+    // 串行化：命令排在本房间队列尾部；队列本身永不 reject（否则后续命令全部短路）。
+    const run = room.commandQueue.then(() =>
+      this.executeMoveCommand(room, client, seat, commandId, expectedRevision, row, col));
+    room.commandQueue = run.then(() => undefined, () => undefined);
+    await run;
+  }
+
+  private executeMoveCommand(
+    room: Room, client: Client, seat: Seat,
+    commandId: string, expectedRevision: number | null, row: number, col: number,
+  ): void {
+    if (room.ended) {
+      // 房间已终局：如果命令其实已经生效过，回放 ACK（幂等），否则明确拒绝。
+      const prior = this.db.findGameCommand(room.id, commandId);
+      if (prior) return this.sendTo(client.ws, JSON.parse(prior.ackJson) as object);
+      return this.sendCmdError(client, room, 'GAME_ENDED', 'no active game', commandId);
+    }
+    // 幂等闸门：先查已生效命令，命中即回放，不再落子、不碰时钟。
+    const prior = this.db.findGameCommand(room.id, commandId);
+    if (prior) {
+      const digest = commandPayloadDigest({ row, col });
+      if (prior.payloadDigest !== digest) {
+        return this.sendCmdError(client, room, COMMAND_ERRORS.IDEMPOTENCY_CONFLICT,
+          'commandId reused with a different payload', commandId);
+      }
+      this.sendTo(client.ws, JSON.parse(prior.ackJson) as object);
+      return;
+    }
+    if (expectedRevision !== null && expectedRevision !== room.revision) {
+      return this.sendCmdError(client, room, COMMAND_ERRORS.STALE_REVISION,
+        `expected revision ${expectedRevision} but room is at ${room.revision}`, commandId);
+    }
+    if (currentPlayerOf(room.state) !== seat) {
+      return this.sendCmdError(client, room, 'NOT_YOUR_TURN', 'not your turn', commandId);
+    }
+    // 绝对截止时间在受理前校验：被 CPU 拖延的定时器回调不能让它失效。
     if (room.mode === 'online' && room.turnDeadlineAt && Date.now() >= room.turnDeadlineAt) {
       this.forfeitSeat(room, currentPlayerOf(room.state), 'TIMEOUT');
       return;
     }
     const res = applyMove(room.state, row, col);
     if (res.rejected) {
-      for (const id of room.humanIds) {
-        const c = this.clients.get(id);
-        if (c) this.sendTo(c.ws, { type: 'error', error: `move rejected: ${res.rejected}` });
-      }
+      // 非法落子不落库、不推进 revision、**不重置落子时钟**。
+      this.sendTo(client.ws, { type: 'command.rejected', commandId, code: 'MOVE_REJECTED', error: `move rejected: ${res.rejected}`, revision: room.revision });
       return;
     }
-    room.state = res.state;
+    this.commitAppliedMove(room, seat, commandId, { row, col }, res.state);
+  }
+
+  /**
+   * 已生效落子的唯一提交路径：**先持久化，再改内存，最后广播**。
+   * AI 落子同样走这里（commandId 由服务器生成，服务器是权威）。
+   */
+  private commitAppliedMove(
+    room: Room, seat: Seat, commandId: string,
+    payload: Record<string, unknown>, nextState: GameState,
+  ): void {
+    const revisionBefore = room.revision;
+    const revisionAfter = revisionBefore + 1;
+    const seq = room.seq + 1;
+    const ack = {
+      type: 'ack',
+      commandId,
+      gameId: room.id,
+      seat,
+      revision: revisionAfter,
+      seq,
+      applied: { ...payload },
+    };
+    const record = this.db.appendGameCommand({
+      gameId: room.id,
+      commandId,
+      seat,
+      payload,
+      revisionBefore,
+      revisionAfter,
+      seq,
+      eventType: 'move.applied',
+      eventPayload: { seat, ...payload, revision: revisionAfter },
+      snapshot: this.buildRoomSnapshot(room, nextState, revisionAfter, seq),
+      ack,
+      createdAt: Date.now(),
+    });
+    if (!record.appended) {
+      // 并发下别人先写入了同一 commandId：**不重复落子**。
+      const owner = room.seats[seat].kind === 'human' && room.seats[seat].userId
+        ? this.clients.get(room.seats[seat].userId!)
+        : undefined;
+      if (record.conflict) {
+        if (owner && owner.gameId === room.id) {
+          this.sendCmdError(owner, room, COMMAND_ERRORS.IDEMPOTENCY_CONFLICT, 'commandId reused with a different payload', commandId);
+        }
+        return;
+      }
+      // 同 payload 重放：ACK 已经写在库里，把它发回即可。
+      if (owner && owner.gameId === room.id) this.sendTo(owner.ws, record.ack as object);
+      return;
+    }
+    room.revision = revisionAfter;
+    room.seq = seq;
+    room.state = nextState;
     this.broadcastRoom(room);
-    if (res.state.status !== 'playing') {
+    const c = room.seats[seat].kind === 'human' && room.seats[seat].userId ? this.clients.get(room.seats[seat].userId!) : undefined;
+    if (c && c.gameId === room.id) this.sendTo(c.ws, ack);
+    if (nextState.status !== 'playing') {
       this.finishNormal(room);
       return;
     }
     void this.maybeRunAI(room);
+  }
+
+  /** 房间快照：进程被强杀后据此重建房间（含座位归属与 revision/seq）。 */
+  private buildRoomSnapshot(room: Room, state: GameState, revision = room.revision, seq = room.seq): RoomSnapshot {
+    const seats = {} as RoomSnapshot['seats'];
+    for (const s of SEATS) {
+      const si = room.seats[s];
+      seats[s] = si.kind === 'human'
+        ? { kind: 'human', userId: si.userId ?? null, username: si.username ?? null }
+        : { kind: 'ai', aiLevel: si.aiLevel ?? null, stars: si.stars ?? null };
+    }
+    return {
+      state,
+      mode: room.mode,
+      boardSize: state.boardSize,
+      seats,
+      members: { ...room.members },
+      policy: room.policy,
+      revision,
+      seq,
+    };
+  }
+
+  /**
+   * 进程重启后的恢复（P0B / G12）。
+   *
+   * 从最新快照重建房间，进入 RECOVERY_PAUSED，并开启 60 秒窗口：
+   *  - 窗口内玩家回来（resume / queue.join）→ 恢复原 revision 继续下棋；
+   *  - 窗口到期仍无人回来 → 按 SYSTEM_ABORT 结算，**全员 VOID、零竞技变更**
+   *    （复用 P0A 的结算语义，不会因为“服务器重启”而扣任何人的分）。
+   *
+   * 返回恢复出来的对局数；由 server.ts 在启动时调用。
+   */
+  recover(): { recovered: number; gameIds: string[] } {
+    const games = this.db.loadRecoverableGames();
+    const recovered: string[] = [];
+    for (const g of games) {
+      if (this.rooms.has(g.gameId)) continue;
+      const snap = g.snapshot as RoomSnapshot | null;
+      if (!snap || !snap.state) continue;
+      // 已经结束的局不需要恢复（其结果早已落库）。
+      if (snap.state.status !== 'playing') continue;
+      const room = this.rehydrateRoom(g.gameId, snap, g.revision, g.seq);
+      this.rooms.set(room.id, room);
+      for (const uid of Object.keys(room.members)) this.userGame.set(uid, room.id);
+      room.recoveryDeadlineAt = Date.now() + this.opts.recoveryGraceMs;
+      room.recoveryTimer = setTimeout(() => this.expireRecovery(room), this.opts.recoveryGraceMs);
+      room.recoveryTimer.unref?.();
+      recovered.push(room.id);
+      this.logMatchmaking('recovery_paused', {
+        roomId: room.id, mode: room.mode, revision: room.revision,
+        deadlineAt: room.recoveryDeadlineAt, humans: Object.keys(room.members).length,
+      });
+    }
+    this.recoveredGameIds.push(...recovered);
+    return { recovered: recovered.length, gameIds: recovered };
+  }
+
+  /**
+   * 优雅停止：清掉所有定时器与内存房间，但**不写任何结算**。
+   * 用于进程退出与测试中模拟“服务器没了但快照还在”的重启场景。
+   * 注意：真实崩溃（SIGKILL）不会走这里，恢复能力完全依赖已落库的快照。
+   */
+  shutdown(): void {
+    if (this.queueSweepTimer) clearInterval(this.queueSweepTimer);
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    if (this.queueWakeTimer) clearTimeout(this.queueWakeTimer);
+    this.queueSweepTimer = null;
+    this.heartbeatTimer = null;
+    this.queueWakeTimer = null;
+    for (const room of this.rooms.values()) {
+      this.clearTurnClock(room);
+      for (const t of room.disconnectTimers.values()) clearTimeout(t);
+      room.disconnectTimers.clear();
+      if (room.recoveryTimer) clearTimeout(room.recoveryTimer);
+      room.recoveryTimer = undefined;
+    }
+    this.rooms.clear();
+    this.userGame.clear();
+    for (const id of [...this.clients.keys()]) this.matchmaking.leave(id);
+    for (const c of this.clients.values()) {
+      try { c.ws.close(1001, 'server shutdown'); } catch { /* noop */ }
+    }
+    this.clients.clear();
+  }
+
+  private rehydrateRoom(gameId: string, snap: RoomSnapshot, revision: number, seq: number): Room {
+    const seats = {} as Record<Seat, SeatInfo>;
+    for (const s of SEATS) {
+      const raw = snap.seats?.[s];
+      if (raw?.kind === 'human') {
+        seats[s] = { kind: 'human', userId: raw.userId ?? undefined, username: raw.username ?? '?', conn: 'disconnected' };
+      } else {
+        seats[s] = { kind: 'ai', stars: raw?.stars ?? 3, aiLevel: raw?.aiLevel ?? 3 };
+      }
+    }
+    return {
+      id: gameId,
+      mode: snap.mode,
+      state: snap.state,
+      seats,
+      humanIds: new Set(),
+      members: { ...snap.members },
+      ended: false,
+      running: false,
+      phase: 'RECOVERY_PAUSED',
+      disconnectTimers: new Map(),
+      policy: snap.policy ?? null,
+      revision,
+      seq,
+      commandQueue: Promise.resolve(),
+    };
+  }
+
+  /** 恢复窗口到期：按 SYSTEM_ABORT 结算（全员 VOID，零竞技变更）。 */
+  private expireRecovery(room: Room): void {
+    if (room.ended || room.phase !== 'RECOVERY_PAUSED') return;
+    this.logMatchmaking('recovery_expired', { roomId: room.id, revision: room.revision });
+    this.finalizeRoom(room, {
+      endReason: 'SYSTEM_ABORT',
+      boardWinner: null,
+      forfeitedSeats: [],
+      inGraceSeats: [],
+    });
+  }
+
+  /** 玩家在恢复窗口内回来了：解除暂停并重启落子时钟。 */
+  private resumeFromRecovery(room: Room): void {
+    if (room.phase !== 'RECOVERY_PAUSED') return;
+    if (room.recoveryTimer) clearTimeout(room.recoveryTimer);
+    room.recoveryTimer = undefined;
+    room.recoveryDeadlineAt = undefined;
+    room.phase = 'PLAYING';
+    this.logMatchmaking('recovery_resumed', { roomId: room.id, revision: room.revision });
+    this.ensureTurnClock(room);
   }
 
   private clearTurnClock(room: Room): void {
@@ -692,8 +1004,12 @@ export class GameServer {
       state: room.state,
       seats: this.publicSeats(room),
       qualification: qualificationFromState(room.state),
-          turnDeadlineAt: room.turnDeadlineAt ?? null,
-          serverNow: Date.now(),
+      turnDeadlineAt: room.turnDeadlineAt ?? null,
+      serverNow: Date.now(),
+      revision: room.revision,
+      seq: room.seq,
+      phase: room.phase,
+      protocol: { ...PROTOCOL_INFO },
     });
     for (const id of room.humanIds) {
       const c = this.clients.get(id);
@@ -920,7 +1236,10 @@ export class GameServer {
     room.humanIds.add(client.userId);
     const si = room.seats[seat];
     if (si.kind === 'human') si.conn = 'connected';
-    if (room.phase === 'PLAYER_LEFT' && !this.anyHumanAway(room)) room.phase = 'PLAYING';
+    if (room.phase === 'RECOVERY_PAUSED') {
+      // 玩家在 60 秒窗口内回来了：解除暂停，用快照里的 revision 继续，不重开一局。
+      this.resumeFromRecovery(room);
+    } else if (room.phase === 'PLAYER_LEFT' && !this.anyHumanAway(room)) room.phase = 'PLAYING';
     this.db.touchOnline(client.userId, 'playing');
     this.clearDisconnectTimer(room, seat);
     this.sendTo(client.ws, {
@@ -931,8 +1250,12 @@ export class GameServer {
       yourSeat: seat,
       state: room.state,
       qualification: qualificationFromState(room.state),
-          turnDeadlineAt: room.turnDeadlineAt ?? null,
-          serverNow: Date.now(),
+      turnDeadlineAt: room.turnDeadlineAt ?? null,
+      serverNow: Date.now(),
+      revision: room.revision,
+      seq: room.seq,
+      phase: room.phase,
+      protocol: { ...PROTOCOL_INFO },
     });
     this.sendRoomEvent(room, { type: 'player.status', seat, status: 'reconnected' });
     void this.maybeRunAI(room);

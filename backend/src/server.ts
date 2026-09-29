@@ -19,6 +19,14 @@ const gameServer = new GameServer(db, {
   forfeitGraceMs: Number(process.env.SRSZQ_FORFEIT_GRACE_MS ?? 10_000),
   turnTimeoutMs: Number(process.env.SRSZQ_TURN_TIMEOUT_MS ?? 30_000),
 });
+// P0B：进程重启后从快照恢复未完成对局（RECOVERY_PAUSED + 60 秒窗口）。
+const recovery = gameServer.recover();
+if (recovery.recovered > 0) {
+  console.log(`[srszq] recovery: ${recovery.recovered} paused game(s): ${recovery.gameIds.join(', ')}`);
+} else {
+  console.log('[srszq] recovery: no unfinished games to resume');
+}
+
 const wsPort = Number(process.env.SRSZQ_WS_PORT ?? 8081);
 const wsHttp = createServer();
 gameServer.attach(wsHttp, '/ws');
