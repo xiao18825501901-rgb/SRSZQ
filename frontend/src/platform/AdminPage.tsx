@@ -94,6 +94,11 @@ export function AdminPage({ user }: { user: PublicUser }) {
   }
 
   const ops = live?.ops ?? null;
+  // 三层部署对账：前端 bundle 里烘焙的构建提交 vs 后端自报提交。
+  // 只在前端 sha 真的被注入（Netlify 注入 COMMIT_REF）时才可能给出“同提交”。
+  const backendSha = (((version as any)?.source?.backendSourceSha ?? null) as string | null);
+  const frontendSha = __SRSZQ_SOURCE_SHA__;
+  const sameCommit = frontendSha !== 'unknown' && !!backendSha && backendSha.startsWith(frontendSha.slice(0, 7));
   const mb = (n: number | undefined): string => (typeof n === 'number' ? Math.round(n / 1048576) + ' MB' : '—');
 
   return (
@@ -117,7 +122,10 @@ export function AdminPage({ user }: { user: PublicUser }) {
             运行 {(version as any)?.protocol?.protocolVersion ?? '—'}
           </p>
           <p className="muted" data-testid="admin-source-sha">
-            源码：backend {(version as any)?.source?.backendSourceSha ?? '未报告'} · frontend {(version as any)?.source?.frontendSourceSha ?? '未报告'}
+            源码：backend {backendSha ?? '未报告'} · frontend {(version as any)?.source?.frontendSourceSha ?? '未报告'}
+          </p>
+          <p className="muted" data-testid="admin-build-sha">
+            构建对账：前端产物由 {frontendSha} 构建 · 判定 {sameCommit ? '与后端同提交' : '需人工核对'}
           </p>
           <p className="muted">
             资源：RSS {mb(ready?.metrics?.rssBytes)} · heap {mb(ready?.metrics?.heapUsedBytes)} · CPU {ready?.metrics?.cpuCount ?? '—'} 核 ·
