@@ -205,6 +205,62 @@ async function main(): Promise<void> {
     }
   });
 
+  console.log('--- 管理端控制台接口 ---');
+
+  await check('A1 管理端接口要求 ADMIN：普通账号 403，管理员可见实时快照且不含身份信息', async () => {
+    const apiDir = mkdtempSync(join(tmpdir(), 'srszq-admin-'));
+    const adminDb = openDb(join(apiDir, 'admin.sqlite'));
+    const { server } = createApi(adminDb, {
+      ops: () => ({
+        rooms: 3, roomsEnded: 1, wsClients: 7, queuedEntries: 2,
+        worker: { poolSize: 2, warm: 2, running: 1, queued: 0, submitted: 10, decided: 9, timedOut: 0, failed: 0, rejected: 1, cancelled: 0, respawns: 0 },
+      }),
+      readiness: () => ({ worker: { poolSize: 2, warm: 2 } }),
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const base = 'http://127.0.0.1:' + (server.address() as AddressInfo).port;
+    const mk = (name: string, role: 'USER' | 'ADMIN'): { id: string; token: string } => {
+      const u = adminDb.createUser({ email: name + '@t.local', username: name, passwordHash: 'h', salt: 's' });
+      const token = 'tok-' + name;
+      adminDb.createSession(token, u.id, Date.now() + 3600_000);
+      if (role === 'ADMIN') adminDb.setUserRole(u.id, 'ADMIN');
+      return { id: u.id, token };
+    };
+    const plain = mk('PlainUser', 'USER');
+    const boss = mk('BossUser', 'ADMIN');
+    try {
+      const denied = await fetch(base + '/api/admin/live', { headers: { Authorization: 'Bearer ' + plain.token } });
+      assert.equal(denied.status, 403, '普通账号必须 403');
+      const anon = await fetch(base + '/api/admin/live');
+      assert.equal(anon.status, 401, '未登录必须 401');
+      const liveRes = await fetch(base + '/api/admin/live', { headers: { Authorization: 'Bearer ' + boss.token } });
+      const live = await liveRes.json() as any;
+      assert.equal(liveRes.status, 200, JSON.stringify(live));
+      assert.equal(live.ops.rooms, 3, '实时快照来自注入的 ops');
+      assert.equal(live.ops.worker.warm, 2);
+      assert.equal(live.db.publishedPuzzles > 0, true, '题库规模应可见');
+      assert.equal(typeof live.db.pendingReports, 'number');
+      assert.equal(typeof live.events.matchFinishesHumanOnly.total, 'number');
+      const blob = JSON.stringify(live);
+      for (const bad of ['@t.local', 'password', 'token']) {
+        assert.equal(blob.includes(bad), false, '管理快照不得包含 ' + bad);
+      }
+      const tasksRes = await fetch(base + '/api/admin/data-tasks', { headers: { Authorization: 'Bearer ' + boss.token } });
+      assert.equal(tasksRes.status, 200);
+      const tasks = await tasksRes.json() as any;
+      assert.ok(Array.isArray(tasks.tasks));
+      adminDb.createDataTask({ userId: plain.id, kind: 'EXPORT' });
+      const after = await (await fetch(base + '/api/admin/data-tasks', { headers: { Authorization: 'Bearer ' + boss.token } })).json() as any;
+      assert.equal(after.tasks.length, 1, '数据请求队列必须列出任务');
+      assert.equal(after.tasks[0].kind, 'EXPORT');
+      assert.equal(JSON.stringify(after).includes('@t.local'), false, '任务队列不得回显邮箱');
+      observed.a1 = { liveOps: live.ops, db: live.db, taskCount: after.tasks.length };
+    } finally {
+      await new Promise<void>((r) => server.close(() => r()));
+      adminDb.close();
+    }
+  });
+
   console.log('--- 迁移向后兼容 ---');
 
   await check('M1 旧库（只有 P0A 之前的表）用当前代码打开：补表补列、旧数据一行不丢', async () => {

@@ -213,6 +213,28 @@ export class GameServer {
   readonly recoveredGameIds: string[] = [];
   /** P0C：有界 AI worker 池（所有 AI 搜索都在这里执行，不占主线程）。 */
   readonly aiHost: AiWorkerHost;
+
+  /**
+   * P4：管理端要的运行时快照。只读、无副作用，且**不含**任何用户身份信息 ——
+   * 管理页面需要知道“现在有多少房、多少连接、AI 池状态”，不需要知道是谁。
+   */
+  opsSnapshot(): {
+    rooms: number;
+    roomsEnded: number;
+    wsClients: number;
+    queuedEntries: number;
+    worker: AiWorkerHost['stats'];
+  } {
+    let roomsEnded = 0;
+    for (const room of this.rooms.values()) if (room.ended) roomsEnded += 1;
+    return {
+      rooms: this.rooms.size,
+      roomsEnded,
+      wsClients: this.clients.size,
+      queuedEntries: this.matchmaking.size,
+      worker: this.aiHost.stats,
+    };
+  }
   private readonly aiPoolSize: number;
   private readonly aiQueueLimit: number;
   private readonly aiHardTimeoutMs: number;

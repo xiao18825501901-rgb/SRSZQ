@@ -14,6 +14,8 @@ export interface PublicUser {
   tutorialCompleted: boolean;
   onlineStatus: string;
   rating: number;
+  /** 仅用于决定是否显示管理入口；服务端仍会对每个管理接口独立鉴权。 */
+  role?: 'USER' | 'ADMIN';
 }
 
 export function getToken(): string | null {
@@ -127,6 +129,38 @@ export const puzzleApi = {
   attempt: (puzzleId: string, attemptId: string, row: number, col: number) =>
     api<AttemptResult>('POST', `/api/puzzles/${encodeURIComponent(puzzleId)}/attempt`, { attemptId, row, col }),
   progress: () => api<{ progress: PuzzleProgress }>('GET', '/api/puzzles/progress'),
+};
+
+/* ---- P4 管理端接口 ---- */
+
+export interface AdminLive {
+  ops: {
+    rooms: number; roomsEnded: number; wsClients: number; queuedEntries: number;
+    worker: { poolSize: number; warm: number; running: number; queued: number; submitted: number; decided: number; timedOut: number; failed: number; rejected: number; cancelled: number; respawns: number };
+  } | null;
+  db: { liveGames: number; settledToday: number; pendingReports: number; pendingDataTasks: number; datasetRuns: number; publishedPuzzles: number };
+  events: { matchStartsHumanOnly: { total: number; distinctUsers: number }; matchFinishesHumanOnly: { total: number; distinctUsers: number }; rule: string };
+}
+export interface AdminReport {
+  reportId: string; reporterId: string; targetKind: string; targetId: string; reason: string; detail: string;
+  status: string; createdAt: number; reviewedAt: number | null; reviewNote: string | null;
+}
+export interface AdminAuditRow {
+  id: string; actorId: string; actorRole: string; action: string;
+  targetKind: string | null; targetId: string | null; detail: unknown; createdAt: number;
+}
+export interface AdminDataTask { taskId: string; kind: string; status: string; requestedAt: number; finishedAt: number | null; error: string | null }
+export interface AdminDatasetRun { runId: string; seedFrom: number; seedTo: number; engineVersion: string; budget: string; uniqueSampleCount: number; createdAt: number }
+
+export const adminApi = {
+  live: () => api<AdminLive & { ready?: unknown }>('GET', '/api/admin/live'),
+  reports: (status?: string) => api<{ reports: AdminReport[] }>('GET', '/api/admin/reports' + (status ? '?status=' + status : '')),
+  reviewReport: (reportId: string, status: 'REVIEWED' | 'DISMISSED' | 'ACTIONED', note: string) =>
+    api<{ reviewed: boolean; status: string }>('POST', '/api/admin/reports/' + encodeURIComponent(reportId), { status, note }),
+  audit: () => api<{ audit: AdminAuditRow[] }>('GET', '/api/admin/audit'),
+  dataTasks: () => api<{ tasks: AdminDataTask[] }>('GET', '/api/admin/data-tasks'),
+  datasetRuns: () => api<{ runs: AdminDatasetRun[] }>('GET', '/api/admin/dataset/runs'),
+  eventMetrics: (name: string, days = 1) => api<{ name: string; humanOnly: { total: number; distinctUsers: number }; includingBotsAndSynthetic: { total: number }; rule: string }>('GET', `/api/admin/metrics/events?name=${encodeURIComponent(name)}&days=${days}`),
 };
 
 export const authApi = {

@@ -76,6 +76,7 @@ export function toPublic(user: User): PublicUser {
     onlineStatus: user.onlineStatus,
     rating: user.rating,
     tutorialCompleted: user.tutorialCompleted,
+    role: user.role,
   };
 }
 
@@ -274,6 +275,14 @@ export interface ApiHooks {
    * 刻意做成注入而不是直接依赖 GameServer：/ready 需要的是**状态快照**，不是游戏逻辑。
    */
   readiness?: () => { worker?: { poolSize: number; warm: number } };
+  /** P4：管理端实时快照（房间/连接/队列/AI 池）。与 readiness 一样只给状态，不给身份。 */
+  ops?: () => {
+    rooms: number;
+    roomsEnded: number;
+    wsClients: number;
+    queuedEntries: number;
+    worker: { poolSize: number; warm: number; running: number; queued: number; submitted: number; decided: number; timedOut: number; failed: number; rejected: number; cancelled: number; respawns: number };
+  };
   /**
    * S07：会话被撤销（登出）。服务端据此**立即切断**该用户的 WebSocket，
    * 否则登出后旧连接仍能继续下棋 —— 那等于登出没有生效。
@@ -297,6 +306,9 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
 
   const publicShareLimiter = new SlidingWindowLimiter(PUBLIC_SHARE_RATE_LIMIT, PUBLIC_SHARE_RATE_WINDOW_MS);
   const startedAt = Date.now();
+  /** 管理端计数：只读一行 COUNT，不返回任何身份信息。 */
+  const countRows = (sql: string, ...params: unknown[]): number =>
+    Number((db.raw.prepare(sql).get(...(params as never[])) as { n?: number } | undefined)?.n ?? 0);
   // 启动时探测一次：/version 与 /ready 报的是实际部署的提交。
   const backendSourceSha = detectBackendSourceSha();
   const frontendSourceSha = process.env.SRSZQ_FRONTEND_SOURCE_SHA?.trim() || null;
@@ -587,6 +599,46 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
         if (!gate.ok) return;
         const status = url.searchParams.get('status');
         return send(res, 200, { reports: db.listReports(status) });
+      }
+      if (isApi && seg[1] === 'admin' && seg[2] === 'live' && seg.length === 3 && req.method === 'GET') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        const ops = hooks.ops?.() ?? null;
+        const now = Date.now();
+        return send(res, 200, {
+          ops,
+          // 队列/房间等实时值来自内存快照；下面这些是数据库口径（不含身份信息）。
+          db: {
+            liveGames: countRows('SELECT COUNT(*) AS n FROM live_games'),
+            settledToday: countRows('SELECT COUNT(*) AS n FROM match_results WHERE settled_at >= ?', now - 86400000),
+            pendingReports: countRows("SELECT COUNT(*) AS n FROM reports WHERE status = 'PENDING'"),
+            pendingDataTasks: countRows("SELECT COUNT(*) AS n FROM data_tasks WHERE status IN ('PENDING','RUNNING')"),
+            datasetRuns: countRows('SELECT COUNT(*) AS n FROM dataset_runs'),
+            publishedPuzzles: PUZZLE_BANK_META.total,
+          },
+          events: {
+            matchStartsHumanOnly: db.countProductEvents({ name: 'match_start', sinceMs: now - 86400000 }),
+            matchFinishesHumanOnly: db.countProductEvents({ name: 'match_finish', sinceMs: now - 86400000 }),
+            rule: '默认口径排除 bot 与合成/测试来源（规格 7.1）',
+          },
+          queue: ops ? { queuedEntries: ops.queuedEntries } : null,
+        });
+      }
+      if (isApi && seg[1] === 'admin' && seg[2] === 'data-tasks' && seg.length === 3 && req.method === 'GET') {
+        const gate = adminUser();
+        if (!gate.ok) return;
+        // 数据导出/删除请求队列：只给任务状态与类型，不给邮箱等内容。
+        const rows = db.raw
+          .prepare('SELECT task_id, kind, status, requested_at, finished_at, error FROM data_tasks ORDER BY requested_at DESC LIMIT 100')
+          .all() as Array<Record<string, unknown>>;
+        return send(res, 200, {
+          tasks: rows.map((r) => ({
+            taskId: String(r.task_id), kind: String(r.kind), status: String(r.status),
+            requestedAt: Number(r.requested_at),
+            finishedAt: r.finished_at === null || r.finished_at === undefined ? null : Number(r.finished_at),
+            error: r.error === null || r.error === undefined ? null : String(r.error),
+          })),
+        });
       }
       if (isApi && seg[1] === 'admin' && seg[2] === 'audit' && seg.length === 3 && req.method === 'GET') {
         const gate = adminUser();

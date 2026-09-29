@@ -641,6 +641,8 @@ export function openDb(path: string): Db {
       tutorialCompleted: Number(r.tutorial_completed) === 1,
       onlineStatus: r.online_status as User['onlineStatus'],
       rating: Number(r.rating),
+      // role 是 P4 迁移加的列：老库补列后默认 USER，这里用 COALESCE 兼容两种行。
+      role: (r.role === 'ADMIN' ? 'ADMIN' : 'USER') as User['role'],
     };
   };
 

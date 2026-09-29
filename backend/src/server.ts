@@ -61,6 +61,8 @@ const { server: apiServer } = createApi(db, {
   readiness: () => ({
     worker: { poolSize: gameServer.aiHost.stats.poolSize, warm: gameServer.aiHost.stats.warm },
   }),
+  // P4：管理页面的实时快照（只给规模与状态，不给身份）。
+  ops: () => gameServer.opsSnapshot(),
 });
 const apiPort = Number(process.env.PORT ?? 8080);
 apiServer.listen(apiPort, '127.0.0.1', () => {
