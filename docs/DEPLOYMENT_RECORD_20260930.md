@@ -64,6 +64,38 @@ wss://api.srszq.com/ws?protocol=2&ruleset=formal-rules-v2
 （见 `PRODUCTION_OPERATIONS.md`："The QA account remains in the database for evidence"）。
 未删除，也未用于任何真人统计。
 
+---
+
+## 第二次发布：P0C（B2）— 2026-09-30
+
+| 项 | 值 |
+|---|---|
+| releaseId | `p0c-20260930` |
+| 生产提交 | `ef175ed81a165209b9fd7fb78f804edcb5e68b90`（含 `7d349d9` P0C + `ef175ed` smoke 修复） |
+| 回滚点 | `d9dddd32fa755c9a7d475ab893f79ac6a44db3d4` |
+| 回滚依赖 | `/var/backups/srszq/release-20260929T191047Z-yYShfh` |
+| 上线前独立备份 | `/home/admin/srszq-predeploy-backups/p0c-20260929T190536Z.sqlite`（integrity ok，175 用户 / 44 局） |
+| 前端 | 无改动（B2 纯后端），Netlify 重建结果相同 |
+
+### 第一次尝试失败并自动回滚（值得记录）
+
+`scripts/deploy-production.sh` 的 smoke 门禁连 `ws://127.0.0.1:8081/ws`（无 token），
+期望「先握手成功、再收到 error=unauthorized」。P0C 把未认证拒绝提前到 **HTTP 层 401**
+（更安全：不给未授权来源分配任何连接资源），`ws` 客户端于是抛 `abortHandshake`，
+**未捕获异常让 smoke 退出非零 -> 触发部署回滚**。
+
+生产未受损：回滚把源码与依赖都还原，数据库从未被恢复或改写。
+
+修复方式：改 smoke 而不是改回产品行为 —— 两种拒绝形态都算通过（业务断言不变：
+「未认证客户端拿不到可用连接」），401 分支额外断言状态码确为 401。
+修复后先在**旧后端**上验证兼容分支通过，才重新部署。
+
+### 上线后观测
+
+- `ai_pool_warmed: 1/1` —— AI worker 线程在 PM2 下正常启动（这是 P0C 的关键前提）。
+- 公网 21 项端到端全部通过，含未认证 401、伪造 Origin 403、命令信封、ACK、幂等重放、STALE_REVISION。
+- 实测改善：主线程事件循环阻塞从 125–195ms 降到 15.1ms（仅调度噪声）。
+
 ## 未做的事
 
 - 未改 DNS、未改域名、未改仓库可见性。

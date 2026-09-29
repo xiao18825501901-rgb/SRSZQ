@@ -63,7 +63,10 @@ const main = async () => {
   ok(!!start, '匹配成功并收到 game.start');
   if (!start) { ws.close(); return; }
   ok(start.revision === 0, 'game.start.revision === 0');
-  ok(start.protocol?.releaseId === 'p0b-20260930', 'game.start 带 releaseId=p0b-20260930，实际 ' + start.protocol?.releaseId);
+  // 用 HTTP 端点报出的 releaseId 作基准，而不是写死某个批次号：
+  // 断言的是「HTTP 与 WebSocket 报告同一个版本」，批次变了不该让测试失真。
+  ok(start.protocol?.releaseId === v.json?.protocol?.releaseId,
+    'game.start 的 releaseId 必须与 /api/version 一致（http=' + v.json?.protocol?.releaseId + ' ws=' + start.protocol?.releaseId + '）');
   const mySeat = start.yourSeat;
   const aiCount = Object.values(start.seats).filter(s => s.kind === 'ai').length;
   ok(aiCount === 2, '1H+2AI 补位，ai=' + aiCount);
@@ -124,6 +127,39 @@ const main = async () => {
   ws.send(JSON.stringify({ type: 'PLAYER_RESIGN' }));
   await new Promise(r => setTimeout(r, 1500));
   ws.close();
+
+  // ---- P0C 公网安全断言 ----
+  log('=== 4) 公网 P0C 安全边界 ===');
+  const unauth = await new Promise((resolve) => {
+    const bad = new WebSocket('wss://api.srszq.com/ws');
+    let settled = false;
+    const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+    bad.on('unexpected-response', (_req, res) => { bad.terminate(); done({ rejectedBeforeUpgrade: true, statusCode: res.statusCode }); });
+    bad.on('error', (e) => {
+      const m = /Unexpected server response: (\d{3})/.exec(String(e?.message ?? ''));
+      done(m ? { rejectedBeforeUpgrade: true, statusCode: Number(m[1]) } : { rejectedBeforeUpgrade: false, error: String(e?.message ?? e) });
+    });
+    bad.on('open', () => { bad.close(); done({ rejectedBeforeUpgrade: false }); });
+    setTimeout(() => done({ rejectedBeforeUpgrade: false, error: 'timeout' }), 8000);
+  });
+  ok(unauth.rejectedBeforeUpgrade === true && unauth.statusCode === 401,
+    '公网未认证 WSS 必须在握手前被 401 拒绝，实际 ' + JSON.stringify(unauth));
+
+  const badOrigin = await new Promise((resolve) => {
+    const evil = new WebSocket('wss://api.srszq.com/ws?token=' + encodeURIComponent(token), { headers: { Origin: 'https://evil.example' } });
+    let settled = false;
+    const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+    evil.on('unexpected-response', (_req, res) => { evil.terminate(); done({ rejectedBeforeUpgrade: true, statusCode: res.statusCode }); });
+    evil.on('error', (e) => {
+      const m = /Unexpected server response: (\d{3})/.exec(String(e?.message ?? ''));
+      done(m ? { rejectedBeforeUpgrade: true, statusCode: Number(m[1]) } : { rejectedBeforeUpgrade: false, error: String(e?.message ?? e) });
+    });
+    evil.on('open', () => { evil.close(); done({ rejectedBeforeUpgrade: false }); });
+    setTimeout(() => done({ rejectedBeforeUpgrade: false, error: 'timeout' }), 8000);
+  });
+  ok(badOrigin.rejectedBeforeUpgrade === true && badOrigin.statusCode === 403,
+    '公网伪造 Origin 必须在握手前被 403 拒绝，实际 ' + JSON.stringify(badOrigin));
+
   log('=== 观测 ===');
   log('  DEMO_USER=' + username + ' seat=' + mySeat);
   log(failures === 0 ? 'PUBLIC E2E: ALL PASS 0' : 'PUBLIC E2E: ' + failures + ' FAILED 1');
