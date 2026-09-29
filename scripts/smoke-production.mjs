@@ -54,22 +54,42 @@ async function authenticatedWebSocket(token, expectedUserId) {
 }
 await ready();
 console.log('API PASS: loopback API returned the expected JSON response');
-await new Promise((resolve, reject) => {
+// 未认证的 WS 必须在**握手前**就被拒绝。两种可接受的拒绝形态：
+//  1) 升级请求直接收到 HTTP 401（当前实现：on('unexpected-response')）
+//  2) 兼容旧形态：握手成功后立刻收到 {error:'unauthorized'} 并被关闭
+// 业务断言不变 —— 「未认证客户端拿不到可用连接」。
+const unauthOutcome = await new Promise((resolve, reject) => {
   const ws = new WebSocket(wsUrl, {
     handshakeTimeout: 5000,
     ...(wsHost ? { headers: { Host: wsHost } } : {}),
   });
   const timer = setTimeout(() => { ws.terminate(); reject(Error('WS timeout')); }, 7000);
-  ws.on('error', error => { clearTimeout(timer); reject(error); });
+  ws.on('unexpected-response', (_req, res) => {
+    clearTimeout(timer);
+    ws.terminate();
+    resolve({ rejectedBeforeUpgrade: true, statusCode: res.statusCode });
+  });
+  ws.on('error', error => {
+    clearTimeout(timer);
+    // ws 库在收到非 101 响应时也可能走 error（Unexpected server response: 4xx）。
+    const m = /Unexpected server response: (\d{3})/.exec(String(error?.message ?? ''));
+    if (m) resolve({ rejectedBeforeUpgrade: true, statusCode: Number(m[1]) });
+    else reject(error);
+  });
   ws.on('message', raw => {
     try {
       const message = JSON.parse(String(raw));
       assert.equal(message.error, 'unauthorized');
-      clearTimeout(timer); ws.close(); resolve();
+      clearTimeout(timer); ws.close(); resolve({ rejectedBeforeUpgrade: false, statusCode: null });
     } catch (error) { clearTimeout(timer); ws.terminate(); reject(error); }
   });
 });
-console.log(`WS PASS: ${wsUrl} upgraded and rejected an unauthenticated client`);
+if (unauthOutcome.rejectedBeforeUpgrade) {
+  assert.equal(unauthOutcome.statusCode, 401);
+  console.log(`WS PASS: ${wsUrl} rejected an unauthenticated client before upgrade (HTTP 401)`);
+} else {
+  console.log(`WS PASS: ${wsUrl} upgraded and rejected an unauthenticated client`);
+}
 
 const processes = JSON.parse(execFileSync('pm2', ['jlist'], { encoding: 'utf8' }));
 const backend = processes.find(process => process.name === 'srszq-backend');
