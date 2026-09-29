@@ -11,12 +11,19 @@ git fetch origin
 previous=$(git rev-parse HEAD)
 target=$(git rev-parse origin/main)
 git merge-base --is-ancestor "$previous" "$target"
+# 第一方源码目录不属于“运行期数据”。.gitignore 明确写了 !frontend/src/data/
+# （见 25fc09e: track frontend hero-game data swallowed by data/ ignore rule），
+# 因此按通用的 data/ 名字做黑名单会把真实源码当成运行数据，导致任何 release 都被拒绝。
+# 这里先把 frontend/src/data/ 排除，再套用原来的运行期/密钥规则。
+tracked_runtime_or_secret() {
+  git ls-tree -r --name-only "$1" \
+    | grep -vE '^frontend/src/data/' \
+    | grep -vE '(^|/)\.env\.example$' \
+    | grep -Eq '(^|/)(data/|\.env($|\.))|\.(sqlite(-wal|-shm)?|pem|key)$'
+}
 for revision in "$previous" "$target"; do
-  if git ls-tree -r --name-only "$revision" | grep -Eq '(^|/)(data/|\.env($|\.))|\.(sqlite(-wal|-shm)?|pem|key)$'; then
-    # .env.example is an allowed non-secret template; check again without it.
-    if git ls-tree -r --name-only "$revision" | grep -vE '(^|/)\.env\.example$' | grep -Eq '(^|/)(data/|\.env($|\.))|\.(sqlite(-wal|-shm)?|pem|key)$'; then
-      echo 'Runtime or secret files tracked; release refused'; exit 1
-    fi
+  if tracked_runtime_or_secret "$revision"; then
+    echo "Runtime or secret files tracked in $revision; release refused"; exit 1
   fi
 done
 if git grep -IlE 'ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY' "$target" -- .; then
