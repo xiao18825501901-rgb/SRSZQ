@@ -92,6 +92,15 @@ const SUITES = {
     phase: 'P3A',
     deferred: ['D07/D08 续训声明与模型卡', 'O02 留存口径', 'O05 备份恢复演练'],
   },
+  provider: {
+    title: 'P3B provider 接口 / 续训声明校验 / 评测矩阵聚合',
+    entry: 'backend/tests/ai.provider.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['D06', 'D07', 'D08(失败指标)'],
+    phase: 'P3B',
+    deferred: ['真实训练与 checkpoint（本项目未训练任何模型）', 'GPU/搜索 scaling 与 exact oracle 残局评测'],
+  },
   features: {
     title: 'P1 排位资格 / V1 评分算法 / 重复对手保护 / 排行榜过滤',
     entry: 'backend/tests/rating.policy.ts',

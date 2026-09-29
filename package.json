@@ -26,6 +26,8 @@
     "test:history": "tsx backend/tests/history.replay.ts",
     "test:puzzles": "tsx backend/tests/puzzles.bank.ts",
     "test:privacy": "tsx backend/tests/privacy.dataset.ts",
+    "test:provider": "tsx backend/tests/ai.provider.ts",
+    "eval:ai": "tsx scripts/product/ai-eval-matrix.mts",
     "build:puzzles": "tsx scripts/product/build-puzzle-bank.mts",
     "test:product": "node scripts/product/run-tests.mjs",
     "e2e": "node e2e.cjs",
