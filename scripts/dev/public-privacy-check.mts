@@ -26,6 +26,10 @@ async function main(): Promise<void> {
   const game = await playScriptedTrioGame({ apiBase: API, wsUrl: WSURL, prefix: 'pv', password: 'Demo-PV-' + stamp + '!3' });
   ok(game.humanSeats === 3 && game.ackFail === 0, '三人同房且 20 手全部被接受');
   const winner = game.winner;
+  // 注意：users[0] 往往就是获胜者本人（座位分配随机）。举报/屏蔽/“他人仍可读”都必须
+  // 用**另一个**账号，否则会自己举报自己（服务端正确返回 400）而看起来像产品缺陷。
+  const other = game.users.find((u) => u.id !== winner.id)!;
+  ok(other.id !== winner.id, '准备好另一名参与者账号用于举报/屏蔽/他人可读检查：' + other.username);
 
   console.log('=== D01 训练许可（默认不纳入） ===');
   const before = await api(API, 'GET', '/api/consent/training', undefined, winner.token);
@@ -58,13 +62,15 @@ async function main(): Promise<void> {
   ok(auditDenied.status === 403, '普通账号读审计 403');
 
   console.log('=== O04 举报 / 屏蔽 ===');
-  const report = await api(API, 'POST', '/api/report', { targetKind: 'USER', targetId: game.users[0].id, reason: 'spam', detail: '验证用举报' }, winner.token);
+  const report = await api(API, 'POST', '/api/report', { targetKind: 'USER', targetId: other.id, reason: 'spam', detail: '验证用举报' }, winner.token);
   ok(report.status === 201 && report.json?.report?.status === 'PENDING', '举报进入人工队列（PENDING）');
   ok(String(report.json?.note ?? '').includes('不会依据举报自动封禁'), '接口明确说明不做自动处罚');
-  const blocked = await api(API, 'POST', '/api/block', { userId: game.users[0].id }, winner.token);
+  const blocked = await api(API, 'POST', '/api/block', { userId: other.id }, winner.token);
   ok(blocked.status === 200 && Array.isArray(blocked.json?.blocks) && blocked.json.blocks.length === 1, '屏蔽生效');
-  const unblocked = await api(API, 'DELETE', '/api/block/' + game.users[0].id, undefined, winner.token);
+  const unblocked = await api(API, 'DELETE', '/api/block/' + other.id, undefined, winner.token);
   ok(unblocked.status === 200 && unblocked.json?.blocks.length === 0, '解除屏蔽');
+  const selfReport = await api(API, 'POST', '/api/report', { targetKind: 'USER', targetId: winner.id, reason: 'self' }, winner.token);
+  ok(selfReport.status === 400, '不能举报自己（服务端 400）');
 
   console.log('=== O04 导出 ===');
   const created = await api(API, 'POST', '/api/me/export', {}, winner.token);
@@ -93,8 +99,10 @@ async function main(): Promise<void> {
   ok(afterShare.status === 410, '删除后公开分享返回 410（实际 ' + afterShare.status + '）');
   const meAfter = await api(API, 'GET', '/api/me', undefined, winner.token);
   ok(meAfter.status === 401, '会话已失效（旧 token 不再可用）');
-  const otherStillThere = await api(API, 'GET', '/api/games/' + game.gameId + '/replay', undefined, game.users[0].token);
-  ok(otherStillThere.status === 200, '同一局对其他参与者仍然可读（不连带删除他人记录）');
+  const otherStillThere = await api(API, 'GET', '/api/games/' + game.gameId + '/replay', undefined, other.token);
+  ok(otherStillThere.status === 200, '同一局对其他参与者仍然可读（不连带删除他人记录，实际 ' + otherStillThere.status + '）');
+  const otherHistory = await api(API, 'GET', '/api/history?limit=5', undefined, other.token);
+  ok(otherHistory.json?.history?.length >= 1, '其他参与者的历史记录不受影响');
 
   console.log('=== 观测 ===');
   console.log('  release=' + release);
