@@ -128,6 +128,34 @@ export interface RecoverableGame {
   snapshot: unknown;
 }
 
+/** R01：本人历史列表的一行（只含本人座位视角，不泄露对手内部 ID）。 */
+export interface HistoryEntry {
+  gameId: string;
+  seat: string;
+  outcome: ParticipantOutcome;
+  ratingDelta: number;
+  mode: string;
+  boardSize: number;
+  endReason: string;
+  winnerSeat: string | null;
+  isRanked: boolean;
+  scorePolicy: string;
+  settledAt: number;
+  moveCount: number;
+  hasShare: boolean;
+}
+
+/** R06：去标识分享链接。token 是唯一对外标识，gameId 绝不出现在公开响应里。 */
+export interface ShareLink {
+  token: string;
+  gameId: string;
+  ownerId: string;
+  createdAt: number;
+  expiresAt: number;
+  revokedAt: number | null;
+  views: number;
+}
+
 export interface Db {
   raw: DatabaseSync;
   createUser(input: { email: string; username: string; passwordHash: string; salt: string }): User;
@@ -173,6 +201,36 @@ export interface Db {
    * 用于规格 4.2 的重复对手保护：同一三人组合 24 小时内第 4 局起竞技分变动为 0。
    */
   countRecentMatchesForUsers(userIds: string[], sinceMs: number): number;
+  /** R01：本人各模式终局的分页历史（按结算时间倒序）。 */
+  historyFor(userId: string, limit: number, offset: number): HistoryEntry[];
+  /** R01：与 historyFor 同一过滤条件下的总条数，供分页使用。 */
+  historyCount(userId: string): number;
+  /** R01/R02：本人是否参与该局（本人座位视角）。不存在返回 null。 */
+  participantOf(userId: string, gameId: string): { seat: string; outcome: ParticipantOutcome; ratingDelta: number } | null;
+  /** 房间创建时登记“谁在这局里”（座位归属），终局结算后关闭。 */
+  openLiveGame(gameId: string, members: Record<string, string>): void;
+  /** 终局结算后关闭进行中记录（分享/分析随之切换到已结算判定）。 */
+  closeLiveGame(gameId: string): void;
+  /**
+   * R02/R06：进行中（尚未结算）对局的座位归属。
+   * match_participants 只在终局结算时写入，所以未结算局必须从快照的 members 判定 ——
+   * 否则“进行中的对局不能分享/不能分析”会退化成 404，把“不是你的”和“还没结束”混为一谈。
+   */
+  seatInLiveGame(userId: string, gameId: string): string | null;
+  /** R01/R06：某局参与者的脱敏视图（座位/名次/来源），**不含** user_id 与用户名。 */
+  matchParticipantViews(gameId: string): Array<{ seat: string; outcome: ParticipantOutcome; kind: string; source: AccountSource; ratingDelta: number }>;
+  /** R02：某局最新权威快照（默认只含已结算局；includeUnsettled 供恢复路径使用）。 */
+  latestSnapshot(gameId: string): { revision: number; seq: number; stateJson: string } | null;
+  /** R06：创建去标识分享链接（终局后由本人主动创建）。 */
+  createShareLink(input: { token: string; gameId: string; ownerId: string; ttlMs: number }): ShareLink;
+  /** R06：按 token 读取（含已撤销/已过期，由调用方判定可见性）。 */
+  findShareLink(token: string): ShareLink | null;
+  /** R06：撤销本人创建的链接；返回是否真的撤销了（非本人/不存在 = false）。 */
+  revokeShareLink(token: string, ownerId: string): boolean;
+  /** R06：某局由本人创建的分享链接（用于前端显示“已分享/撤销”）。 */
+  listShareLinks(gameId: string, ownerId: string): ShareLink[];
+  /** R06：公开访问计数（审计用）。 */
+  countShareView(token: string): void;
   saveGame(input: { id: string; boardSize: number; mode: string; winner: string | null; movesJson: string; createdAt: number }): void;
   saveMatch(input: {
     id: string;
@@ -345,6 +403,30 @@ export function openDb(path: string): Db {
 
     CREATE INDEX IF NOT EXISTS idx_game_events_game ON game_events (game_id, seq);
     CREATE INDEX IF NOT EXISTS idx_game_snapshots_game ON game_snapshots (game_id, revision);
+
+    /* ---- P2 棋谱历史 / 去标识分享（R01 R02 R06） ---- */
+
+    -- 分享链接：token 是唯一对外标识。撤销 = 写 revoked_at（不删行，保留审计）。
+    -- 公开响应绝不返回 game_id / owner_id，所以泄露面只有 token 本身。
+    CREATE TABLE IF NOT EXISTS share_links (
+      token TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL,
+      owner_id TEXT NOT NULL REFERENCES users(id),
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      revoked_at INTEGER,
+      views INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_share_links_game ON share_links (game_id, owner_id);
+
+    -- 进行中对局的座位归属（终局即删除）。没有它，API 就无法区分
+    -- “这局不是你的”（404）与“这局还没结束”（409）。
+    CREATE TABLE IF NOT EXISTS live_games (
+      game_id TEXT PRIMARY KEY,
+      seats_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   // 轻量迁移：老库 matches 表补 Player Leave System 列（幂等）
@@ -792,6 +874,150 @@ export function openDb(path: string): Db {
     listFriends(userId) {
       const rows = raw.prepare('SELECT friend_id FROM friends WHERE user_id = ?').all(userId) as Array<{ friend_id: string }>;
       return rows.map((x) => String(x.friend_id));
+    },
+    historyFor(userId, limit, offset) {
+      // 只读本人座位视角：对手的 user_id / 邮箱一律不出现在返回结构里。
+      const rows = raw
+        .prepare(
+          `SELECT mp.game_id, mp.seat, mp.outcome, mp.rating_delta,
+                  mr.mode, mr.board_size, mr.end_reason, mr.winner_seat, mr.is_ranked, mr.score_policy, mr.settled_at,
+                  (SELECT COUNT(*) FROM game_events e WHERE e.game_id = mp.game_id AND e.type = 'move.applied') AS move_count,
+                  (SELECT COUNT(*) FROM share_links s
+                    WHERE s.game_id = mp.game_id AND s.owner_id = mp.user_id
+                      AND s.revoked_at IS NULL AND s.expires_at > ?) AS share_count
+             FROM match_participants mp
+             JOIN match_results mr ON mr.game_id = mp.game_id
+            WHERE mp.user_id = ?
+            ORDER BY mr.settled_at DESC, mp.game_id DESC
+            LIMIT ? OFFSET ?`,
+        )
+        .all(Date.now(), userId, limit, offset) as Array<Record<string, unknown>>;
+      return rows.map((x) => ({
+        gameId: String(x.game_id),
+        seat: String(x.seat),
+        outcome: String(x.outcome) as ParticipantOutcome,
+        ratingDelta: Number(x.rating_delta),
+        mode: String(x.mode),
+        boardSize: Number(x.board_size),
+        endReason: String(x.end_reason),
+        winnerSeat: x.winner_seat === null ? null : String(x.winner_seat),
+        isRanked: Number(x.is_ranked) === 1,
+        scorePolicy: String(x.score_policy),
+        settledAt: Number(x.settled_at),
+        moveCount: Number(x.move_count),
+        hasShare: Number(x.share_count) > 0,
+      }));
+    },
+    historyCount(userId) {
+      const r = raw
+        .prepare('SELECT COUNT(*) AS n FROM match_participants mp JOIN match_results mr ON mr.game_id = mp.game_id WHERE mp.user_id = ?')
+        .get(userId) as { n?: number } | undefined;
+      return Number(r?.n ?? 0);
+    },
+    participantOf(userId, gameId) {
+      const r = raw
+        .prepare('SELECT seat, outcome, rating_delta FROM match_participants WHERE game_id = ? AND user_id = ?')
+        .get(gameId, userId) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      return { seat: String(r.seat), outcome: String(r.outcome) as ParticipantOutcome, ratingDelta: Number(r.rating_delta) };
+    },
+    openLiveGame(gameId, members) {
+      raw
+        .prepare('INSERT OR REPLACE INTO live_games (game_id,seats_json,created_at) VALUES (?,?,?)')
+        .run(gameId, JSON.stringify(members), Date.now());
+    },
+    closeLiveGame(gameId) {
+      raw.prepare('DELETE FROM live_games WHERE game_id = ?').run(gameId);
+    },
+    seatInLiveGame(userId, gameId) {
+      const live = raw.prepare('SELECT seats_json FROM live_games WHERE game_id = ?').get(gameId) as { seats_json?: string } | undefined;
+      if (live?.seats_json) {
+        try {
+          const seats = JSON.parse(live.seats_json) as Record<string, string>;
+          if (typeof seats[userId] === 'string') return seats[userId];
+        } catch {
+          /* 记录损坏时继续用快照兜底 */
+        }
+      }
+      const snap = db.latestSnapshot(gameId);
+      if (!snap) return null;
+      try {
+        const parsed = JSON.parse(snap.stateJson) as { members?: Record<string, string> } | null;
+        const seat = parsed?.members?.[userId];
+        return typeof seat === 'string' ? seat : null;
+      } catch {
+        return null;
+      }
+    },
+    matchParticipantViews(gameId) {
+      const rows = raw
+        .prepare(
+          `SELECT mp.seat, mp.outcome, mp.kind, mp.rating_delta, COALESCE(u.source, 'HUMAN') AS source
+             FROM match_participants mp
+             LEFT JOIN users u ON u.id = mp.user_id
+            WHERE mp.game_id = ?
+            ORDER BY mp.seat`,
+        )
+        .all(gameId) as Array<Record<string, unknown>>;
+      return rows.map((x) => ({
+        seat: String(x.seat),
+        outcome: String(x.outcome) as ParticipantOutcome,
+        kind: String(x.kind),
+        source: String(x.source) as AccountSource,
+        ratingDelta: Number(x.rating_delta),
+      }));
+    },
+    latestSnapshot(gameId) {
+      const r = raw
+        .prepare('SELECT revision, state_json FROM game_snapshots WHERE game_id = ? ORDER BY revision DESC LIMIT 1')
+        .get(gameId) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      const seq = raw.prepare('SELECT COALESCE(MAX(seq),0) AS s FROM game_events WHERE game_id = ?').get(gameId) as { s?: number } | undefined;
+      return { revision: Number(r.revision), seq: Number(seq?.s ?? 0), stateJson: String(r.state_json) };
+    },
+    createShareLink(input) {
+      const createdAt = Date.now();
+      const expiresAt = createdAt + input.ttlMs;
+      raw
+        .prepare('INSERT INTO share_links (token,game_id,owner_id,created_at,expires_at,revoked_at,views) VALUES (?,?,?,?,?,NULL,0)')
+        .run(input.token, input.gameId, input.ownerId, createdAt, expiresAt);
+      return { token: input.token, gameId: input.gameId, ownerId: input.ownerId, createdAt, expiresAt, revokedAt: null, views: 0 };
+    },
+    findShareLink(token) {
+      const r = raw.prepare('SELECT * FROM share_links WHERE token = ?').get(token) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      return {
+        token: String(r.token),
+        gameId: String(r.game_id),
+        ownerId: String(r.owner_id),
+        createdAt: Number(r.created_at),
+        expiresAt: Number(r.expires_at),
+        revokedAt: r.revoked_at === null || r.revoked_at === undefined ? null : Number(r.revoked_at),
+        views: Number(r.views),
+      };
+    },
+    revokeShareLink(token, ownerId) {
+      const res = raw
+        .prepare('UPDATE share_links SET revoked_at = ? WHERE token = ? AND owner_id = ? AND revoked_at IS NULL')
+        .run(Date.now(), token, ownerId);
+      return Number(res.changes ?? 0) > 0;
+    },
+    listShareLinks(gameId, ownerId) {
+      const rows = raw
+        .prepare('SELECT * FROM share_links WHERE game_id = ? AND owner_id = ? ORDER BY created_at DESC')
+        .all(gameId, ownerId) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        token: String(r.token),
+        gameId: String(r.game_id),
+        ownerId: String(r.owner_id),
+        createdAt: Number(r.created_at),
+        expiresAt: Number(r.expires_at),
+        revokedAt: r.revoked_at === null || r.revoked_at === undefined ? null : Number(r.revoked_at),
+        views: Number(r.views),
+      }));
+    },
+    countShareView(token) {
+      raw.prepare('UPDATE share_links SET views = views + 1 WHERE token = ?').run(token);
     },
     close() {
       raw.close();

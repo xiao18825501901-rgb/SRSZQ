@@ -215,6 +215,25 @@ export function broadcastStatusFor(plan: SettlementPlan): 'won' | 'draw' | 'forf
   return 'won';
 }
 
+/**
+ * 稳定的 128 位内容摘要（纯 JS，无 node 依赖，浏览器可直接用）。
+ * 只用于检索 / 审计 / 证据绑定 —— 规格 6.1 明写 hash **不是**服务器防篡改的充分证明。
+ */
+export function stableDigest(payload: string): string {
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  let h3 = 0x9e3779b9;
+  let h4 = 0x85ebca6b;
+  for (let i = 0; i < payload.length; i++) {
+    const c = payload.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 + c, 0x85ebca6b) >>> 0;
+    h3 = Math.imul(h3 ^ (c + i), 0xc2b2ae35) >>> 0;
+    h4 = Math.imul(h4 + (c ^ i), 0x27d4eb2f) >>> 0;
+  }
+  return [h1, h2, h3, h4].map((x) => x.toString(16).padStart(8, '0')).join('');
+}
+
 /** 稳定摘要：用于证据绑定与“同一局只结算一次”的比对。 */
 export function settlementDigest(plan: SettlementPlan): string {
   const payload = JSON.stringify({
@@ -231,17 +250,6 @@ export function settlementDigest(plan: SettlementPlan): string {
       .map((p) => [p.seat, p.kind, p.userId ?? null, p.outcome, p.ratingDelta])
       .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
   });
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  let h3 = 0x9e3779b9;
-  let h4 = 0x85ebca6b;
-  for (let i = 0; i < payload.length; i++) {
-    const c = payload.charCodeAt(i);
-    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
-    h2 = Math.imul(h2 + c, 0x85ebca6b) >>> 0;
-    h3 = Math.imul(h3 ^ (c + i), 0xc2b2ae35) >>> 0;
-    h4 = Math.imul(h4 + (c ^ i), 0x27d4eb2f) >>> 0;
-  }
   // 128 位十六进制摘要（32 字符）：用于把“这一份结算”绑定到证据上。
-  return [h1, h2, h3, h4].map((x) => x.toString(16).padStart(8, '0')).join('');
+  return stableDigest(payload);
 }

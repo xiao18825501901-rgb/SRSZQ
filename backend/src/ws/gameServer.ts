@@ -592,6 +592,7 @@ export class GameServer {
       commandQueue: Promise.resolve(),
     };
     this.rooms.set(room.id, room);
+    this.db.openLiveGame(room.id, room.members);
     this.ensureTurnClock(room);
     this.logMatchmaking('ai_fill_complete', {
       queueId, roomId: room.id, humanCount: humans.length, aiCount: 3 - humans.length,
@@ -998,6 +999,7 @@ export class GameServer {
       if (snap.state.status !== 'playing') continue;
       const room = this.rehydrateRoom(g.gameId, snap, g.revision, g.seq);
       this.rooms.set(room.id, room);
+      this.db.openLiveGame(room.id, room.members);
       for (const uid of Object.keys(room.members)) this.userGame.set(uid, room.id);
       room.recoveryDeadlineAt = Date.now() + this.opts.recoveryGraceMs;
       room.recoveryTimer = setTimeout(() => this.expireRecovery(room), this.opts.recoveryGraceMs);
@@ -1309,6 +1311,8 @@ export class GameServer {
 
     room.ended = true;
     room.phase = 'FINISHED';
+    // 终局已结算：进行中记录退场，分享/分析改走已结算归属判定。
+    this.db.closeLiveGame(room.id);
     this.clearTurnClock(room);
     room.endReason = plan.endReason;
     for (const t of room.disconnectTimers.values()) clearTimeout(t);

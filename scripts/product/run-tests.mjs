@@ -65,6 +65,15 @@ const SUITES = {
     phase: 'P0C',
     deferred: ['S04 WS 单次票据', 'S08 邮件找回', 'S09 账号枚举', 'S10 活跃对局分析'],
   },
+  replay: {
+    title: 'P2 棋谱历史 / 全谱重放 / 关键三手 / 跨轮防守 / 去标识分享撤销',
+    entry: 'backend/tests/history.replay.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['R01', 'R02', 'R03', 'R04', 'R05', 'R06'],
+    phase: 'P2',
+    deferred: ['R07 题库 30-60 道', 'R08 每日题/错题', 'R09/R10 UI 与真实浏览器截图'],
+  },
   features: {
     title: 'P1 排位资格 / V1 评分算法 / 重复对手保护 / 排行榜过滤',
     entry: 'backend/tests/rating.policy.ts',

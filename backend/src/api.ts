@@ -3,13 +3,33 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Db } from './db.js';
 import { avatarFor, createSessionToken, hashPassword, makeSalt, sessionExpiry, validateEmail, validatePassword, validateUsername, verifyPassword } from './auth.js';
 import type { PublicUser, User } from './models.js';
-import { featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID } from '../../shared/src/index.js';
+import { randomUUID } from 'node:crypto';
+import { SlidingWindowLimiter } from './ws/security.js';
+import {
+  featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID,
+  asBoardSize, moveListOf, replayGame, reviewKeyMoves, stateDigest, threatWindows,
+  PLAYER_LABELS, RULESET_VERSION, RELEASE_ID,
+  type PersistedEvent, type GameState, type Player, type ReplayOutcome, type ReviewMove, type ThreatWindow,
+} from '../../shared/src/index.js';
 
 export interface ApiContext {
   db: Db;
   /** 从 Authorization: Bearer <token> 解析并校验会话，返回用户或 null */
   authUser(req: IncomingMessage): User | null;
 }
+
+/** R06：分享链接 TTL —— 规格写死 7 天，不接受调用方覆盖。 */
+const SHARE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Phase A 复盘的分析口径标识：只做精确一步事实，绝不产生搜索估计。 */
+const REVIEW_ANALYSIS_MODE = 'phase-a-exact-one-ply';
+
+/**
+ * 公开分享视图是**未认证**的，而每次请求都要真跑一遍重放（O(棋盘² × 手数)）。
+ * 不加限制的话，它就是一个不用登录就能打满事件循环的入口，所以按来源限流。
+ */
+const PUBLIC_SHARE_RATE_LIMIT = 30;
+const PUBLIC_SHARE_RATE_WINDOW_MS = 60_000;
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://srszq.com',
@@ -73,6 +93,107 @@ export function requireTutorialDone(res: ServerResponse, user: User | null): boo
   return true;
 }
 
+/* ---- P2 复盘视图（R02/R03/R04）：单一实现，供本人重放与公开分享共用 ---- */
+
+/**
+ * 全谱重放视图。hashMatches 的期望值来自**服务器自己持久化的权威快照**，
+ * 因此“重放到同一 hash”是对持久状态的一致性检查，而不是把客户端给的 hash 当真。
+ */
+function buildReplayView(db: Db, gameId: string, boardSizeRaw: unknown) {
+  const boardSize = asBoardSize(Number(boardSizeRaw));
+  if (boardSize === null) return null;
+  const events = db.listGameEvents(gameId) as PersistedEvent[];
+  const snap = db.latestSnapshot(gameId);
+  let snapshotHash: string | null = null;
+  if (snap) {
+    try {
+      const parsed = JSON.parse(snap.stateJson) as { state?: GameState } | null;
+      if (parsed && parsed.state) snapshotHash = stateDigest(parsed.state);
+    } catch {
+      snapshotHash = null;
+    }
+  }
+  const outcome: ReplayOutcome = replayGame(boardSize, events, { expectedHash: snapshotHash });
+  const windows: ThreatWindow[] = threatWindows(outcome);
+  const keyMoves = reviewKeyMovesFor(outcome, windows);
+  return {
+    rulesetVersion: RULESET_VERSION,
+    protocolVersion: PROTOCOL_INFO.protocolVersion,
+    releaseId: RELEASE_ID,
+    boardSize,
+    moveCount: outcome.steps.length,
+    moves: moveListOf(outcome),
+    status: outcome.state.status,
+    winnerSeat: outcome.state.winner,
+    winLine: outcome.state.winLine,
+    finalHash: outcome.finalHash,
+    snapshotHash,
+    snapshotRevision: snap ? snap.revision : null,
+    replayOk: outcome.ok,
+    replayErrors: outcome.errors,
+    hashMatches: outcome.hashMatches,
+    analysisMode: REVIEW_ANALYSIS_MODE,
+    // 5.2 的缓存键必须含 gameHash + engineVersion + budget + rulesetId；这里四项齐全。
+    reviewCacheKey: [outcome.finalHash, RULESET_VERSION, REVIEW_ANALYSIS_MODE, RELEASE_ID].join(':'),
+    keyMoves,
+    defenseWindowCount: windows.length,
+    seatLabels: PLAYER_LABELS,
+  };
+}
+
+/** 关键片段 + 与之对应的跨轮防守窗口（只有真的发生了遮挡才附窗口）。 */
+function reviewKeyMovesFor(outcome: ReplayOutcome, windows: ThreatWindow[]): Array<ReviewMove & { defenseWindow: ThreatWindow | null }> {
+  return reviewKeyMoves(outcome).map((km) => {
+    const w =
+      km.type === 'PREEMPTIVE_BLOCK'
+        ? windows.find(
+            (x) => x.row === km.row && x.col === km.col && x.resolvedAtPly === km.ply && x.resolvedBySeat === km.actorSeat,
+          ) ?? null
+        : null;
+    return { ...km, defenseWindow: w };
+  });
+}
+
+/**
+ * R06 公开视图：只出座位字母、棋色、名次、坐标与已证实的解释。
+ * 明确**不含** gameId / userId / 用户名 / 邮箱 / IP / 会话信息。
+ * demo=true 表示这局里有非 HUMAN 来源账号（合成/测试/演示），不允许冒充真人。
+ */
+function buildSharedView(db: Db, gameId: string) {
+  const settled = db.findMatchResult(gameId);
+  if (!settled) return null;
+  const base = buildReplayView(db, gameId, settled.boardSize);
+  if (!base) return null;
+  const parts = db.matchParticipantViews(gameId);
+  return {
+    demo: parts.some((p) => p.source !== 'HUMAN'),
+    rulesetVersion: base.rulesetVersion,
+    protocolVersion: base.protocolVersion,
+    mode: settled.mode,
+    boardSize: base.boardSize,
+    endReason: settled.endReason,
+    isRanked: settled.isRanked,
+    settledAt: settled.settledAt,
+    status: base.status,
+    winnerSeat: settled.winnerSeat,
+    seatLabels: base.seatLabels,
+    seats: parts.map((p) => ({
+      seat: p.seat,
+      label: PLAYER_LABELS[p.seat as Player] ?? p.seat,
+      kind: p.kind,
+      outcome: p.outcome,
+      ratingDelta: p.ratingDelta,
+    })),
+    moveCount: base.moveCount,
+    moves: base.moves,
+    winLine: base.winLine,
+    keyMoves: base.keyMoves,
+    finalHash: base.finalHash,
+    replayOk: base.replayOk,
+    analysisMode: base.analysisMode,
+  };
+}
+
 export interface ApiHooks {
   /** 邀请发出 → 服务端登记邀请会话（支持“多邀请聚合”状态机） */
   onInviteCreated?: (senderId: string, receiverId: string) => void;
@@ -101,6 +222,7 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
     },
   };
 
+  const publicShareLimiter = new SlidingWindowLimiter(PUBLIC_SHARE_RATE_LIMIT, PUBLIC_SHARE_RATE_WINDOW_MS);
   const server = createServer(async (req, res) => {
     const origin = req.headers.origin;
     const originAllowed = typeof origin === 'string' && allowedOrigins.has(origin);
@@ -118,6 +240,108 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
     const url = new URL(req.url ?? '/', 'http://localhost');
     const route = `${req.method} ${url.pathname}`;
     try {
+      /* ---- P2 动态路由（R01/R02/R06）：路径里带 gameId / token，常量 switch 匹配不到 ---- */
+      const seg = url.pathname.split('/').filter(Boolean);
+      const isApi = seg[0] === 'api';
+
+      // R06：公开分享视图。**不带任何内部标识**：无 gameId、无 userId、无用户名、无邮箱、无 IP。
+      if (isApi && seg[1] === 'shared' && seg.length === 3 && req.method === 'GET') {
+        const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+        const source = forwarded || req.socket.remoteAddress || 'unknown';
+        if (!publicShareLimiter.tryTake(source)) {
+          return send(res, 429, { error: 'rate limited', code: 'RATE_LIMITED' });
+        }
+        const link = db.findShareLink(seg[2]);
+        if (!link) return send(res, 404, { error: 'not found' });
+        if (link.revokedAt !== null) return send(res, 410, { error: 'revoked' });
+        if (link.expiresAt <= Date.now()) return send(res, 410, { error: 'expired' });
+        const settled = db.findMatchResult(link.gameId);
+        if (!settled) return send(res, 404, { error: 'not found' });
+        const shared = buildSharedView(db, link.gameId);
+        if (!shared) return send(res, 422, { error: 'UNSUPPORTED_BOARD_SIZE' });
+        db.countShareView(link.token);
+        return send(res, 200, {
+          shared: {
+            createdAt: link.createdAt,
+            expiresAt: link.expiresAt,
+            views: link.views,
+            ...shared,
+          },
+        });
+      }
+
+      // R06：撤销（仅创建者本人；撤销后公开视图 410）。
+      if (isApi && seg[1] === 'share' && seg.length === 3 && req.method === 'DELETE') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const revoked = db.revokeShareLink(seg[2], user.id);
+        if (!revoked) return send(res, 404, { error: 'not found or already revoked' });
+        return send(res, 200, { revoked: true, token: seg[2] });
+      }
+
+      // R02：本人全谱重放（含关键片段与跨轮防守窗口）。
+      if (isApi && seg[1] === 'games' && seg.length === 4 && seg[3] === 'replay' && req.method === 'GET') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const gameId = seg[2];
+        // 先判归属：不是本人参与的对局一律 404，避免用 403/404 差异枚举对局 ID。
+        const part = db.participantOf(user.id, gameId);
+        if (!part && !db.seatInLiveGame(user.id, gameId)) return send(res, 404, { error: 'not found' });
+        const settled = db.findMatchResult(gameId);
+        if (!settled) return send(res, 409, { error: 'ANALYSIS_REQUIRES_SETTLED' });
+        if (!part) return send(res, 404, { error: 'not found' });
+        const built = buildReplayView(db, gameId, settled.boardSize);
+        if (!built) return send(res, 422, { error: 'UNSUPPORTED_BOARD_SIZE' });
+        return send(res, 200, {
+          replay: {
+            gameId,
+            mySeat: part.seat,
+            myOutcome: part.outcome,
+            myRatingDelta: part.ratingDelta,
+            mode: settled.mode,
+            scorePolicy: settled.scorePolicy,
+            settledAt: settled.settledAt,
+            ...built,
+            shares: db.listShareLinks(gameId, user.id).map((s) => ({
+              token: s.token,
+              path: '/s/' + s.token,
+              createdAt: s.createdAt,
+              expiresAt: s.expiresAt,
+              revokedAt: s.revokedAt,
+              views: s.views,
+            })),
+          },
+        });
+      }
+
+      // R06：终局后主动创建分享链接（进行中的对局不允许）。
+      if (isApi && seg[1] === 'games' && seg.length === 4 && seg[3] === 'share' && req.method === 'POST') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const gameId = seg[2];
+        if (!db.participantOf(user.id, gameId) && !db.seatInLiveGame(user.id, gameId)) return send(res, 404, { error: 'not found' });
+        if (!db.findMatchResult(gameId)) return send(res, 409, { error: 'SHARE_REQUIRES_SETTLED' });
+        const token = randomUUID().replace(/-/g, '');
+        const link = db.createShareLink({ token, gameId, ownerId: user.id, ttlMs: SHARE_TTL_MS });
+        return send(res, 201, {
+          share: { token, path: '/s/' + token, createdAt: link.createdAt, expiresAt: link.expiresAt, ttlMs: SHARE_TTL_MS },
+        });
+      }
+
+      // R06：本人某局的分享状态（前端显示“已分享 / 已撤销 / 已过期”）。
+      if (isApi && seg[1] === 'games' && seg.length === 4 && seg[3] === 'share' && req.method === 'GET') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const gameId = seg[2];
+        if (!db.participantOf(user.id, gameId) && !db.seatInLiveGame(user.id, gameId)) return send(res, 404, { error: 'not found' });
+        return send(res, 200, {
+          shares: db.listShareLinks(gameId, user.id).map((s) => ({
+            token: s.token, path: '/s/' + s.token, createdAt: s.createdAt,
+            expiresAt: s.expiresAt, revokedAt: s.revokedAt, views: s.views,
+          })),
+        });
+      }
+
       switch (route) {
         case 'POST /api/register': {
           const body = await readJson(req);
@@ -195,6 +419,21 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           const offset = Number.isFinite(o) ? Math.max(0, Math.floor(o)) : 0;
           const total = Number((db.raw.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n);
           return send(res, 200, { ranking: db.ranking(limit, offset), total, offset, limit });
+        }
+        case 'GET /api/history': {
+          // R01：本人各模式终局的分页历史。分页参数与 /api/ranking 同口径（上限 50）。
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          const l = Number(url.searchParams.get('limit') ?? 20);
+          const o = Number(url.searchParams.get('offset') ?? 0);
+          const limit = Number.isFinite(l) ? Math.min(50, Math.max(1, Math.floor(l))) : 20;
+          const offset = Number.isFinite(o) ? Math.max(0, Math.floor(o)) : 0;
+          return send(res, 200, {
+            history: db.historyFor(user.id, limit, offset),
+            total: db.historyCount(user.id),
+            limit,
+            offset,
+          });
         }
         case 'GET /api/invitations': {
           const user = ctx.authUser(req);
