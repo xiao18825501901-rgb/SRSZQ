@@ -151,3 +151,59 @@ wss://api.srszq.com/ws?protocol=2&ruleset=formal-rules-v2
 - 未开启评分 Beta、未晋级 Invitus、未开 shadow（实测均为 OFF 且为默认值）。
 - 未迁移/覆盖生产数据库；只做了在线备份。
 - 未删除任何生产数据。
+
+---
+
+## P2 上线（B4 第一批：历史 / 全谱重放 / 关键三手 / 跨轮防守 / 分享）
+
+| 项 | 值 |
+|---|---|
+| releaseId | `p2-20260930` |
+| 生产提交 | `84db1fcbe62699fe1b6730dfb6eb5060ef397ee0` |
+| 回滚点（上一提交） | `b934139` |
+| 回滚依赖 + 上线前库备份 | `/var/backups/srszq/release-20260929T204444Z-mG0hqF`（含切换前的 node_modules 与 `srszq-daily-2026-09-29T20-44-44-130Z-…sqlite`） |
+| 服务端校验树（独立重跑 npm ci + 全部测试 + build + audit） | `/var/tmp/srszq-release-zFWGUd` |
+| 前端 | 源码未变（Netlify 从 main 重建，页面行为不变） |
+
+### 本次上线的能力
+
+R01 历史与分页、R02 全谱重放与分支隔离、R03 关键三手解释、R04 跨轮防守窗口、
+R05 多个已证明答案、R06 去标识分享与撤销（7 天 TTL）。分析只在终局后允许，且只给精确一步事实。
+
+新增数据表：`share_links`（撤销写 `revoked_at` 保留审计行，不删行）、
+`live_games`（进行中对局的座位归属，终局即删 —— 没有它，API 无法区分“不是你的”和“还没结束”）。
+
+新增接口：`GET /api/history`、`GET /api/games/:id/replay`、
+`POST|GET /api/games/:id/share`、`DELETE /api/share/:token`、`GET /api/shared/:token`。
+公开视图未认证却要跑一遍重放，因此按来源限流（超限 429 RATE_LIMITED）。
+
+### 公网验收（真实域名，`scripts/dev/public-replay-check.mjs`，40 项断言全过）
+
+```
+release=p2-20260930
+3 真人 online 20 手脚本对局
+  -> keyMoves IMMEDIATE_WIN@20/B(6,4) · MISSED_WIN@18/C(2,2) · PREEMPTIVE_BLOCK@16/A(0,0)
+  -> finalHash=be6f08fd0d1950c1c6dfab4c9a0c199a（与本机同一脚本对局算出的摘要完全一致）
+  -> hashMatches=true replayOk=true errors=[]
+  -> 公开分享不含 gameId / 用户 id / 用户名 / 邮箱；撤销后 410 revoked
+  -> ratingDeltas=[30,-10,-10]（beta 关闭时按 legacy 结算）
+PUBLIC REPLAY CHECK: ALL PASS 0
+```
+
+原始日志：`SRSZQ_Productization_Deliveries/P2_20260930/evidence/public-replay-check.log`（退出码 0）。
+
+### 上线后生产库实况（只读核对，未做任何迁移）
+
+```
+users=185 games=50 matches=50 match_results=8 rating_ledger=10 game_events=50 share_links=2 live_games=0
+pragma integrity_check -> ok
+/api/config/features -> ratingBeta=false(isDefault) invitusShadow=false(isDefault)
+```
+
+### 本批次仍然没碰的东西
+
+- 未改 DNS、未改域名、未改仓库可见性。
+- 未开启评分 Beta、未晋级 Invitus、未开 shadow（实测都是默认关闭）。
+- 未迁移/覆盖生产库；上线前由发布脚本自动做了一次库备份。
+- 未删除任何生产数据。`match_results` 只统计 P0A 建表之后结算的局，早期对局完整保存在 `games`/`matches`（50 局）里。
+- R07 题库、R08 每日题/错题、R09 前端界面、R10 真实浏览器截图仍未完成，见交付包 `NEXT_ACTION.md`。
