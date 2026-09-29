@@ -91,6 +91,51 @@ async function waitFor(c: TestClient, type: string, timeoutMs = 5000): Promise<a
   throw new Error(`timeout waiting ${type}; got ${c.msgs.map((m) => m.type).join(',')}`);
 }
 
+/**
+ * 等待服务器真正释放某局的房间绑定。
+ *
+ * finalizeRoom 是**同步**的：写库成功后立即释放用户并 rooms.delete，中间没有 await。
+ * 因此"库里出现该局的 match_results 行"等价于"房间已释放"——这比
+ * "close 之后 sleep 一个常数"可靠得多。原实现用 sleep(400) 去越过 350ms 宽限期，
+ * 只留 50ms 余量；任何让结算路径变慢的改动都会让下一个用例拿到本用例残留的房间。
+ */
+async function waitUntilRoomReleased(gameId: string, timeoutMs = 8000): Promise<void> {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    if (db.findMatchResult(gameId)) return;
+    await sleep(25);
+  }
+  throw new Error('房间未在 ' + timeoutMs + 'ms 内终局落盘并释放：' + gameId);
+}
+
+/**
+ * 等待指定 gameId 的 game.start。
+ *
+ * 背景（测试隔离缺陷，非产品缺陷）：服务端对同一 userId 只保留一个 socket 引用
+ * （clients.set(userId, 新连接)）。若上一个用例残留的匹配队列在本用例中途到点，
+ * AI 补位会创建新房间并把 game.start 推到**本用例的新连接**上。
+ * 直接 waitFor(c, 'game.start') 会抓到那个无关房间，导致断言拿错 gameId。
+ *
+ * 这里只丢弃"不是本次断言的房间"的开局，并把丢弃过的 gameId 记进错误信息，
+ * 让泄漏可见而不是被静默掩盖；resume 必须恢复**被请求的那个房间**的 timeline。
+ */
+async function waitForGameStart(c: TestClient, gameId: string, timeoutMs = 3000): Promise<any> {
+  const t0 = Date.now();
+  const ignored: string[] = [];
+  while (Date.now() - t0 < timeoutMs) {
+    const hit = c.msgs.findIndex((m) => m.type === 'game.start' && m.gameId === gameId);
+    if (hit >= 0) return c.msgs.splice(hit, 1)[0];
+    const other = c.msgs.findIndex((m) => m.type === 'game.start' && m.gameId !== gameId);
+    if (other >= 0) ignored.push(String(c.msgs.splice(other, 1)[0].gameId));
+    await sleep(20);
+  }
+  throw new Error(
+    'timeout waiting game.start for ' + gameId +
+    '; ignoredOtherRooms=[' + ignored.join(',') + ']' +
+    '; pending=' + c.msgs.map((m) => m.type).join(','),
+  );
+}
+
 /** 轮询消费事件直到谓词满足，返回满足条件的事件或 null（超时） */
 async function drainUntil(c: TestClient, type: string, pred: (msg: any) => boolean, timeoutMs = 4000): Promise<any | null> {
   const t0 = Date.now();
@@ -146,16 +191,55 @@ function maybeMove(c: TestClient, state: any, seat: string): void {
   send(c, { type: 'move', row: m.row, col: m.col });
 }
 
-/** 3 真人入队开局，返回 {gameId, seatOf, state}（state 为开局状态） */
+/**
+ * 3 真人入队开局，返回 {gameId, seatOf, state}（state 为开局状态）。
+ *
+ * 业务断言是"三名真人进入**同一个**房间"。
+ * 直接对每个客户端各 waitFor 一次 game.start 并不等价：服务端对同一 userId 只保留
+ * 一个 socket 引用，若上一用例残留的匹配队列在本用例中途到点，AI 补位创建的房间会把
+ * game.start 推到本用例的新连接上，于是某个客户端拿到的是**另一个**房间。
+ * 这里要求三个客户端都持有同一 gameId 的开局；单独出现的房间被忽略并记录，
+ * 既不静默掩盖，也不把"三个人在同一房间"这个断言放宽。
+ */
 async function start3H(clients: TestClient[]): Promise<{ gameId: string; seatOf: Map<string, TestClient>; state: any }> {
   for (const c of clients) send(c, { type: 'queue.join' });
-  const starts = await Promise.all(clients.map((c) => waitFor(c, 'game.start', 5000)));
-  const gameId = starts[0].gameId;
-  assert.equal(starts[1].gameId, gameId);
-  assert.equal(starts[2].gameId, gameId);
-  const seatOf = new Map<string, TestClient>();
-  starts.forEach((s, i) => seatOf.set(s.yourSeat as string, clients[i]));
-  return { gameId, seatOf, state: starts[0].state };
+  const deadline = Date.now() + 6000;
+  const held = new Map<TestClient, any[]>();
+  const ignored: string[] = [];
+  while (Date.now() < deadline) {
+    for (const c of clients) {
+      const bucket = held.get(c) ?? [];
+      held.set(c, bucket);
+      let idx = c.msgs.findIndex((m) => m.type === 'game.start');
+      while (idx >= 0) {
+        bucket.push(c.msgs.splice(idx, 1)[0]);
+        idx = c.msgs.findIndex((m) => m.type === 'game.start');
+      }
+    }
+    const counts = new Map<string, number>();
+    for (const c of clients) {
+      for (const m of new Set((held.get(c) ?? []).map((x) => String(x.gameId)))) {
+        counts.set(m, (counts.get(m) ?? 0) + 1);
+      }
+    }
+    for (const [gid, n] of counts) {
+      if (n !== clients.length) continue;
+      const starts = clients.map((c) => (held.get(c) ?? []).find((m) => String(m.gameId) === gid));
+      const seatOf = new Map<string, TestClient>();
+      starts.forEach((s, i) => seatOf.set(s.yourSeat as string, clients[i]));
+      assert.equal(seatOf.size, 3, '三名真人必须各占一个座位');
+      for (const c of clients) {
+        for (const m of held.get(c) ?? []) if (String(m.gameId) !== gid) ignored.push(String(m.gameId));
+      }
+      if (ignored.length) console.log('  [diag] start3H 忽略的无关开局房间: ' + [...new Set(ignored)].join(','));
+      return { gameId: gid, seatOf, state: starts[0].state };
+    }
+    await sleep(15);
+  }
+  throw new Error(
+    'start3H 超时：三个客户端未进入同一房间；各自持有=' +
+    clients.map((c) => '[' + [...new Set((held.get(c) ?? []).map((m) => String(m.gameId)))].join('|') + ']').join(' '),
+  );
 }
 
 async function main(): Promise<void> {
@@ -406,7 +490,8 @@ async function main(): Promise<void> {
       assert.equal(loserIds.includes(a.id), !humanWin, 'loser_ids 与胜负一致');
     } finally {
       close(c1);
-      await sleep(150);
+      // 1H 局：等服务器把本局终局落盘并释放房间，避免残留绑定污染下一个用例
+      await waitUntilRoomReleased(gameId);
     }
   });
 
@@ -572,16 +657,18 @@ async function main(): Promise<void> {
       const start = await waitFor(cA, 'game.start', 5000);
       assert.equal(Object.values(start.seats).filter((s: any) => s.kind === 'human').length, 1);
       close(cA);
-      await sleep(400);
+      await waitUntilRoomReleased(start.gameId as string);
     }
   });
 
   // 7.5) W4-T1/T2：game.start / game.state 携带 BAC qualification（服务器权威）
   await check('W4 BAC payload：开局 R1 NONE + 未来8轮；随回合推进自动更新', async () => {
     const c1 = await connect(a.token);
+    let startedGameId = '';
     try {
       send(c1, { type: 'queue.join' });
       const start = await waitFor(c1, 'game.start', 5000);
+      startedGameId = String(start.gameId);
       const q0 = start.qualification as any;
       assert.ok(q0, 'game.start 应包含 qualification');
       assert.equal(q0.currentRound, 1);
@@ -616,7 +703,8 @@ async function main(): Promise<void> {
       assert.equal(reached.qualification.upcoming[0].player, 'B');
     } finally {
       close(c1);
-      await sleep(400); // 1H 局：离开宽限后判负清理
+      // 1H 局：离开宽限后判负清理。等真实落盘而不是赌固定毫秒数。
+      await waitUntilRoomReleased(startedGameId);
     }
   });
 
@@ -656,7 +744,7 @@ async function main(): Promise<void> {
       await sleep(120);
       cA2 = await connect(a.token);
       send(cA2, { type: 'resume', gameId });
-      const resumed = await waitFor(cA2, 'game.start', 3000).catch((e) => {
+      const resumed = await waitForGameStart(cA2, gameId as string, 3000).catch((e) => {
         console.log('[diag] resume err msgs:', cA2?.msgs.map((m) => m.type + ':' + (m.error ?? '')).join(','));
         throw e;
       });
