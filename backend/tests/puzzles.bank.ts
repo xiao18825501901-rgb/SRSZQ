@@ -292,8 +292,14 @@ async function main(): Promise<void> {
     assert.equal(second.json.duplicate, true, '重复 attemptId 必须被识别为重发');
     assert.equal(second.json.verdict, 'CORRECT', '重发必须回放同一结论');
     assert.equal(second.json.attempts, first.json.attempts, '重发不得增加尝试次数');
-    const third = await api('POST', '/api/puzzles/' + pz.puzzleId + '/attempt', { attemptId: 'att-1', row: 0, col: 0 }, u.token);
+    // 必须用**真的不同**的坐标：曾经这里写死 (0,0)，而第一个答案本身就可能是 (0,0)，
+    // 于是这个断言会偶发地把“正确的重发处理”误判成失败。
+    const other = { row: a.row === 0 ? 1 : 0, col: a.col === 0 ? 1 : 0 };
+    const third = await api('POST', '/api/puzzles/' + pz.puzzleId + '/attempt', { attemptId: 'att-1', ...other }, u.token);
     assert.equal(third.status, 409, '同一 attemptId 换答案必须被拒，而不是覆盖历史');
+    const replayAfterConflict = await api('POST', '/api/puzzles/' + pz.puzzleId + '/attempt', body, u.token);
+    assert.equal(replayAfterConflict.json.verdict, 'CORRECT', '被拒的冲突不得改动已落库的尝试');
+    assert.equal(replayAfterConflict.json.attempts, first.json.attempts, '冲突之后尝试次数仍不变');
   });
 
   await check('R08d 进度持久：答对后状态为 SOLVED，答错进错题本并可重练', async () => {

@@ -84,8 +84,12 @@ const main = async (): Promise<void> => {
   ok(bad.json?.answers === undefined, '答错先不给答案（可重试）');
   const badAgain = await api('POST', '/api/puzzles/' + local.puzzleId + '/attempt', { attemptId: 'pub-w1', ...wrongMove }, token);
   ok(badAgain.json?.duplicate === true && badAgain.json?.attempts === bad.json?.attempts, '同一 attemptId 重发：duplicate=true 且次数不变（' + badAgain.json?.attempts + '）');
-  const conflict = await api('POST', '/api/puzzles/' + local.puzzleId + '/attempt', { attemptId: 'pub-w1', row: 0, col: 0 }, token);
+  // 换一个**真的不同**的坐标：写死 (0,0) 会在 wrongMove 恰好是 (0,0) 时把正确的重发处理误判成失败。
+  const otherCell = { row: wrongMove!.row === 0 ? 1 : 0, col: wrongMove!.col === 0 ? 1 : 0 };
+  const conflict = await api('POST', '/api/puzzles/' + local.puzzleId + '/attempt', { attemptId: 'pub-w1', ...otherCell }, token);
   ok(conflict.status === 409, '同一 attemptId 换答案 -> 409（实际 ' + conflict.status + '）');
+  const afterConflict = await api('POST', '/api/puzzles/' + local.puzzleId + '/attempt', { attemptId: 'pub-w1', ...wrongMove }, token);
+  ok(afterConflict.json?.verdict === 'INCORRECT' && afterConflict.json?.attempts === bad.json?.attempts, '被拒的冲突不得改动已落库的尝试');
   const a = local.answers[0];
   const good = await api('POST', '/api/puzzles/' + local.puzzleId + '/attempt', { attemptId: 'pub-c1', row: a.row, col: a.col }, token);
   ok(good.json?.verdict === 'CORRECT', '答案点 -> CORRECT（实际 ' + good.json?.verdict + '）');
