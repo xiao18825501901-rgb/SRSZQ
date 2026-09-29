@@ -22,8 +22,9 @@ const API = argOf('--api', 'https://api.srszq.com');
 const OUT = argOf('--out', 'evidence/browser-admin');
 // 端口随机化：固定端口会让“上一次没清掉的浏览器实例”被误当成本次实例（容量探针踩过同款坑）。
 const PORT = Number(argOf('--port', String(9300 + Math.floor(Math.random() * 500))));
-const ADMIN_USER = argOf('--admin-user', '');
-const ADMIN_PASS = argOf('--admin-pass', '');
+// 也接受环境变量：CI/批处理里不必把口令写进命令行（进程列表可读）。
+const ADMIN_USER = argOf('--admin-user', process.env.SRSZQ_ADMIN_USER ?? '');
+const ADMIN_PASS = argOf('--admin-pass', process.env.SRSZQ_ADMIN_PASS ?? '');
 const EXPECT_SHA = argOf('--expect-sha', '');
 const EXPECT_RELEASE = argOf('--expect-release', RELEASE_ID);
 if (!ADMIN_USER || !ADMIN_PASS) { console.error('需要 --admin-user/--admin-pass（管理员账号）'); process.exit(2); }
@@ -231,16 +232,21 @@ const main = async (): Promise<void> => {
     await goto('/admin');
     ok(await page.waitFor('[data-testid="admin-page"]'), '管理台页面渲染成功（url=' + String(await page.evaluate('location.href')) + '）');
     // 数据是异步取的：必须等**真实数据**落到面板上，不能只等容器出现、更不能用固定 sleep。
+    // 三个面板是**三个独立请求**（/api/version、/ready、/api/admin/audit），各自到达时间不同。
+    // 只等其中一个就会读到另一个的空状态（曾因此把 /ready 的“读取失败”当成真结论）。
     const dataLoaded = await (async (): Promise<boolean> => {
       const t0 = Date.now();
+      let last = '';
       while (Date.now() - t0 < 30000) {
-        const txt = String(await page.evaluate('document.querySelector("[data-testid=admin-source-sha]")?.innerText ?? ""'));
-        if (txt.includes(EXPECT_SHA)) return true;
+        const s = await page.evaluate('(() => ({ sha: document.querySelector("[data-testid=admin-source-sha]")?.innerText ?? "", ready: document.querySelector("[data-testid=admin-ready]")?.innerText ?? "", audit: document.querySelectorAll("[data-testid=admin-audit-row]").length }))()');
+        last = JSON.stringify(s);
+        if (String(s.sha).includes(EXPECT_SHA) && /就绪|未就绪/.test(String(s.ready)) && s.audit >= 1) return true;
         await sleep(300);
       }
+      console.log('  DIAG 等待超时，最后一次读到的面板状态：' + last);
       return false;
     })();
-    ok(dataLoaded, '管理台真实数据已加载（后端 sha 落到面板上，等待真实数据而不是固定 sleep）');
+    ok(dataLoaded, '管理台真实数据已加载（源 sha + /ready 结论 + 审计行三处异步面板都到位）');
     ok((await page.evaluate('document.querySelectorAll("[data-testid=admin-forbidden]").length')) === 0, '管理员视角不出现“非管理员”提示');
 
     const p = await page.evaluate(PROBE);
