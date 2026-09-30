@@ -8,6 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BoardSize } from '../../../shared/src/game/types';
 import { puzzleApi, type AttemptResult, type PuzzleProgress, type PuzzleView } from '../api';
 import { ReviewBoard, buildStateFromMoves } from './ReviewParts';
+import { VictoryTrack } from '../components/MatchPanel';
+import { clampStep, timelineCopy, timelineOf } from './puzzleTimeline';
 import { ACCEPTANCE_LABEL, explainPuzzle } from './reviewCopy';
 
 const VERDICT_LABEL: Record<string, string> = {
@@ -21,6 +23,9 @@ export function PuzzlePage() {
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  // 正在查看第几手：null = 跟随最新局面。上一步/下一步/回到开局都只改这个值，
+  // 棋盘与胜权时间线都从它算出来——所以复盘时时间线必然跟着走。
+  const [viewStep, setViewStep] = useState<number | null>(null);
   const seq = useRef(0);
 
   const loadProgress = useCallback(async () => {
@@ -35,6 +40,7 @@ export function PuzzlePage() {
   const loadPuzzle = useCallback(async (puzzleId?: string) => {
     setBusy(true);
     setResult(null);
+    setViewStep(null);
     try {
       if (puzzleId) {
         const r = await puzzleApi.get(puzzleId);
@@ -54,13 +60,19 @@ export function PuzzlePage() {
 
   useEffect(() => { void loadPuzzle(); void loadProgress(); }, [loadPuzzle, loadProgress]);
 
+  const totalSteps = puzzle?.moves.length ?? 0;
+  const step = clampStep(viewStep ?? totalSteps, totalSteps);
+  const atLive = step >= totalSteps;
   const built = useMemo(
-    () => (puzzle ? buildStateFromMoves(puzzle.boardSize as BoardSize, puzzle.moves) : null),
-    [puzzle],
+    () => (puzzle ? buildStateFromMoves(puzzle.boardSize as BoardSize, puzzle.moves, step) : null),
+    [puzzle, step],
   );
+  // 时间线永远由“当前正在查看的局面”算出（同一个共享资格引擎，Online Match 也用这个函数）。
+  const timeline = useMemo(() => (built ? timelineOf(built.state) : null), [built]);
+  const copy = timeline ? timelineCopy(timeline) : null;
 
   const submit = useCallback(async (row: number, col: number) => {
-    if (!puzzle || busy) return;
+    if (!puzzle || busy || !atLive) return;
     setBusy(true);
     try {
       seq.current += 1;
@@ -78,7 +90,7 @@ export function PuzzlePage() {
     } finally {
       setBusy(false);
     }
-  }, [puzzle, busy, loadProgress]);
+  }, [puzzle, busy, loadProgress, atLive]);
 
   return (
     <main className="rv-page" data-testid="puzzle-page">
@@ -94,7 +106,19 @@ export function PuzzlePage() {
       {puzzle && built && (
         <div className="rv-puzzle-layout">
           <div className="rv-col-board rv-puzzle-board">
-            <ReviewBoard state={built.state} disabled={busy || result?.verdict === 'CORRECT'} onCellClick={(r, c) => void submit(r, c)} />
+            <ReviewBoard state={built.state} disabled={busy || result?.verdict === 'CORRECT' || !atLive} onCellClick={(r, c) => void submit(r, c)} />
+            <div className="rv-btnrow" data-testid="puzzle-steps">
+              <button className="btn" data-testid="puzzle-step-first" onClick={() => setViewStep(0)} disabled={step === 0}>|‹</button>
+              <button className="btn" data-testid="puzzle-step-prev" onClick={() => setViewStep(clampStep(step - 1, totalSteps))} disabled={step === 0}>‹</button>
+              <span className="muted" data-testid="puzzle-step-info">第 {step} / {totalSteps} 手</span>
+              <button className="btn" data-testid="puzzle-step-next" onClick={() => setViewStep(clampStep(step + 1, totalSteps))} disabled={atLive}>›</button>
+              <button className="btn" data-testid="puzzle-step-live" onClick={() => setViewStep(null)} disabled={atLive}>回到当前局面</button>
+            </div>
+            {!atLive && (
+              <p className="rv-notice" data-testid="puzzle-rewound">
+                正在查看历史局面（第 {step} / {totalSteps} 手）：回到当前局面后才能落子。
+              </p>
+            )}
             <p className="muted rv-hint">点一个空交叉点落子。答案提交后由服务端用完整答案集判定。</p>
           </div>
           <aside className="rv-col-aside">
@@ -108,6 +132,21 @@ export function PuzzlePage() {
               </p>
               <p className="muted">起始局面 {puzzle.startMoves} 手 · {puzzle.boardSize} 路 · 来源 {puzzle.sourceKind}</p>
             </div>
+
+            {timeline && copy && (
+              <div className="panel" data-testid="puzzle-timeline" data-round={copy.round} data-eligible={copy.eligible ?? 'none'}>
+                <div className="panel-title">胜权时间线</div>
+                <p data-testid="puzzle-timeline-current">{copy.current}</p>
+                <p className="muted" data-testid="puzzle-timeline-next">{copy.next}</p>
+                <VictoryTrack state={built.state} ended={false} thinking={false} />
+                <p className="muted" data-testid="puzzle-timeline-source">
+                  与 Online Match 同一个资格引擎（shared/game/qualification）：题目第 {puzzle.round} 轮 · 当前查看第 {step} / {totalSteps} 手 · Round {copy.round}
+                </p>
+                {!atLive && (
+                  <p className="muted" data-testid="puzzle-timeline-follows">时间线跟随当前查看的局面：第 {step} 手时 Round {copy.round}。</p>
+                )}
+              </div>
+            )}
 
             {result && (
               <div className="panel rv-verdict" data-testid="puzzle-verdict-panel">

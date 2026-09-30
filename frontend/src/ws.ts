@@ -4,6 +4,7 @@ import { colorName } from './playerPresentation';
 import type { GameState, Player } from '../../shared/src/game/types';
 import type { QualificationView } from '../../shared/src/game/qualification';
 import { PROTOCOL_VERSION, RULESET_VERSION } from '../../shared/src/product/protocol';
+import { DEFAULT_QUEUE_TIMEOUT_MS } from '../../shared/src/product/queuePolicy';
 
 export type WSHandler = (msg: Record<string, any>) => void;
 
@@ -24,9 +25,12 @@ class SrszqSocket {
     if (this.ws) return;
     this.closed = false;
     // O06：连接时显式声明协议/规则版本。服务端版本不一致会直接拒绝，而不是静默降级。
+    // 增量 C：一键账号没有令牌——不带 token 参数，服务端会从 HttpOnly cookie 认会话。
+    // 这样会话密钥永远不出现在 URL 里（老流程仍按 token 参数走，行为不变）。
+    const token = getToken() ?? '';
     this.ws = new WebSocket(
-      `${WS_URL}?token=${encodeURIComponent(getToken() ?? '')}` +
-      `&protocol=${PROTOCOL_VERSION}&ruleset=${encodeURIComponent(RULESET_VERSION)}`,
+      (token ? `${WS_URL}?token=${encodeURIComponent(token)}&` : `${WS_URL}?`) +
+      `protocol=${PROTOCOL_VERSION}&ruleset=${encodeURIComponent(RULESET_VERSION)}`,
     );
     this.ws.onmessage = (ev) => {
       let msg: Record<string, any>;
@@ -131,7 +135,8 @@ export interface SeatStatusEvent {
 class GameLink {
   phase: GamePhase = 'idle';
   waiting = 0;
-  timeoutMs = 60_000;
+  // 服务器在 queue.joined / queue.state 里下发真实 timeoutMs 与 deadlineAt；这里只是收到消息前的兜底显示值。
+  timeoutMs = DEFAULT_QUEUE_TIMEOUT_MS;
   queueId = '';
   enqueuedAt = 0;
   deadlineAt = 0;

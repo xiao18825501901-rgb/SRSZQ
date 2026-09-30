@@ -10,13 +10,30 @@ export interface MatchSeat { kind: 'human'|'ai'; username?: string; stars?: numb
 export function ColorChip({player,small=false}:{player:Player|null;small?:boolean}){
  return <span className={`color-chip ${player?'stone-'+player:'stone-none'} ${small?'small':''}`} aria-label={colorName(player)}/>;
 }
-export function MatchPanel({state,seats,mySeat,qualification,thinking,ended=false}:{state:GameState;seats:Record<Player,MatchSeat>;mySeat?:Player;qualification?:QualificationView|null;thinking?:boolean;ended?:boolean}){
+/**
+ * 胜权时间线（Online Match 与每日一题**共用同一个组件**：规则源与视觉都只有一份）。
+ * 规则来自共享资格引擎——优先服务器权威 payload，缺省回退 qualificationFromState。
+ * 层级：now（当前，最重）> next（下一轮，次级）> 其余（弱化）。
+ */
+export function VictoryTrack({state,mySeat,qualification,ended=false,thinking=false}:{state:GameState;mySeat?:Player;qualification?:QualificationView|null;ended?:boolean;thinking?:boolean}){
  const current=currentPlayerOf(state);
  const r=state.status!=='playing' ? state.moves.at(-1)?.round??1 : Math.floor(state.turnIndex/3)+1;
  const q=qualification&&qualification.currentRound===r?qualification:qualificationFromState({...state,turnIndex:(r-1)*3});
  const who=q.currentEligible;
  const schedule=[{round:r,player:who},...q.upcoming.slice(0,5)];
  let nextMine=r+1;if(mySeat){while(getEligiblePlayer(nextMine)!==mySeat)nextMine++;}
+ return <section className="victory-track" aria-label="胜权时间线" data-round={r} data-eligible={who??'none'}>
+  <div className="track-heading"><strong>第 {r} 回合</strong><span>{ended?'对局结束':thinking?'AI 思考中':`轮到${colorName(current)}棋`}</span></div>
+  <div className="right-now"><span>当前胜权</span><strong><ColorChip player={who} small/>{who?playerName(who):'无人'}</strong></div>
+  <div className="round-track">{schedule.map((x,i)=><div className={`track-stop ${i===0?'now':i===1?'next':''}`} key={x.round}>
+    <ColorChip player={x.player} small/><b>{x.round}</b><span>{colorName(x.player)}</span>
+  </div>)}</div>
+  <div className="track-foot"><span>下一回合 · {colorName(q.upcoming[0]?.player)}{q.upcoming[0]?.player?'棋':''}</span>{mySeat&&<span>你的下次胜权：第 {nextMine} 回合</span>}</div>
+ </section>;
+}
+export function MatchPanel({state,seats,mySeat,qualification,thinking,ended=false}:{state:GameState;seats:Record<Player,MatchSeat>;mySeat?:Player;qualification?:QualificationView|null;thinking?:boolean;ended?:boolean}){
+ const current=currentPlayerOf(state);
+ // 胜权时间线已抽成 VictoryTrack（与每日一题共用）；这里只留落子顺序条。
  return <>
    <section className="seat-strip" aria-label="落子顺序：红、绿、白">
      {PLAYERS.map(p=><div key={p} className={`compact-seat ${!ended&&p===current?'active':''} ${p===mySeat?'is-you':''}`}>
@@ -24,14 +41,7 @@ export function MatchPanel({state,seats,mySeat,qualification,thinking,ended=fals
        {!ended&&p===current&&<span className="turn-pin" title="当前落子"/>}
      </div>)}
    </section>
-   <section className="victory-track" aria-label="胜权时间线">
-     <div className="track-heading"><strong>第 {r} 回合</strong><span>{ended?'对局结束':thinking?'AI 思考中':`轮到${colorName(current)}棋`}</span></div>
-     <div className="right-now"><span>当前胜权</span><strong><ColorChip player={who} small/>{who?playerName(who):'无人'}</strong></div>
-     <div className="round-track">{schedule.map((x,i)=><div className={`track-stop ${i===0?'now':''}`} key={x.round}>
-       <ColorChip player={x.player} small/><b>{x.round}</b><span>{colorName(x.player)}</span>
-     </div>)}</div>
-     <div className="track-foot"><span>下一回合 · {colorName(q.upcoming[0]?.player)}{q.upcoming[0]?.player?'棋':''}</span>{mySeat&&<span>你的下次胜权：第 {nextMine} 回合</span>}</div>
-   </section>
+   <VictoryTrack state={state} mySeat={mySeat} qualification={qualification} ended={ended} thinking={thinking}/>
  </>;
 }
 export function PositionHints({state,showLegal,showWinning,onLegal,onWinning}:{state:GameState;showLegal:boolean;showWinning:boolean;onLegal:(v:boolean)=>void;onWinning:(v:boolean)=>void}){

@@ -158,6 +158,12 @@ body::after {
   .match-sidebar .track-foot { flex-wrap: wrap; gap: 3px 9px; }
   .position-hints { gap: 11px; padding-inline: 10px; }
 }
+/* 胜权时间线层级（增量）：CURRENT 最重、NEXT 次级、更远的未来弱化。
+   白棋的可见性沿用 refresh.css 里已有的 .stone-C 描边 + 深色文字，不另造一套视觉。 */
+.track-stop.next .color-chip { outline: 2px solid #c9b48c; outline-offset: 2px; }
+.track-stop:not(.now):not(.next) { opacity: .78; }
+.track-stop.next b { color: #6b5a2e; }
+
 @media print {
   body::before, body::after { display: none; }
   body, html { background: white; }

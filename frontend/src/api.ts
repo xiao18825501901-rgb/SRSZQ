@@ -1,6 +1,10 @@
 /** SRSZQ 前端 API 客户端（后端 http://127.0.0.1:8080） */
 
 export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://127.0.0.1:8080';
+
+// 增量 C：一键账号的会话在 HttpOnly cookie 里（跨源但同 site），所以每个请求都要带凭据。
+// 老流程不受影响：它仍然用 localStorage 里的 Bearer 令牌。
+export const API_CREDENTIALS: RequestCredentials = 'include';
 export const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://127.0.0.1:8081/ws';
 
 const TOKEN_KEY = 'srszq_token';
@@ -16,13 +20,17 @@ export interface PublicUser {
   rating: number;
   /** 仅用于决定是否显示管理入口；服务端仍会对每个管理接口独立鉴权。 */
   role?: 'USER' | 'ADMIN';
+  /** 增量 C：true = 一键创建的临时账号（还没有设置昵称/密码）。 */
+  provisional?: boolean;
 }
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 export function setAuth(token: string, user: PublicUser): void {
-  localStorage.setItem(TOKEN_KEY, token);
+  // 增量 C：一键账号没有 Bearer 令牌（会话在 HttpOnly cookie 里），此时只缓存用户对象。
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 export function clearAuth(): void {
@@ -41,6 +49,7 @@ export function getCachedUser(): PublicUser | null {
 export async function api<T = any>(method: string, path: string, body?: unknown): Promise<{ status: number; data: T }> {
   const res = await fetch(API_BASE + path, {
     method,
+    credentials: API_CREDENTIALS,
     headers: {
       'Content-Type': 'application/json',
       ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
@@ -169,7 +178,14 @@ export const authApi = {
   login: (account: string, password: string) =>
     api<{ user: PublicUser; token: string }>('POST', '/api/login', { account, password }),
   logout: () => api('POST', '/api/logout'),
-  me: () => api<{ user: PublicUser }>('GET', '/api/me'),
+  me: () => api<{ user: PublicUser; provisional?: boolean }>('GET', '/api/me'),
+  /** 增量 C：一键创建账号并开始。幂等：已有会话时返回同一个账号（created=false）。 */
+  quickStart: () => api<{ user: PublicUser; provisional: boolean; created: boolean }>('POST', '/api/auth/quick-start'),
+  /** 增量 C：原地领取账号（设置昵称 + 密码，仍是同一个 userId）。 */
+  claimAccount: (username: string, password: string, email?: string) =>
+    api<{ user: PublicUser; provisional: boolean }>('POST', '/api/me/claim-account', {
+      username, password, ...(email ? { email } : {}),
+    }),
   completeTutorial: () => api<{ user: PublicUser }>('POST', '/api/tutorial/complete'),
   ranking: (limit = 50, offset = 0) => api<{ ranking: Array<PublicUser & { wins: number; games: number; winRate: number }>; total: number }>('GET', `/api/ranking?limit=${limit}&offset=${offset}`),
   friends: () => api<{ friends: PublicUser[] }>('GET', '/api/friends'),

@@ -5,6 +5,11 @@ import { avatarFor, createSessionToken, hashPassword, makeSalt, sessionExpiry, v
 import type { PublicUser, User } from './models.js';
 import { randomUUID } from 'node:crypto';
 import { SlidingWindowLimiter } from './ws/security.js';
+import {
+  isProvisionalEmail, makeProvisionalUsername, provisionalPlaceholderEmail,
+  resolveQuickStartRateLimit, QUICK_START_RATE_WINDOW_MS,
+} from './quickAccount.js';
+import { clearedSessionCookieHeader, parseCookies, sessionCookieHeader, sessionTokenFrom, SESSION_COOKIE } from './sessionCookie.js';
 import { buildReadyReport, detectBackendSourceSha, livenessPayload } from './readiness.js';
 import {
   featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID,
@@ -77,8 +82,12 @@ export function toPublic(user: User): PublicUser {
     rating: user.rating,
     tutorialCompleted: user.tutorialCompleted,
     role: user.role,
+    // 增量 C：临时账号（未领取）在界面上要能被识别出来，才能提示“完善账号”。
+    provisional: user.accountType === 'PROVISIONAL',
   };
 }
+
+
 
 function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
@@ -295,16 +304,27 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
   const ctx: ApiContext = {
     db,
     authUser(req) {
-      const h = req.headers.authorization ?? '';
-      const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+      // 增量 C：Bearer（老流程）与 HttpOnly 会话 cookie（一键账号流程）都认。
+      // cookie 里放的是会话令牌，前端 JS 读不到它，也不出现在 URL 或 JSON 里。
+      const token = sessionTokenFrom(req);
       if (!token) return null;
       const session = db.findSession(token);
       if (!session || session.expiresAt < Date.now()) return null;
-      return db.findUserById(session.userId);
+      const user = db.findUserById(session.userId);
+      // 活动时间用于“闲置临时账号清理队列”。每小时最多写一次，避免每个请求都写库。
+      if (user && Date.now() - user.lastSeenAt > 3600_000) db.touchLastSeen(user.id);
+      return user;
     },
   };
 
   const publicShareLimiter = new SlidingWindowLimiter(PUBLIC_SHARE_RATE_LIMIT, PUBLIC_SHARE_RATE_WINDOW_MS);
+  // 增量 C：一键建号的限流。多人共用出口 IP 只会被限速，不会被永久封禁（窗口滚动）。
+  const quickStartLimiter = new SlidingWindowLimiter(resolveQuickStartRateLimit(process.env.SRSZQ_QUICK_START_RATE_LIMIT), QUICK_START_RATE_WINDOW_MS);
+  /** 取客户端来源标记：优先反代头，其次 socket 地址。 */
+  const clientSource = (req: IncomingMessage): string => {
+    const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+    return forwarded || req.socket.remoteAddress || 'unknown';
+  };
   const startedAt = Date.now();
   /** 管理端计数：只读一行 COUNT，不返回任何身份信息。 */
   const countRows = (sql: string, ...params: unknown[]): number =>
@@ -318,7 +338,12 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-    if (originAllowed) res.setHeader('Access-Control-Allow-Origin', origin);
+    if (originAllowed) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      // 增量 C：一键账号用 HttpOnly cookie 维持会话，跨源请求必须允许携带凭据。
+      // 只有白名单来源才会拿到这一行，且 Vary: Origin 已设置，不会被缓存串味。
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
 
     if (req.method === 'OPTIONS') {
       if (!originAllowed) return send(res, 403, { error: 'origin not allowed' });
@@ -788,6 +813,15 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           db.touchOnline(user.id, 'online');
           const token = createSessionToken();
           db.createSession(token, user.id, sessionExpiry());
+          // 增量 C：事件名与临时账号/领取**分开**，这样“正式注册用户增长”不会被临时账号灌水。
+          db.insertProductEvent({
+            eventId: 'register:' + user.id,
+            name: 'registered_existing_flow',
+            userId: user.id,
+            source: source === 'HUMAN' ? 'HUMAN' : source,
+            isSample: source !== 'HUMAN',
+            payload: { source },
+          });
           return send(res, 201, { user: { ...toPublic(user), email: user.email }, token });
         }
         case 'POST /api/login': {
@@ -803,9 +837,101 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           db.createSession(token, user.id, sessionExpiry());
           return send(res, 200, { user: { ...toPublic(user), email: user.email }, token });
         }
+        /* ---- 增量 C：一键创建账号并开始 ---- */
+        case 'POST /api/auth/quick-start': {
+          // 幂等第一道：这个浏览器已经有有效会话（Bearer 或 cookie）→ 直接返回同一个账号。
+          // 双击/刷新/多标签页都会走到这里，因此不会创建第二个账号。
+          const existing = ctx.authUser(req);
+          if (existing) {
+            return send(res, 200, {
+              user: { ...toPublic(existing), email: existing.email },
+              provisional: existing.accountType === 'PROVISIONAL',
+              created: false,
+            });
+          }
+          if (!quickStartLimiter.tryTake(clientSource(req))) {
+            return send(res, 429, { error: '创建太频繁，请稍后再试', code: 'RATE_LIMITED' });
+          }
+          // 原子创建：每次真的新建一行（不做账号池、不共用默认密码）。
+          // 昵称与占位邮箱都可能撞唯一约束，撞了就重试，绝不复用已有账号。
+          let created: User | null = null;
+          for (let attempt = 0; attempt < 4 && !created; attempt += 1) {
+            const username = makeProvisionalUsername((n) => db.findUserByUsername(n) !== null);
+            const email = provisionalPlaceholderEmail();
+            const salt = makeSalt();
+            try {
+              // passwordHash 为空字符串 = 没有任何密码能通过校验（不设默认密码）。
+              created = db.createUser({ email, username, passwordHash: '', salt, accountType: 'PROVISIONAL' });
+            } catch {
+              // 唯一约束冲突：换一个名字再来一次。
+            }
+          }
+          if (!created) return send(res, 503, { error: '暂时无法创建账号，请重试' });
+          db.touchOnline(created.id, 'online');
+          const sid = createSessionToken();
+          db.createSession(sid, created.id, sessionExpiry());
+          // 事件名分开：临时账号不能被算成“正式注册用户增长”。
+          db.insertProductEvent({
+            eventId: 'provisional:' + created.id,
+            name: 'provisional_account_created',
+            userId: created.id,
+            source: 'PROVISIONAL',
+            payload: { username: created.username },
+          });
+          res.setHeader('Set-Cookie', sessionCookieHeader(req, sid, sessionExpiry() - Date.now()));
+          // 注意：响应里**没有** token、没有哈希、没有会话密钥。会话只走 HttpOnly cookie。
+          return send(res, 201, { user: toPublic(created), provisional: true, created: true });
+        }
+
+        /* ---- 增量 C：原地领取账号（设置昵称 + 密码，仍是同一个 userId） ---- */
+        case 'POST /api/me/claim-account': {
+          const me = ctx.authUser(req);
+          if (!me) return send(res, 401, { error: 'unauthorized' });
+          if (me.accountType !== 'PROVISIONAL') {
+            // 已领取账号改密码需要验证旧密码，属于另一件事；这里不做半套。
+            return send(res, 409, { error: '账号已领取', code: 'ALREADY_CLAIMED' });
+          }
+          const body = await readJson(req);
+          const username = String(body.username ?? '').trim();
+          const password = String(body.password ?? '');
+          const emailInput = body.email === undefined || body.email === null ? '' : String(body.email).trim().toLowerCase();
+          // 复用**既有**校验器与 KDF：不另造一套用户名/密码规则。
+          const invalid = validateUsername(username) ?? validatePassword(password) ?? (emailInput ? validateEmail(emailInput) : null);
+          if (invalid) return send(res, 400, { error: invalid });
+          const takenName = db.findUserByUsernameCI(username);
+          if (takenName && takenName.id !== me.id) return send(res, 409, { error: '用户名已被占用' });
+          if (emailInput) {
+            const owner = db.findUserByEmail(emailInput);
+            if (owner && owner.id !== me.id) return send(res, 409, { error: '邮箱已注册' });
+          }
+          // 邮箱可选：不填就继续用占位邮箱（占位邮箱不会被当成真实邮箱对外展示）。
+          const email = emailInput || me.email;
+          const salt = makeSalt();
+          const claimed = db.claimAccount(me.id, {
+            username, passwordHash: hashPassword(password, salt), salt, email, avatar: avatarFor(username),
+          });
+          if (!claimed) return send(res, 404, { error: 'not found' });
+          db.touchLastSeen(claimed.id);
+          db.insertProductEvent({
+            eventId: 'claimed:' + claimed.id,
+            name: 'claimed_account',
+            userId: claimed.id,
+            source: 'HUMAN',
+            payload: { emailProvided: emailInput !== '' },
+          });
+          // 同一个 userId：对局/积分/好友/历史全部保留。
+          // 占位邮箱（未填邮箱时）不外泄给前端，免得被当成真实邮箱展示。
+          return send(res, 200, {
+            user: { ...toPublic(claimed), ...(isProvisionalEmail(claimed.email) ? {} : { email: claimed.email }) },
+            provisional: false,
+          });
+        }
+
         case 'POST /api/logout': {
           const h = req.headers.authorization ?? '';
-          const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+          // 一键账号流程的会话在 HttpOnly cookie 里，登出时必须一起清掉。
+          res.setHeader('Set-Cookie', clearedSessionCookieHeader());
+          const token = h.startsWith('Bearer ') ? h.slice(7) : parseCookies(req)[SESSION_COOKIE] ?? '';
           if (token) {
             const session = db.findSession(token);
             if (session) {
@@ -853,10 +979,13 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           });
         }
         case 'GET /api/me': {
+          // 一键账号流程靠 HttpOnly cookie 就能走到这里（前端不需要持有任何令牌）。
           const user = ctx.authUser(req);
           if (!user) return send(res, 401, { error: 'unauthorized' });
           const full = db.findUserById(user.id)!;
-          return send(res, 200, { user: { ...toPublic(full), email: full.email } });
+          // 临时账号的占位邮箱不外泄；账号类型如实返回，前端据此提示“完善账号”。
+          const emailView = isProvisionalEmail(full.email) ? {} : { email: full.email };
+          return send(res, 200, { user: { ...toPublic(full), ...emailView }, provisional: full.accountType === 'PROVISIONAL' });
         }
         case 'POST /api/tutorial/complete': {
           const user = ctx.authUser(req);

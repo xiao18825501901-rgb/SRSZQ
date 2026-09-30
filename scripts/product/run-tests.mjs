@@ -32,6 +32,22 @@ const ROOT = resolve(HERE, '..', '..');
  * 它们会出现在报告里，但永远不会被算作 PASS。
  */
 const SUITES = {
+  quickaccount: {
+    title: '增量 C 一键创建账号并开始（临时账号 / 原地领取 / 迁移幂等 / 不进正式排位）',
+    entry: 'backend/tests/quickAccount.flow.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['C_QUICK_ACCOUNT', 'C_CLAIM', 'D_SECURITY', 'E_MIGRATION', 'REGRESSION(legacy login/register)'],
+    phase: 'INCREMENT_C',
+  },
+  matchmaking: {
+    title: '增量 B Online 排队 20 秒（真实默认值 + 真实 20 秒冒烟 + 取消排队不算弃权）',
+    entry: 'backend/tests/matchmaking.timeout.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['B_QUEUE_20S', 'REGRESSION(30s turn clock / 10s reconnect grace)'],
+    phase: 'INCREMENT_B',
+  },
   results: {
     title: 'P0A 可信结果与事务结算（原子/幂等/回滚/宽限/开关）',
     entry: 'backend/tests/results.settlement.ts',

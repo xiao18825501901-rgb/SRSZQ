@@ -161,7 +161,15 @@ export interface ShareLink {
 
 export interface Db {
   raw: DatabaseSync;
-  createUser(input: { email: string; username: string; passwordHash: string; salt: string }): User;
+  createUser(input: { email: string; username: string; passwordHash: string; salt: string; accountType?: 'PROVISIONAL' | 'CLAIMED' }): User;
+  /** 增量 C：原地领取临时账号（同一个 userId，不新建账号）。 */
+  claimAccount(userId: string, patch: { username: string; passwordHash: string; salt: string; email: string; avatar: string }): User | null;
+  /** 增量 C：刷新最近活动时间（会话校验/登入时调用）。 */
+  touchLastSeen(userId: string): void;
+  /** 增量 C：闲置且无资产的临时账号（只进清理队列，本批次不做任何删除）。 */
+  listProvisionalCleanupCandidates(idleBefore: number, limit?: number): Array<{ id: string; username: string; createdAt: number; lastSeenAt: number }>;
+  /** 增量 C：临时/已领取/存量账号计数（analytics 用，三者分开）。 */
+  accountTypeSummary(): { provisional: number; claimed: number; idleProvisional: number };
   findUserByEmail(email: string): User | null;
   findUserByUsername(username: string): User | null;
   findUserByUsernameCI(username: string): User | null;
@@ -627,6 +635,11 @@ export function openDb(path: string): Db {
   // P3A：角色由受控 CLI 授予（不硬编码邮箱）；注销只做去标识，不物理删除他人相关记录。
   ensureColumn('users', 'role', "role TEXT NOT NULL DEFAULT 'USER'");
   ensureColumn('users', 'deleted_at', 'deleted_at INTEGER');
+  // 增量 C：账号类型。老库补列默认 CLAIMED —— 既有正式用户天然就是“已领取”，不需要单独迁移。
+  ensureColumn('users', 'account_type', "account_type TEXT NOT NULL DEFAULT 'CLAIMED'");
+  ensureColumn('users', 'claimed_at', 'claimed_at INTEGER');
+  // 增量 C：最近活动时间（会话校验时刷新），仅供闲置临时账号清理队列使用。
+  ensureColumn('users', 'last_seen_at', 'last_seen_at INTEGER NOT NULL DEFAULT 0');
 
   const mapUser = (r: Record<string, unknown> | undefined): User | null => {
     if (!r) return null;
@@ -643,6 +656,10 @@ export function openDb(path: string): Db {
       rating: Number(r.rating),
       // role 是 P4 迁移加的列：老库补列后默认 USER，这里用 COALESCE 兼容两种行。
       role: (r.role === 'ADMIN' ? 'ADMIN' : 'USER') as User['role'],
+      // account_type 是增量 C 加的列：老库补列后默认 CLAIMED。
+      accountType: (r.account_type === 'PROVISIONAL' ? 'PROVISIONAL' : 'CLAIMED') as User['accountType'],
+      claimedAt: r.claimed_at == null ? null : Number(r.claimed_at),
+      lastSeenAt: Number(r.last_seen_at ?? 0),
     };
   };
 
@@ -651,8 +668,9 @@ export function openDb(path: string): Db {
     createUser(input) {
       const id = randomUUID();
       const createdAt = Date.now();
-      raw.prepare('INSERT INTO users (id,email,username,avatar,password_hash,salt,created_at,online_status,rating) VALUES (?,?,?,?,?,?,?,?,?)').run(
+      raw.prepare('INSERT INTO users (id,email,username,avatar,password_hash,salt,created_at,online_status,rating,account_type,claimed_at,last_seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(
         id, input.email, input.username, '', input.passwordHash, input.salt, createdAt, 'online', 1200,
+        input.accountType ?? 'CLAIMED', input.accountType === 'PROVISIONAL' ? null : createdAt, createdAt,
       );
       raw.prepare('INSERT INTO ranking (user_id,wins,games,score) VALUES (?,0,0,0)').run(id);
       return db.findUserById(id)!;
@@ -674,6 +692,40 @@ export function openDb(path: string): Db {
     touchOnline(id, status) {
       raw.prepare('UPDATE users SET online_status = ? WHERE id = ?').run(status, id);
     },
+    touchLastSeen(userId) {
+      raw.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(Date.now(), userId);
+    },
+    claimAccount(userId, patch) {
+      // 原地领取：只改这一行，userId 不变，所以对局/积分/好友/历史全部保留。
+      const now = Date.now();
+      const r = raw.prepare(
+        "UPDATE users SET username = ?, password_hash = ?, salt = ?, email = ?, avatar = ?, account_type = 'CLAIMED', claimed_at = ? WHERE id = ?",
+      ).run(patch.username, patch.passwordHash, patch.salt, patch.email, patch.avatar, now, userId);
+      if (Number(r.changes ?? 0) === 0) return null;
+      return db.findUserById(userId);
+    },
+    listProvisionalCleanupCandidates(idleBefore, limit = 200) {
+      // “无资产”= 没有对局记录、没有好友、没有已结算名次。有资产的账号一律不进队列。
+      const rows = raw.prepare(`
+        SELECT u.id, u.username, u.created_at, u.last_seen_at
+        FROM users u
+        WHERE COALESCE(u.account_type,'CLAIMED') = 'PROVISIONAL'
+          AND COALESCE(u.last_seen_at, 0) < ?
+          AND NOT EXISTS (SELECT 1 FROM match_participants mp WHERE mp.user_id = u.id)
+          AND NOT EXISTS (SELECT 1 FROM friends f WHERE f.user_id = u.id OR f.friend_id = u.id)
+        ORDER BY u.last_seen_at ASC
+        LIMIT ?
+      `).all(idleBefore, limit) as Array<{ id: string; username: string; created_at: number; last_seen_at: number }>;
+      return rows.map((r) => ({ id: String(r.id), username: String(r.username), createdAt: Number(r.created_at), lastSeenAt: Number(r.last_seen_at ?? 0) }));
+    },
+    accountTypeSummary() {
+      const one = (sql: string): number => Number((raw.prepare(sql).get() as { n?: number } | undefined)?.n ?? 0);
+      return {
+        provisional: one("SELECT COUNT(*) AS n FROM users WHERE COALESCE(account_type,'CLAIMED') = 'PROVISIONAL'"),
+        claimed: one("SELECT COUNT(*) AS n FROM users WHERE COALESCE(account_type,'CLAIMED') = 'CLAIMED'"),
+        idleProvisional: one("SELECT COUNT(*) AS n FROM users WHERE COALESCE(account_type,'CLAIMED') = 'PROVISIONAL' AND COALESCE(last_seen_at,0) < " + String(Date.now() - 30 * 24 * 3600 * 1000)),
+      };
+    },
     createSession(token, userId, expiresAt) {
       raw.prepare('INSERT INTO sessions (token,user_id,expires_at) VALUES (?,?,?)').run(token, userId, expiresAt);
     },
@@ -693,12 +745,14 @@ export function openDb(path: string): Db {
     ranking(limit, offset = 0) {
       // 规格 4.1：合成用户、测试账号、管理员演示账号不进入公开排行榜
       // —— 是「来源标记 + 查询过滤」，不是删用户。
+      // 增量 C：未领取的临时账号同样不进公开排行榜（一次性匿名账号不该出现在正式榜单上）。
       const rows = raw
         .prepare(
           `SELECT u.id,u.username,u.avatar,u.online_status,u.rating,
                   COALESCE(r.wins,0) AS wins, COALESCE(r.games,0) AS games
            FROM users u LEFT JOIN ranking r ON r.user_id = u.id
            WHERE COALESCE(u.source,'HUMAN') = 'HUMAN'
+             AND COALESCE(u.account_type,'CLAIMED') = 'CLAIMED'
            ORDER BY u.rating DESC, u.created_at ASC, u.id ASC LIMIT ? OFFSET ?`,
         )
         .all(limit, offset) as Array<Record<string, unknown>>;

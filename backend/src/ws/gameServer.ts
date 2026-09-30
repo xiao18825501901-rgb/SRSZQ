@@ -14,6 +14,8 @@ import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMo
 import { qualificationFromState } from '../../../shared/src/game/qualification.js';
 import { pickOnlineSingleHumanAiDifficulty, pickOnlineTwoHumanAiDifficulty, shuffled } from '../../../shared/src/ai/assignment.js';
 import type { AiDifficulty, MatchPolicyContext } from '../../../shared/src/ai/types.js';
+import { DEFAULT_QUEUE_TIMEOUT_MS } from '../../../shared/src/product/queuePolicy.js';
+import { sessionTokenFrom } from '../sessionCookie.js';
 import { MatchmakingQueue, type MatchmakingEntry } from './matchmaking.js';
 import { AiWorkerHost } from '../ai/aiWorkerHost.js';
 import { decideWebSocketOrigin, rejectFrame, SlidingWindowLimiter, WS_MAX_MESSAGE_BYTES, WS_COMMAND_RATE_LIMIT, WS_COMMAND_RATE_WINDOW_MS } from './security.js';
@@ -77,7 +79,7 @@ interface SeatInfo {
 }
 
 export interface GameServerOptions {
-  queueTimeoutMs?: number; // 默认 60_000；测试可缩短
+  queueTimeoutMs?: number; // 默认 DEFAULT_QUEUE_TIMEOUT_MS = 20_000（增量 B）；测试可缩短
   aiMoveDelayMs?: number; // AI 落子模拟思考延迟
   disconnectSkipMs?: number; // 好友局：轮到断线玩家时多久自动跳过
   aiTimeBudgetMs?: number;
@@ -215,6 +217,20 @@ export class GameServer {
   readonly aiHost: AiWorkerHost;
 
   /**
+   * 增量 B：计时策略快照（只读）。
+   * 存在的理由：把“本轮只改了排队超时，没碰 30 秒落子与 10 秒断线宽限”变成**机器可断言**的事实，
+   * 而不是靠人读 diff。恢复窗口 recoveryGraceMs 与断线宽限 forfeitGraceMs 是两回事，都列出来免得混淆。
+   */
+  policySnapshot(): { queueTimeoutMs: number; turnTimeoutMs: number; forfeitGraceMs: number; recoveryGraceMs: number } {
+    return {
+      queueTimeoutMs: this.opts.queueTimeoutMs,
+      turnTimeoutMs: this.opts.turnTimeoutMs,
+      forfeitGraceMs: this.opts.forfeitGraceMs,
+      recoveryGraceMs: this.opts.recoveryGraceMs,
+    };
+  }
+
+  /**
    * P4：管理端要的运行时快照。只读、无副作用，且**不含**任何用户身份信息 ——
    * 管理页面需要知道“现在有多少房、多少连接、AI 池状态”，不需要知道是谁。
    */
@@ -260,7 +276,7 @@ export class GameServer {
     this.featureFlags = { ...parseFeatureFlags(process.env), ...(opts.featureFlags ?? {}) };
     this.settlementMaxAttempts = opts.settlementMaxAttempts ?? 3;
     this.opts = {
-      queueTimeoutMs: opts.queueTimeoutMs ?? 60_000,
+      queueTimeoutMs: opts.queueTimeoutMs ?? DEFAULT_QUEUE_TIMEOUT_MS,
       aiMoveDelayMs: opts.aiMoveDelayMs ?? 350,
       disconnectSkipMs: opts.disconnectSkipMs ?? 30_000,
       aiTimeBudgetMs: opts.aiTimeBudgetMs ?? 250,
@@ -317,7 +333,7 @@ export class GameServer {
       // 连 WebSocket 都不建立，避免给未授权来源分配任何服务端资源。
       // S05：认证也在升级之前完成。未认证客户端连 WebSocket 都不建立，
       // 不再"先握手再关闭"——那会为一个未授权来源分配真实的连接资源。
-      if (!this.resolveSessionUser(url.searchParams.get('token') ?? '')) {
+      if (!this.resolveSessionUser(url.searchParams.get('token') ?? '', req)) {
         console.warn(JSON.stringify({ event: 'ws_unauthenticated_rejected', timestamp: Date.now() }));
         socket.write(['HTTP/1.1 401 Unauthorized', 'Connection: close', '', ''].join(String.fromCharCode(13, 10)));
         socket.destroy();
@@ -335,16 +351,22 @@ export class GameServer {
     });
   }
 
-  /** 由 token 解析出有效用户；升级阶段与 onSocket 共用同一判定，避免两处逻辑漂移。 */
-  private resolveSessionUser(token: string) {
-    const session = token ? this.db.findSession(token) : null;
+  /**
+   * 由 token 解析出有效用户；升级阶段与 onSocket 共用同一判定，避免两处逻辑漂移。
+   * 增量 C：一键账号没有 Bearer 令牌，会话在 HttpOnly cookie 里——`?token=` 为空时回退到 cookie。
+   * 这样新流程不需要把任何会话密钥放到 URL 里。
+   */
+  private resolveSessionUser(token: string, req?: IncomingMessage) {
+    const fromReq = req ? sessionTokenFrom(req) : '';
+    const effective = token || fromReq;
+    const session = effective ? this.db.findSession(effective) : null;
     return session && session.expiresAt >= Date.now() ? this.db.findUserById(session.userId) : null;
   }
 
   private async onSocket(ws: WebSocket, req: IncomingMessage): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const token = url.searchParams.get('token') ?? '';
-    const user = this.resolveSessionUser(token);
+    const user = this.resolveSessionUser(token, req);
     if (!user) {
       ws.send(JSON.stringify({ type: 'error', error: 'unauthorized' }));
       ws.close(4001, 'unauthorized');
@@ -1234,14 +1256,20 @@ export class GameServer {
     const seatIsHuman = {} as Record<Seat, boolean>;
     const seatGatePassed = {} as Record<Seat, boolean>;
     const humanIds: string[] = [];
+    let provisionalSeats = 0;
     for (const s of SEATS) {
       const si = room.seats[s];
       const isHuman = si.kind === 'human' && !!si.userId;
       seatIsHuman[s] = isHuman;
       if (isHuman) {
         humanIds.push(si.userId!);
+        const seatUser = this.db.findUserById(si.userId!);
         // 门禁口径：三步教学完成（老用户兼容，不要求重做）。邮箱验证暂无 transport，未纳入。
-        seatGatePassed[s] = this.db.findUserById(si.userId!)?.tutorialCompleted === true;
+        // 增量 C：未领取的临时账号不算通过排位门禁 —— 直接走**既有**的“门禁未过”通道
+        // （结果为策略 none、分差全 0），不新开一套判定，也不改动积分算法本身。
+        const claimed = seatUser?.accountType === 'CLAIMED';
+        if (seatUser && !claimed) provisionalSeats += 1;
+        seatGatePassed[s] = seatUser?.tutorialCompleted === true && claimed;
       } else {
         seatGatePassed[s] = false;
       }
@@ -1261,7 +1289,7 @@ export class GameServer {
     });
 
     if (policy === NO_RATING_POLICY_ID) {
-      this.logAi({ event: 'rating_policy_applied', roomId: room.id, policy, sameTrioMatchNumber, noContest });
+      this.logAi({ event: 'rating_policy_applied', roomId: room.id, policy, sameTrioMatchNumber, noContest, provisionalSeats });
       return {
         ...plan, isRanked: false, scorePolicy: NO_RATING_POLICY_ID,
         participants: plan.participants.map((p) => ({ ...p, ratingDelta: 0 })),

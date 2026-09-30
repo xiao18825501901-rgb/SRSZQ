@@ -12,6 +12,7 @@ export * from './product/replay';
 export * from './product/puzzleBank';
 export * from './product/accountSource';
 export * from './product/consent';
+export * from './product/queuePolicy';
 export * from './product/dataset';
 export * from './ai/checkpoint';
 export * from './ai/provider';

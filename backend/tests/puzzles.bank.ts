@@ -23,8 +23,10 @@ import {
 import { PUZZLE_BANK, PUZZLE_BANK_META, PUZZLE_TRAJECTORIES_PACKED } from '../../shared/src/product/puzzleBank.generated.js';
 import { replayGame } from '../../shared/src/product/replay.js';
 import { getEligiblePlayer, roundFromTurn } from '../../shared/src/game/eligibility.js';
+import { qualificationFromState } from '../../shared/src/game/qualification.js';
 import { getWinningPoints, isLegalMove } from '../../shared/src/game/legalMoves.js';
-import type { Player } from '../../shared/src/game/types.js';
+import type { BoardSize, Player } from '../../shared/src/game/types.js';
+import { applyMove, createInitialState } from '../../shared/src/game/rules.js';
 
 let db: Db;
 let apiBase = '';
@@ -350,6 +352,70 @@ async function main(): Promise<void> {
     assert.ok(Number(prog.n) >= 2, '进度必须落库，实际 ' + prog.n);
     const dup = db.raw.prepare('SELECT COUNT(*) AS n FROM (SELECT user_id, attempt_id FROM puzzle_attempts GROUP BY user_id, attempt_id HAVING COUNT(*) > 1)').get() as { n: number };
     assert.equal(Number(dup.n), 0, '(user_id, attempt_id) 不允许重复行');
+  });
+
+  // ---- 增量 A：每日一题胜权时间线（与 Online Match 同源） ----
+
+  await check('R08g 每日一题时间线与服务器自报的 round/eligiblePlayer 一致（同一规则源）', async () => {
+    const u = await registerUser('PuzzleE');
+    const daily = await api('GET', '/api/puzzles/daily', undefined, u.token);
+    assert.equal(daily.status, 200, 'daily 必须可读：' + JSON.stringify(daily.json));
+    const pz = daily.json.puzzle as {
+      puzzleId: string; boardSize: BoardSize; moves: Array<{ row: number; col: number }>;
+      round: number; eligiblePlayer: Player | null; startMoves: number;
+    };
+    // 题面棋谱 = 题目起始局面的前 startMoves 手；用共享引擎重放，不许另算一套。
+    assert.equal(pz.moves.length, pz.startMoves, '题面必须给出完整起始棋谱');
+    let state = createInitialState(pz.boardSize);
+    for (let i = 0; i < pz.moves.length; i += 1) {
+      const m = pz.moves[i];
+      const res = applyMove(state, m.row, m.col);
+      // 注意：applyMove 成功时**没有** rejected 字段，所以只能用 falsy 判断，不能严格等于 false。
+      assert.ok(!res.rejected,
+        '题面棋谱必须合法：第 ' + (i + 1) + ' 手 (' + m.row + ',' + m.col + ') 被拒绝 reason=' + String(res.rejected)
+        + ' 题=' + pz.puzzleId + ' 棋盘=' + pz.boardSize + ' 手数=' + pz.moves.length
+        + ' 首手=' + JSON.stringify(pz.moves[0]));
+      state = res.state;
+    }
+    assert.equal(roundFromTurn(state.turnIndex), pz.round, '题目 round 必须等于真实局面算出的 Round');
+    const view = qualificationFromState(state);
+    assert.equal(view.currentEligible, pz.eligiblePlayer, '时间线当前胜权必须等于服务器自报值');
+    assert.equal(view.currentEligible, getEligiblePlayer(pz.round), '当前胜权必须等于正式规则结果');
+    assert.ok(view.upcoming.length >= 5, '时间线窗口至少要能显示未来 5 轮，实际 ' + view.upcoming.length);
+    observed.r08g = { puzzleId: pz.puzzleId, round: pz.round, eligible: pz.eligiblePlayer, window: view.upcoming.length };
+  });
+
+  await check('R08h 复盘步进：时间线随“正在查看第几手”变化（R5 无胜权 → R6 白 → R7 绿 → R8 红）', async () => {
+    const trail = TRAILS.find((t) => t.moves.length >= 24);
+    assert.ok(trail, '需要一条至少 24 手的真实轨迹');
+    const byPly = new Map<number, Player | null>();
+    for (let k = 0; k <= 21; k++) {
+      const st = startStateOf(trail!.boardSize, trail!, k);
+      const view = qualificationFromState(st);
+      assert.equal(view.currentRound, roundFromTurn(k), '第 ' + k + ' 手对应的 Round 必须由引擎算出');
+      assert.equal(view.currentEligible, getEligiblePlayer(roundFromTurn(k)), '第 ' + k + ' 手的胜权必须等于正式规则');
+      byPly.set(k, view.currentEligible);
+    }
+    assert.equal(byPly.get(14), null, '第 14 手仍在 R5：无胜权');
+    assert.equal(byPly.get(15), 'C', '第 15 手进入 R6：白棋');
+    assert.equal(byPly.get(18), 'B', '第 18 手 R7：绿棋');
+    assert.equal(byPly.get(21), 'A', '第 21 手 R8：红棋');
+    // 后退一步必须回到上一步的结论（可重放，不是一次性状态）
+    const back = qualificationFromState(startStateOf(trail!.boardSize, trail!, 14));
+    assert.equal(back.currentEligible, null, '退回第 14 手必须回到“无胜权”');
+    observed.r08h = { p0: byPly.get(0), p14: byPly.get(14), p15: byPly.get(15), p18: byPly.get(18), p21: byPly.get(21) };
+  });
+
+  await check('R08i 全部已发布题目的 round/eligiblePlayer 都符合正式规则（60 道逐条核对）', async () => {
+    let wrong = 0;
+    for (const pz of PUZZLE_BANK) {
+      if (getEligiblePlayer(pz.round) !== pz.eligiblePlayer) wrong += 1;
+      // 题面起始局面重放后的 Round 也必须等于题目自报 round
+      const st = startStateOf(pz.boardSize, trailOf(pz.sourceGameId), pz.startPly);
+      if (roundFromTurn(st.turnIndex) !== pz.round) wrong += 1;
+    }
+    assert.equal(wrong, 0, '不符合正式规则的题目数：' + wrong);
+    observed.r08i = { checked: PUZZLE_BANK.length, wrong };
   });
 
   console.log('--- 观测 ---');

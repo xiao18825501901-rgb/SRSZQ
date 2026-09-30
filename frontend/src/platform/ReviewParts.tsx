@@ -6,24 +6,16 @@
  */
 import { useMemo, type ReactNode } from 'react';
 import type { BoardSize, GameState } from '../../../shared/src/game/types';
-import { applyMove, createInitialState } from '../../../shared/src/game/rules';
 import { Board } from '../components/Board';
 import type { KeyMove, ReplayMove } from '../api';
 import { certaintyNote, explainKeyMove, keyMoveTitle } from './reviewCopy';
 
 export const SEAT_DOT: Record<string, string> = { A: 'dot-a', B: 'dot-b', C: 'dot-c' };
 
-/** 用真实引擎把落子序列重建成局面；任何一手被引擎拒绝都会被计数并暴露出来。 */
-export function buildStateFromMoves(boardSize: BoardSize, moves: Array<{ row: number; col: number }>): { state: GameState; rejected: number } {
-  let state = createInitialState(boardSize);
-  let rejected = 0;
-  for (const m of moves) {
-    const res = applyMove(state, m.row, m.col);
-    if (res.rejected) { rejected += 1; continue; }
-    state = res.state;
-  }
-  return { state, rejected };
-}
+// 局面重建已提到纯模块 replayState.ts（可被单测直接调用）；这里保留再导出，调用点不变。
+// 注意：再导出不会把名字带进本模块作用域，本文件自己也要用，所以先 import 再 export。
+import { buildStateFromMoves } from './replayState';
+export { buildStateFromMoves };
 
 export function MoveTimeline({ moves, cursor, onCursor, keyPlies, label }: {
   moves: ReplayMove[];

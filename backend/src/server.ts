@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { openDb } from './db.js';
 import { createApi } from './api.js';
 import { GameServer } from './ws/gameServer.js';
+import { resolveQueueTimeoutMs } from '../../shared/src/product/queuePolicy.js';
 
 const dataDir = process.env.SRSZQ_DATA_DIR || join(process.cwd(), 'data');
 mkdirSync(dataDir, { recursive: true });
@@ -12,7 +13,8 @@ const db = openDb(join(dataDir, 'srszq.sqlite'));
 
 // WebSocket 游戏服务（ws://127.0.0.1:8081）
 const gameServer = new GameServer(db, {
-  queueTimeoutMs: Number(process.env.SRSZQ_QUEUE_TIMEOUT_MS ?? 60_000),
+  // 增量 B：默认 20 秒（shared/product/queuePolicy 是唯一默认值来源）；CI 可用 SRSZQ_QUEUE_TIMEOUT_MS 缩短。
+  queueTimeoutMs: resolveQueueTimeoutMs(process.env.SRSZQ_QUEUE_TIMEOUT_MS),
   aiMoveDelayMs: Number(process.env.SRSZQ_AI_DELAY_MS ?? 350),
   disconnectSkipMs: Number(process.env.SRSZQ_DISCONNECT_SKIP_MS ?? 30_000),
   inviteGatherMs: Number(process.env.SRSZQ_INVITE_GATHER_MS ?? 30_000),

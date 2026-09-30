@@ -23,8 +23,8 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
  if(phase==='queue'||phase==='idle')return <main className="matchmaking-card panel">
    <div className="search-stones" aria-label="红、绿、白三个座位"><ColorChip player="A"/><ColorChip player="B"/><ColorChip player="C"/></div>
    <h1>{remaining===0?'正在准备棋盘…':'正在寻找对手'}</h1><p>{user.username} · 当前等待 {gameLink.waiting||1} 人</p>
-   <div className="matching-seconds">{remaining}<small>秒</small></div><div className="matching-progress"><span style={{width:`${Math.max(0,remaining/60*100)}%`}}/></div>
-   <p className="muted">60 秒内不足 3 名真人时，将由 AI 补位自动开局。</p>
+   <div className="matching-seconds">{remaining}<small>秒</small></div><div className="matching-progress"><span style={{width:`${Math.max(0,remaining/(gameLink.timeoutMs/1000)*100)}%`}}/></div>
+   <p className="muted">20 秒内不足 3 名真人时，将由 AI 补位自动开局。</p>
    {gameLink.error&&<p className="error-text" role="alert">{gameLink.error}</p>}
    <button className="btn" onClick={exit}>取消并返回</button>
  </main>;
