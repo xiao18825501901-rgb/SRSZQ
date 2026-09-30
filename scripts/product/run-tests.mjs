@@ -32,6 +32,14 @@ const ROOT = resolve(HERE, '..', '..');
  * 它们会出现在报告里，但永远不会被算作 PASS。
  */
 const SUITES = {
+  multitab: {
+    title: 'G16 多标签新连接替换旧连接（旧连接必须被关闭且不再生效）',
+    entry: 'backend/tests/ws.multitab.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['G16'],
+    phase: 'G16',
+  },
   quickaccount: {
     title: '增量 C 一键创建账号并开始（临时账号 / 原地领取 / 迁移幂等 / 不进正式排位）',
     entry: 'backend/tests/quickAccount.flow.ts',

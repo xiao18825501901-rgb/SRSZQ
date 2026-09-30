@@ -3,7 +3,7 @@ import { WS_URL, getToken } from './api';
 import { colorName } from './playerPresentation';
 import type { GameState, Player } from '../../shared/src/game/types';
 import type { QualificationView } from '../../shared/src/game/qualification';
-import { PROTOCOL_VERSION, RULESET_VERSION } from '../../shared/src/product/protocol';
+import { PROTOCOL_VERSION, RULESET_VERSION, WS_CLOSE_REPLACED } from '../../shared/src/product/protocol';
 import { DEFAULT_QUEUE_TIMEOUT_MS } from '../../shared/src/product/queuePolicy';
 
 export type WSHandler = (msg: Record<string, any>) => void;
@@ -42,8 +42,16 @@ class SrszqSocket {
       for (const h of [...this.handlers]) h(msg);
     };
     this.ws.onopen = () => this.onOpen?.();
-    this.ws.onclose = () => {
+    this.ws.onclose = (ev) => {
       this.ws = null;
+      // G16：被“同一账号的更新连接”替换时**不要重连**。
+      // 否则两个标签页会互相顶号：A 重连 → 服务端关 B → B 重连 → 服务端关 A …… 无限抖动。
+      if (ev && ev.code === WS_CLOSE_REPLACED) {
+        this.closed = true;
+        // 通知上层（GameLink）去改用户可见状态；socket 层不管 UI 状态。
+        for (const h of [...this.handlers]) h({ type: 'connection.replaced' });
+        return;
+      }
       if (!this.closed) setTimeout(() => this.connect(), 1000);
     };
     this.ws.onerror = () => {
@@ -291,6 +299,13 @@ class GameLink {
         } else if (msg.state === 'NOT_QUEUED' && this.wantsQueue) {
           getSocket().send({ type: 'queue.join' });
         }
+        break;
+      // G16：本页连接被“同一账号的另一个标签页”替换掉了。
+      // 明确告诉用户发生了什么，并且**不**自动重连（重连只会把对方顶掉，来回抖动）。
+      case 'connection.replaced':
+        this.phase = 'idle';
+        this.wantsQueue = false;
+        this.error = '这个账号已在另一个标签页打开，本页连接已断开。';
         break;
       case 'error':
         this.error = String(msg.error ?? 'unknown');

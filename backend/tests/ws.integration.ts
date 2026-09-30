@@ -419,13 +419,17 @@ async function main(): Promise<void> {
       send(oldConnection, { type: 'queue.join' });
       const firstJoin = await waitFor(oldConnection, 'queue.joined');
       newConnection = await connect(w9Users[9].token);
+      // G16：新连接建立的**那一刻**服务端就会关闭旧连接（多标签替换）。
+      // 所以监听必须在这里立刻挂上——等后面再 once('close') 会永远等不到（本地自检踩到：整轮卡死）。
+      const oldClosed = new Promise<void>((resolve) => {
+        if (oldConnection.ws.readyState === oldConnection.ws.CLOSED) return resolve();
+        oldConnection.ws.once('close', () => resolve());
+      });
       send(newConnection, { type: 'queue.join' });
       const resumedJoin = await waitFor(newConnection, 'queue.joined');
       assert.equal(resumedJoin.queueId, firstJoin.queueId);
       assert.equal(resumedJoin.deadlineAt, firstJoin.deadlineAt, 'reconnect must keep the original deadline');
-      const oldClosed = new Promise<void>((resolve) => oldConnection.ws.once('close', () => resolve()));
-      oldConnection.ws.terminate();
-      await oldClosed;
+      await oldClosed; // 旧连接必须已被替换掉（这正是 G16 的要求）
       await sleep(50);
       send(newConnection, { type: 'queue.sync' });
       const state = await waitFor(newConnection, 'queue.state');

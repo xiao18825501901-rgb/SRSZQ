@@ -19,8 +19,11 @@ const OUT = argOf('--out', 'evidence/increment-browser');
 const API_PORT = Number(argOf('--api-port', '8080'));
 const WS_PORT = Number(argOf('--ws-port', '8081'));
 const SITE_PORT = Number(argOf('--site-port', '4173'));
-const DATA = join(tmpdir(), 'srszq-inc-e2e', 'data');
-const LOGS = join(tmpdir(), 'srszq-inc-e2e');
+// 每次跑都用**全新的临时目录**：固定目录会被上一次遗留的后端进程锁住，
+// 启动时的清理会直接 EPERM 失败（本地自检踩到：编排 1 秒就退出、日志还停在上一轮）。
+const RUN_DIR = join(tmpdir(), 'srszq-inc-e2e-' + Date.now().toString(36));
+const DATA = join(RUN_DIR, 'data');
+const LOGS = RUN_DIR;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const children = [];
@@ -56,7 +59,6 @@ function killAll() {
 
 let exitCode = 1;
 try {
-  rmSync(DATA, { recursive: true, force: true });
   mkdirSync(DATA, { recursive: true });
   // 用 resolve：--out 允许给绝对路径（join 会把绝对路径拼到仓库后面，创建出畸形目录）。
   mkdirSync(resolve(ROOT, OUT), { recursive: true });
@@ -94,8 +96,10 @@ try {
   // --check 可以换成别的浏览器检查脚本（例如每日一题专项），默认仍是增量总检查。
   const CHECK = argOf('--check', 'scripts/dev/browser-increment-check.mts');
   console.log('[stack] running check: ' + CHECK);
+  // 也把真实 WS 端口传下去：本地 WS 不在 API 端口上（默认 8081），
+  // 检查脚本若自己拼 ws://…:8080/ws 会撞到 API 的 HTTP 服务并拿到 404（本地自检踩到）。
   const e2e = spawn('cmd', ['/c', 'npx tsx ' + CHECK + ' --site http://127.0.0.1:' + SITE_PORT
-    + ' --api http://127.0.0.1:' + API_PORT + ' --out ' + OUT], { cwd: ROOT, stdio: 'inherit' });
+    + ' --api http://127.0.0.1:' + API_PORT + ' --ws ws://127.0.0.1:' + WS_PORT + '/ws --out ' + OUT], { cwd: ROOT, stdio: 'inherit' });
   exitCode = await new Promise((r) => e2e.on('exit', (c) => r(c ?? 1)));
 
   if (exitCode !== 0) {

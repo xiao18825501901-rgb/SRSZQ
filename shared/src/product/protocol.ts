@@ -13,6 +13,12 @@
 /** 线协议版本。P0B 引入 commandId/expectedRevision/revision/ACK 信封，故升为 2。 */
 export const PROTOCOL_VERSION = 2;
 
+/**
+ * WebSocket 关闭码：这条连接被**同一账号的更新连接**替换（多标签/刷新）。
+ * 客户端收到它时不得自动重连——否则两个标签页会互相顶号、无限抖动。
+ */
+export const WS_CLOSE_REPLACED = 4000;
+
 /** 规则集版本：唯一规则真源（shared/game）的语义标识。 */
 export const RULESET_VERSION = 'formal-rules-v2';
 

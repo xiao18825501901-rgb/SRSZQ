@@ -16,6 +16,7 @@ import { pickOnlineSingleHumanAiDifficulty, pickOnlineTwoHumanAiDifficulty, shuf
 import type { AiDifficulty, MatchPolicyContext } from '../../../shared/src/ai/types.js';
 import { DEFAULT_QUEUE_TIMEOUT_MS } from '../../../shared/src/product/queuePolicy.js';
 import { sessionTokenFrom } from '../sessionCookie.js';
+import { WS_CLOSE_REPLACED } from '../../../shared/src/product/protocol.js';
 import { MatchmakingQueue, type MatchmakingEntry } from './matchmaking.js';
 import { AiWorkerHost } from '../ai/aiWorkerHost.js';
 import { decideWebSocketOrigin, rejectFrame, SlidingWindowLimiter, WS_MAX_MESSAGE_BYTES, WS_COMMAND_RATE_LIMIT, WS_COMMAND_RATE_WINDOW_MS } from './security.js';
@@ -385,6 +386,16 @@ export class GameServer {
       ws.send(JSON.stringify({ type: 'error', error: COMMAND_ERRORS.PROTOCOL_MISMATCH, expected: { ...PROTOCOL_INFO } }));
       ws.close(4002, 'ruleset mismatch');
       return;
+    }
+    // G16：同一账号的新连接**替换**旧连接。
+    // 只覆盖 map 是不够的——旧 socket 仍然是已认证的活连接，还能继续发命令（多标签下会出现一个账号两处操作）。
+    // 因此这里显式关闭旧连接，并通知客户端“你被替换了”（4000），客户端据此不自动重连。
+    const previous = this.clients.get(user.id);
+    if (previous && previous.connectionId !== undefined) {
+      try {
+        previous.ws.close(WS_CLOSE_REPLACED, 'replaced by new connection');
+      } catch { /* 已经断了 */ }
+      console.warn(JSON.stringify({ event: 'ws_connection_replaced', userId: user.id, at: Date.now() }));
     }
     const client: Client = { ws, connectionId: randomUUID(), userId: user.id, username: user.username, isAlive: true };
     this.clients.set(user.id, client);
