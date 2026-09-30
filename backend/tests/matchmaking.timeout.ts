@@ -11,6 +11,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { WebSocket } from 'ws';
 import { openDb, type Db } from '../src/db.js';
@@ -135,6 +136,17 @@ async function main(): Promise<void> {
     const gs = new GameServer(openDb(join(mkdtempSync(join(tmpdir(), 'srszq-mm0-')), 't.sqlite')), {});
     assert.equal(gs.policySnapshot().queueTimeoutMs, 20_000, 'GameServer 默认必须是 20000');
     observed.q1 = gs.policySnapshot();
+  });
+
+  await check('Q7 生产 PM2 配置里的排队超时也是 20000（防“代码改了、环境变量还钉着 60000”）', () => {
+    // 实测踩到过：代码默认改成 20000、生产 ecosystem.config.cjs 仍写着 60000，
+    // 于是线上真实等待仍是 60 秒（前端如实显示 59）。这条断言就是为了不再发生。
+    const cfg = readFileSync(join(process.cwd(), 'ecosystem.config.cjs'), 'utf8');
+    const m = /SRSZQ_QUEUE_TIMEOUT_MS:\s*'([^']+)'/.exec(cfg);
+    assert.ok(m, 'ecosystem.config.cjs 里必须有 SRSZQ_QUEUE_TIMEOUT_MS');
+    assert.equal(Number(m![1]), DEFAULT_QUEUE_TIMEOUT_MS,
+      '生产 PM2 的排队超时必须与代码默认一致：配置 ' + m![1] + ' vs 默认 ' + DEFAULT_QUEUE_TIMEOUT_MS);
+    observed.q7 = { configuredMs: Number(m![1]) };
   });
 
   await check('Q6 30 秒落子倒计时与 10 秒断线宽限没有被这次改动碰到', () => {
