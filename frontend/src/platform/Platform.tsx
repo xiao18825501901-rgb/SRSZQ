@@ -7,6 +7,7 @@ import type { AILevel, SeatConfigs, MatchPolicyContext } from '../../../shared/s
 import { countAI, countHuman } from '../../../shared/src/ai/seats';
 import { createTutorialAssignment, humanSeatOf } from './tutorialModel';
 import { authApi, clearAuth, getCachedUser, getToken, setAuth, type PublicUser } from '../api';
+import { nextGeneration, shouldClearSessionOnError } from './authRace';
 import { gameLink, resetSocket } from '../ws';
 import { useRoute } from '../router';
 import App from '../App';
@@ -25,15 +26,20 @@ import { colorName, playerName } from '../playerPresentation';
 export const STAR_LEVELS: AILevel[]=[1,2,3,4,5];
 export function useSession(){
  const [user,setUser]=useState<PublicUser|null>(()=>getCachedUser());
- const applyAuth=useCallback((token:string,u:PublicUser)=>{setAuth(token,u);setUser(u)},[]);
+ // 会话世代：每次成功登录/建号/领取 +1。用来丢弃“迟到的鉴权失败”——
+ // 线上实测顺序：首屏 /api/me(401) 与一键建号(201) 几乎同时，迟到的 401 会把刚建好的账号清掉
+ // （详见 authRace.ts 的说明；本地因为 API 太快一直没复现，是线上端到端抓出来的）。
+ const gen=useRef(0);
+ const applyAuth=useCallback((token:string,u:PublicUser)=>{gen.current=nextGeneration(gen.current);setAuth(token,u);setUser(u)},[]);
  // 增量 C：一键账号的会话只在 HttpOnly cookie 里，没有本地令牌，
  // 所以不能再拿“有没有 token”当刷新条件——那会让临时账号每次刷新都掉登录。
  const refresh=useCallback(async()=>{
-  try{const {data}=await authApi.me();applyAuth(getToken()??'',data.user)}
+  const genAtStart=gen.current;
+  try{const {data}=await authApi.me();if(gen.current===genAtStart)applyAuth(getToken()??'',data.user)}
   catch(e){
    const msg=e instanceof Error?e.message:String(e);
-   // 只有明确“未授权”才清本地缓存；网络抖动不该把用户踢下线。
-   if(/unauthorized|HTTP 40[13]/.test(msg)){clearAuth();setUser(null)}
+   // 只有明确“未授权/被拒”**且期间没有新会话建立**时才清；网络抖动不该把用户踢下线。
+   if(shouldClearSessionOnError(genAtStart,gen.current,msg)){clearAuth();setUser(null)}
   }
  },[applyAuth]);
  return {user,applyAuth,refresh,clear:()=>setUser(null)};
