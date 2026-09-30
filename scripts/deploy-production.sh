@@ -68,7 +68,9 @@ recover() {
     fi
     # Both revisions passed the runtime-file audit, so this only restores tracked source.
     git restore --source="$previous" --staged --worktree -- .
-    pm2 start ecosystem.config.cjs --update-env
+    # 回滚同样要重建进程：否则回滚后的 env 仍是失败那次留下的值。
+    pm2 delete srszq-backend >/dev/null 2>&1 || true
+    pm2 start ecosystem.config.cjs
     pm2 save
     echo "RELEASE FAILED: restored previous source/dependencies; database untouched."
     echo "Review the deliberate Git rollback diff before the next release. Evidence: $rollback"
@@ -81,8 +83,22 @@ test -z "$(ss -H -ltn 'sport = :8080 or sport = :8081')"
 git merge --ff-only "$target"
 mv "$repo/node_modules" "$rollback/node_modules"
 mv "$stage/node_modules" "$repo/node_modules"
-pm2 reload srszq-backend --update-env
+# PM2 的 reload 会**复用已保存的进程环境**：ecosystem.config.cjs 里新改的 env 不会生效。
+# 实测踩到：文件已改成 20000、运行进程里仍是 60000，线上于是继续等 60 秒而发布脚本报 PASS。
+# 所以这里重建进程，并在下面用门禁确认新 env 真的进了运行进程。
+pm2 delete srszq-backend >/dev/null 2>&1 || true
+pm2 start ecosystem.config.cjs
 pm2 status srszq-backend
+
+# 环境变量门禁：ecosystem 里声明的值必须与运行进程里的值一致，否则视为发布失败（触发回滚）。
+want=$(node -e "const c=require('./ecosystem.config.cjs');process.stdout.write(String(c.apps[0].env.SRSZQ_QUEUE_TIMEOUT_MS))")
+got=$(pm2 jlist 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const a=JSON.parse(d).find(x=>x.name==='srszq-backend');process.stdout.write(String((a&&a.pm2_env&&a.pm2_env.SRSZQ_QUEUE_TIMEOUT_MS)||''))})")
+if test "$want" != "$got"; then
+  echo "ENV FAIL: SRSZQ_QUEUE_TIMEOUT_MS file=$want process=$got (配置没有真正生效)"
+  exit 1
+fi
+echo "ENV PASS: SRSZQ_QUEUE_TIMEOUT_MS=$got applied"
+
 node scripts/smoke-production.mjs
 pm2 save
 trap - EXIT
