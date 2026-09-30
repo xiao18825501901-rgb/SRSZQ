@@ -60,17 +60,28 @@ async function main(): Promise<void> {
   const mySeat = start.yourSeat as 'A' | 'B' | 'C';
   ok(['A', 'B', 'C'].includes(mySeat), '本人座位=' + mySeat);
 
-  // 如果真人先手（A 座），先走一手，之后 AI 必须自己接着走。
+  // 座位是随机的（A→B→C 顺序行动）。要让**两个** AI 座位都走到，真人必须在自己回合落一手，
+  // 除非真人正好是 C 座（两个 AI 都在他之前）。
+  // 只处理 'A' 是不够的：真人 B 座时，A 走完就轮到真人，不落子永远只会有 1 手
+  // —— 线上实测踩到，表现为“AI 只走出 1 手”的假失败（产品行为其实是正常的）。
   const board = (start.state?.board ?? []) as Array<Array<string | null>>;
   const emptyCell = (): { row: number; col: number } => {
     for (let r = 0; r < board.length; r += 1) for (let c = 0; c < board.length; c += 1) if (board[r][c] === null) return { row: r, col: c };
     return { row: 0, col: 0 };
   };
-  if (mySeat === 'A') {
+  if (mySeat !== 'C') {
+    // 等轮到真人（场上已有 mySeatIndex 手）再落子。
+    const myIndex = ({ A: 0, B: 1, C: 2 } as const)[mySeat];
+    const waitT0 = Date.now();
+    while (Date.now() - waitT0 < 20000) {
+      const m = await grab('game.state', 2000);
+      const moves = (m?.state?.moves?.length ?? 0) as number;
+      if (moves >= myIndex) break;
+    }
     const cell = emptyCell();
     ws.send(JSON.stringify({ type: 'move', commandId: 'pb-' + stamp, ...cell }));
     const ack = await grab('ack', 15000);
-    ok(!!ack, '真人先手落子被接受');
+    ok(!!ack, '真人轮到后落子被接受（座位 ' + mySeat + '）');
   }
 
   let plies = 0;
