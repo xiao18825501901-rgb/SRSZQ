@@ -60,6 +60,23 @@ try {
   mkdirSync(DATA, { recursive: true });
   mkdirSync(join(ROOT, OUT), { recursive: true });
 
+  // 关键：这份 e2e 打的是**本地**前后端，所以必须先用**本地 API 地址**重新构建前端。
+  // 否则 dist 里可能装着上一次生产构建（指向 api.srszq.com），页面是 127.0.0.1 就会跨站，
+  // HttpOnly cookie 根本不会带上 —— 本地会看到一片 401（本地自检踩到）。
+  console.log('[stack] building frontend with local API urls ...');
+  const build = spawnSync('cmd', ['/c', 'npm run build'], {
+    cwd: ROOT,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      VITE_API_URL: 'http://127.0.0.1:' + API_PORT,
+      VITE_WS_URL: 'ws://127.0.0.1:' + WS_PORT + '/ws',
+      COMMIT_REF: 'local-e2e',
+    },
+  });
+  if (build.status !== 0) throw new Error('前端本地构建失败，退出码 ' + build.status);
+  console.log('[stack] frontend built with local API urls');
+
   const api = start('backend', 'cmd', ['/c', 'npx tsx backend/src/server.ts'], {
     SRSZQ_DATA_DIR: DATA,
     SRSZQ_ALLOWED_ORIGINS: 'http://127.0.0.1:' + SITE_PORT + ',http://localhost:' + SITE_PORT,
