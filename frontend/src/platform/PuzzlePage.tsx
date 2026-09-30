@@ -11,10 +11,27 @@ import { ReviewBoard, buildStateFromMoves } from './ReviewParts';
 import { VictoryTrack } from '../components/MatchPanel';
 import { clampStep, timelineCopy, timelineOf } from './puzzleTimeline';
 import { ACCEPTANCE_LABEL, explainPuzzle } from './reviewCopy';
+import { playerName } from '../playerPresentation';
 
 const VERDICT_LABEL: Record<string, string> = {
   CORRECT: '正确', INCORRECT: '不对', ILLEGAL: '这一手不合法', OPEN: '开放研究题',
 };
+
+/**
+ * 把接口错误翻成用户看得懂的话。
+ *
+ * 注意：这只改**显示**，不掩盖问题——原始错误仍然打到控制台，便于排查。
+ * 根因（题目 id 未解码导致的所有作答 404）已在后端修掉，这里只是别再把
+ * “not found / HTTP 500”这类字样直接甩给普通用户。
+ */
+function friendlyPuzzleError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/not found|HTTP 404/i.test(msg)) return '题目不存在或已更新，请重新加载今日题目。';
+  if (/HTTP 5\d\d|source trajectory missing/i.test(msg)) return '暂时无法判题，请稍后重试。';
+  if (/unauthorized|HTTP 401|HTTP 403/i.test(msg)) return '登录状态已过期，请重新登录后再试。';
+  if (/Failed to fetch|NetworkError|load failed/i.test(msg)) return '提交失败，请检查网络后重试。';
+  return msg;
+}
 
 export function PuzzlePage() {
   const [puzzle, setPuzzle] = useState<PuzzleView | null>(null);
@@ -33,7 +50,8 @@ export function PuzzlePage() {
       const r = await puzzleApi.progress();
       setProgress(r.data.progress);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      console.warn('[puzzle] progress failed', e);
+      setErr(friendlyPuzzleError(e));
     }
   }, []);
 
@@ -52,7 +70,8 @@ export function PuzzlePage() {
       }
       setErr('');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      console.warn('[puzzle] load failed', e);
+      setErr(friendlyPuzzleError(e));
     } finally {
       setBusy(false);
     }
@@ -86,7 +105,8 @@ export function PuzzlePage() {
       }
       setErr('');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
+      console.warn('[puzzle] attempt failed', e);
+      setErr(friendlyPuzzleError(e));
     } finally {
       setBusy(false);
     }
@@ -119,18 +139,13 @@ export function PuzzlePage() {
                 正在查看历史局面（第 {step} / {totalSteps} 手）：回到当前局面后才能落子。
               </p>
             )}
-            <p className="muted rv-hint">点一个空交叉点落子。答案提交后由服务端用完整答案集判定。</p>
           </div>
           <aside className="rv-col-aside">
             <div className="panel rv-puzzle-info" data-testid="puzzle-info">
               <div className="rv-row">
                 <span className="rv-tag" data-testid="puzzle-type">{ACCEPTANCE_LABEL[puzzle.acceptanceType] ?? puzzle.acceptanceType}</span>
-                <span className="muted" data-testid="puzzle-round">第 {puzzle.round} 轮 · {puzzle.actorSeat} 座行棋</span>
+                <span className="muted" data-testid="puzzle-round">第 {puzzle.round} 轮 · {playerName(puzzle.actorSeat)}行棋</span>
               </div>
-              <p className="muted" data-testid="puzzle-status">
-                我的状态：{puzzle.myStatus === 'SOLVED' ? '已解出' : puzzle.myStatus === 'FAILED' ? '还没解出' : '未作答'} · 已尝试 {puzzle.myAttempts} 次
-              </p>
-              <p className="muted">起始局面 {puzzle.startMoves} 手 · {puzzle.boardSize} 路 · 来源 {puzzle.sourceKind}</p>
             </div>
 
             {timeline && copy && (
@@ -139,12 +154,6 @@ export function PuzzlePage() {
                 <p data-testid="puzzle-timeline-current">{copy.current}</p>
                 <p className="muted" data-testid="puzzle-timeline-next">{copy.next}</p>
                 <VictoryTrack state={built.state} ended={false} thinking={false} />
-                <p className="muted" data-testid="puzzle-timeline-source">
-                  与 Online Match 同一个资格引擎（shared/game/qualification）：题目第 {puzzle.round} 轮 · 当前查看第 {step} / {totalSteps} 手 · Round {copy.round}
-                </p>
-                {!atLive && (
-                  <p className="muted" data-testid="puzzle-timeline-follows">时间线跟随当前查看的局面：第 {step} 手时 Round {copy.round}。</p>
-                )}
               </div>
             )}
 

@@ -130,6 +130,24 @@ export function requireTutorialDone(res: ServerResponse, user: User | null): boo
 
 /* ---- P2 题库接口（R07/R08）：每日一题、作答幂等、进度与错题本 ---- */
 
+/**
+ * 路径段里的题目 id 必须**解码后再查表**。
+ *
+ * 现场缺陷：题 id 形如 `selfplay-13-forbidden-s163:ply39:forbidden-A`（含冒号），
+ * 前端按 HTTP 规范用 encodeURIComponent 变成 `%3A`，而 `new URL().pathname` **不会**解码，
+ * 于是 seg[2] 是编码串、查表必然落空 —— 界面上点任何交叉点都返回 404 not found。
+ * 产品测试一直用**原始 id** 直连（所以没暴露），真实浏览器一点就中招。
+ * 这里统一解码：编码过的能查、没编码的（历史调用方）也照旧能查。
+ */
+function puzzleIdFromSegment(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // 非法百分号序列：当成原始串处理，让它走正常的 404，而不是抛异常变成 500。
+    return raw;
+  }
+}
+
 /** 题面：只给起始局面与题类，**不给答案**、也不给威胁数量提示。 */
 function puzzleView(puzzle: Puzzle, extra: Record<string, unknown> = {}): Record<string, unknown> {
   const trail = PUZZLE_TRAIL_INDEX.get(puzzle.sourceGameId);
@@ -675,7 +693,7 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
       if (isApi && seg[1] === 'puzzles' && seg.length === 3 && req.method === 'GET' && seg[2] !== 'daily' && seg[2] !== 'progress') {
         const user = ctx.authUser(req);
         if (!user) return send(res, 401, { error: 'unauthorized' });
-        const puzzle = PUZZLE_INDEX.get(seg[2]);
+        const puzzle = PUZZLE_INDEX.get(puzzleIdFromSegment(seg[2]));
         if (!puzzle) return send(res, 404, { error: 'not found' });
         const prog = db.raw
           .prepare('SELECT status, attempts FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
@@ -689,7 +707,7 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
       if (isApi && seg[1] === 'puzzles' && seg.length === 4 && seg[3] === 'attempt' && req.method === 'POST') {
         const user = ctx.authUser(req);
         if (!user) return send(res, 401, { error: 'unauthorized' });
-        const puzzle = PUZZLE_INDEX.get(seg[2]);
+        const puzzle = PUZZLE_INDEX.get(puzzleIdFromSegment(seg[2]));
         if (!puzzle) return send(res, 404, { error: 'not found' });
         const body = await readJson(req);
         const attemptId = typeof body.attemptId === 'string' ? body.attemptId.trim() : '';

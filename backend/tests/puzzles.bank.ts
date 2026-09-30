@@ -24,7 +24,7 @@ import { PUZZLE_BANK, PUZZLE_BANK_META, PUZZLE_TRAJECTORIES_PACKED } from '../..
 import { replayGame } from '../../shared/src/product/replay.js';
 import { getEligiblePlayer, roundFromTurn } from '../../shared/src/game/eligibility.js';
 import { qualificationFromState } from '../../shared/src/game/qualification.js';
-import { getWinningPoints, isLegalMove } from '../../shared/src/game/legalMoves.js';
+import { getLegalMoves, getWinningPoints, isLegalMove } from '../../shared/src/game/legalMoves.js';
 import type { BoardSize, Player } from '../../shared/src/game/types.js';
 import { applyMove, createInitialState } from '../../shared/src/game/rules.js';
 
@@ -53,6 +53,13 @@ async function registerUser(name: string) {
   assert.equal(r.status, 201, 'register ' + name + ' -> ' + JSON.stringify(r.json));
   await api('POST', '/api/tutorial/complete', {}, r.json.token);
   return { id: r.json.user.id as string, token: r.json.token as string, username: name };
+}
+
+/** 按前 n 手重建局面（用来模拟界面的“回放态/作答态”两种状态）。 */
+function applyMovesUpTo(boardSize: BoardSize, moves: Array<{ row: number; col: number }>, n: number) {
+  let state = createInitialState(boardSize);
+  for (let i = 0; i < Math.min(n, moves.length); i += 1) state = applyMove(state, moves[i].row, moves[i].col).state;
+  return state;
 }
 
 const TRAILS: Trail[] = expandTrails(PUZZLE_TRAJECTORIES_PACKED);
@@ -416,6 +423,133 @@ async function main(): Promise<void> {
     }
     assert.equal(wrong, 0, '不符合正式规则的题目数：' + wrong);
     observed.r08i = { checked: PUZZLE_BANK.length, wrong };
+  });
+
+  // ---- 线上缺陷回归：界面点棋盘返回 404 not found（题目 id 未解码） ----
+
+  await check('R08j 用**前端同款编码**的 puzzleId 作答不得 404（本次线上缺陷的回归）', async () => {
+    const u = await registerUser('PuzzleF');
+    const daily = await api('GET', '/api/puzzles/daily', undefined, u.token);
+    const pz = daily.json.puzzle as { puzzleId: string };
+    assert.ok(pz.puzzleId.includes(':'), '题目 id 必须真的含冒号（否则这条回归测不到东西）：' + pz.puzzleId);
+    const encoded = encodeURIComponent(pz.puzzleId); // 前端 api.ts 就是这么发的
+    const raw = await api('POST', '/api/puzzles/' + pz.puzzleId + '/attempt', { attemptId: 'r08j-raw', row: 0, col: 0 }, u.token);
+    const enc = await api('POST', '/api/puzzles/' + encoded + '/attempt', { attemptId: 'r08j-enc', row: 0, col: 0 }, u.token);
+    assert.notEqual(raw.status, 404, '原始 id 作答不得 404（实际 ' + raw.status + '）');
+    assert.notEqual(enc.status, 404, '编码 id 作答不得 404（实际 ' + enc.status + ' ' + JSON.stringify(enc.json) + '）');
+    assert.equal(enc.status, raw.status, '编码与原始 id 必须得到同一种响应');
+    const getEnc = await api('GET', '/api/puzzles/' + encoded, undefined, u.token);
+    assert.equal(getEnc.status, 200, '编码 id 的单题视图也必须能找到（实际 ' + getEnc.status + '）');
+    assert.equal(getEnc.json.puzzle.puzzleId, pz.puzzleId, '取回的必须还是同一道题');
+    observed.r08j = { puzzleId: pz.puzzleId, rawStatus: raw.status, encodedStatus: enc.status };
+  });
+
+  await check('R08k 不存在的 puzzleId 才返回 404（编码与原始都一样）', async () => {
+    const u = await registerUser('PuzzleG');
+    const a = await api('POST', '/api/puzzles/no-such-puzzle/attempt', { attemptId: 'r08k', row: 0, col: 0 }, u.token);
+    const b = await api('POST', '/api/puzzles/' + encodeURIComponent('no-such:puzzle') + '/attempt', { attemptId: 'r08k2', row: 0, col: 0 }, u.token);
+    assert.equal(a.status, 404, '未知题目必须 404');
+    assert.equal(b.status, 404, '未知题目（编码形式）也必须 404');
+    observed.r08k = { raw: a.status, encoded: b.status };
+  });
+
+  await check('R08l 正确答案 -> CORRECT；合法但非答案 -> INCORRECT（判题仍在服务端）', async () => {
+    const u = await registerUser('PuzzleH');
+    const pz = PUZZLE_BANK.find((x) => x.answers.length > 0 && x.status === 'PUBLISHED')!;
+    const other = PUZZLE_BANK.find((x) => x.puzzleId !== pz.puzzleId && x.answers.length > 0 && x.status === 'PUBLISHED')!;
+    const st2 = startStateOf(other.boardSize, trailOf(other.sourceGameId), other.startPly);
+    const set2 = new Set(other.answers.map((a) => a.row + ',' + a.col));
+    const wrong = getLegalMoves(st2).find((m) => !set2.has(m.row + ',' + m.col));
+    assert.ok(wrong, '必须能找到一个合法但非答案的点');
+    const okRes = await api('POST', '/api/puzzles/' + encodeURIComponent(pz.puzzleId) + '/attempt', { attemptId: 'r08l-ok', row: pz.answers[0].row, col: pz.answers[0].col }, u.token);
+    assert.equal(okRes.status, 200, '正确答案必须 200（实际 ' + okRes.status + '）');
+    assert.equal(okRes.json.verdict, 'CORRECT', '必须是 CORRECT：' + JSON.stringify(okRes.json));
+    assert.ok(Array.isArray(okRes.json.answers) && okRes.json.answers.length > 0, '答对后应下发完整答案集');
+    const bad = await api('POST', '/api/puzzles/' + encodeURIComponent(other.puzzleId) + '/attempt', { attemptId: 'r08l-bad', row: wrong!.row, col: wrong!.col }, u.token);
+    assert.equal(bad.status, 200, '合法但错误的答案返回 200 + 结论（实际 ' + bad.status + '）');
+    assert.equal(bad.json.verdict, 'INCORRECT', '必须是 INCORRECT：' + JSON.stringify(bad.json));
+    observed.r08l = { correct: okRes.json.verdict, wrong: bad.json.verdict, wrongPoint: [wrong!.row, wrong!.col] };
+  });
+
+  await check('R08m 非法落点给出明确结论（ILLEGAL 或 4xx），绝不能是 404', async () => {
+    const u = await registerUser('PuzzleI');
+    const pz = PUZZLE_BANK.find((x) => x.status === 'PUBLISHED' && x.answers.length > 0)!;
+    const trail = trailOf(pz.sourceGameId);
+    const occupied = trail.moves[0];
+    const url = '/api/puzzles/' + encodeURIComponent(pz.puzzleId) + '/attempt';
+    const r1 = await api('POST', url, { attemptId: 'r08m-occ', row: occupied.row, col: occupied.col }, u.token);
+    const r2 = await api('POST', url, { attemptId: 'r08m-oor', row: 999, col: 999 }, u.token);
+    const r3 = await api('POST', url, { attemptId: 'r08m-bad', row: 'x', col: null }, u.token);
+    for (const [label, r] of [['占用点', r1], ['越界', r2], ['参数非法', r3]] as const) {
+      assert.notEqual(r.status, 404, label + ' 不得是 404（实际 ' + r.status + '）');
+      assert.ok(r.status >= 400 || r.json?.verdict === 'ILLEGAL', label + ' 必须有明确结论，实际 ' + r.status + ' ' + JSON.stringify(r.json));
+    }
+    observed.r08m = { occupied: r1.status + '/' + r1.json.verdict, outOfRange: r2.status + '/' + r2.json.verdict, badArgs: r3.status };
+  });
+
+  await check('R08n 同一 attemptId 重发：duplicate=true 且不重复计数（含编码 id 路径）', async () => {
+    const u = await registerUser('PuzzleJ');
+    const pz = PUZZLE_BANK.find((x) => x.status === 'PUBLISHED' && x.answers.length > 0)!;
+    const point = pz.answers[0];
+    const url = '/api/puzzles/' + encodeURIComponent(pz.puzzleId) + '/attempt';
+    const first = await api('POST', url, { attemptId: 'r08n-1', row: point.row, col: point.col }, u.token);
+    const again = await api('POST', url, { attemptId: 'r08n-1', row: point.row, col: point.col }, u.token);
+    assert.equal(first.status, 200);
+    assert.equal(again.status, 200);
+    assert.equal(again.json.duplicate, true, '重发必须标记 duplicate');
+    assert.equal(again.json.attempts, first.json.attempts, '重发不得增加尝试次数');
+    const rows = db.raw.prepare('SELECT COUNT(*) AS n FROM puzzle_attempts WHERE user_id = ? AND attempt_id = ?').get(u.id, 'r08n-1') as { n: number };
+    assert.equal(Number(rows.n), 1, '同 (user, attemptId) 只允许一行');
+    observed.r08n = { attempts: again.json.attempts, duplicate: again.json.duplicate };
+  });
+
+  await check('R08o 作答后进度按人记录（答对后移出错题本）', async () => {
+    const u = await registerUser('PuzzleK');
+    const pz = PUZZLE_BANK.find((x) => x.status === 'PUBLISHED' && x.answers.length > 0)!;
+    const url = '/api/puzzles/' + encodeURIComponent(pz.puzzleId) + '/attempt';
+    const st = startStateOf(pz.boardSize, trailOf(pz.sourceGameId), pz.startPly);
+    const set = new Set(pz.answers.map((a) => a.row + ',' + a.col));
+    const wrong = getLegalMoves(st).find((m) => !set.has(m.row + ',' + m.col))!;
+    await api('POST', url, { attemptId: 'r08o-w', row: wrong.row, col: wrong.col }, u.token);
+    const p1 = await api('GET', '/api/puzzles/progress', undefined, u.token);
+    assert.equal(p1.json.progress.failed, 1, '错一次应进错题本');
+    await api('POST', url, { attemptId: 'r08o-c', row: pz.answers[0].row, col: pz.answers[0].col }, u.token);
+    const p2 = await api('GET', '/api/puzzles/progress', undefined, u.token);
+    assert.equal(p2.json.progress.solved, 1, '答对后 solved=1');
+    assert.equal(p2.json.progress.failed, 0, '答对后移出错题本');
+    observed.r08o = { afterWrong: p1.json.progress.failed, afterCorrect: p2.json.progress.solved };
+  });
+
+  await check('R08p 题面时间线：R13 绿 / R14 红 / 之后按循环继续（每日题真实局面）', async () => {
+    const u = await registerUser('PuzzleL');
+    const daily = await api('GET', '/api/puzzles/daily', undefined, u.token);
+    const pz = daily.json.puzzle as { boardSize: BoardSize; moves: Array<{ row: number; col: number }>; round: number };
+    let state = createInitialState(pz.boardSize);
+    for (const m of pz.moves) state = applyMove(state, m.row, m.col).state;
+    const view = qualificationFromState(state);
+    const next = view.upcoming[0];
+    assert.equal(view.currentRound, pz.round, '当前轮必须等于题目自报轮次');
+    assert.equal(view.currentEligible, 'B', 'R13 应为绿棋（与正式规则一致）');
+    assert.equal(next.round, 14);
+    assert.equal(next.player, 'A', 'R14 应为红棋');
+    const cycle = view.upcoming.slice(0, 3).map((x) => x.player);
+    assert.deepEqual(cycle, ['A', 'C', 'B'], 'R14/R15/R16 应为 红 -> 白 -> 绿，实际 ' + JSON.stringify(cycle));
+    observed.r08p = { round: view.currentRound, current: view.currentEligible, next: next.player, cycle };
+  });
+
+  await check('R08q 复盘退回历史再回到当前局面后，仍可正常作答（不产生 404）', async () => {
+    const u = await registerUser('PuzzleM');
+    const daily = await api('GET', '/api/puzzles/daily', undefined, u.token);
+    const pz = daily.json.puzzle as { puzzleId: string; boardSize: BoardSize; moves: Array<{ row: number; col: number }> };
+    const back = applyMovesUpTo(pz.boardSize, pz.moves, Math.max(1, pz.moves.length - 3));
+    const live = applyMovesUpTo(pz.boardSize, pz.moves, pz.moves.length);
+    assert.notEqual(back.turnIndex, live.turnIndex, '回放态与作答态必须是不同的局面');
+    const legal = getLegalMoves(live)[0];
+    assert.ok(legal, '作答态必须有合法落点');
+    const res = await api('POST', '/api/puzzles/' + encodeURIComponent(pz.puzzleId) + '/attempt', { attemptId: 'r08q-1', row: legal.row, col: legal.col }, u.token);
+    assert.notEqual(res.status, 404, '回到当前局面后作答不得 404（实际 ' + res.status + '）');
+    assert.equal(res.status, 200, '必须得到真实判题结果');
+    observed.r08q = { replayTurn: back.turnIndex, liveTurn: live.turnIndex, verdict: res.json.verdict };
   });
 
   console.log('--- 观测 ---');

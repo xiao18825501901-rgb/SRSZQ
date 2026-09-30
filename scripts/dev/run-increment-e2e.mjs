@@ -58,7 +58,8 @@ let exitCode = 1;
 try {
   rmSync(DATA, { recursive: true, force: true });
   mkdirSync(DATA, { recursive: true });
-  mkdirSync(join(ROOT, OUT), { recursive: true });
+  // 用 resolve：--out 允许给绝对路径（join 会把绝对路径拼到仓库后面，创建出畸形目录）。
+  mkdirSync(resolve(ROOT, OUT), { recursive: true });
 
   // 关键：这份 e2e 打的是**本地**前后端，所以必须先用**本地 API 地址**重新构建前端。
   // 否则 dist 里可能装着上一次生产构建（指向 api.srszq.com），页面是 127.0.0.1 就会跨站，
@@ -90,7 +91,10 @@ try {
   await waitHttp('http://127.0.0.1:' + SITE_PORT + '/', 60000, 'frontend');
   console.log('[stack] frontend ready');
 
-  const e2e = spawn('cmd', ['/c', 'npx tsx scripts/dev/browser-increment-check.mts --site http://127.0.0.1:' + SITE_PORT
+  // --check 可以换成别的浏览器检查脚本（例如每日一题专项），默认仍是增量总检查。
+  const CHECK = argOf('--check', 'scripts/dev/browser-increment-check.mts');
+  console.log('[stack] running check: ' + CHECK);
+  const e2e = spawn('cmd', ['/c', 'npx tsx ' + CHECK + ' --site http://127.0.0.1:' + SITE_PORT
     + ' --api http://127.0.0.1:' + API_PORT + ' --out ' + OUT], { cwd: ROOT, stdio: 'inherit' });
   exitCode = await new Promise((r) => e2e.on('exit', (c) => r(c ?? 1)));
 
