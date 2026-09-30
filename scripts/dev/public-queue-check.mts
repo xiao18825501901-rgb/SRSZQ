@@ -8,7 +8,7 @@
  * 本脚本用 dsh* 测试账号（已被既有来源分类标成 TEST，不进排行榜），排队后立即离队，不留对局。
  */
 import { WebSocket } from 'ws';
-import { api, registerDemo } from './lib/scriptedGame.mjs';
+import { registerDemo } from './lib/scriptedGame.mjs';
 import { DEFAULT_QUEUE_TIMEOUT_MS } from '../../shared/src/product/queuePolicy.js';
 import { PROTOCOL_VERSION, RULESET_VERSION } from '../../shared/src/product/protocol.js';
 
@@ -19,7 +19,8 @@ let failures = 0;
 const ok = (c: boolean, m: string): void => { if (c) console.log('  PASS ' + m); else { failures += 1; console.log('  FAIL ' + m); } };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const user = await registerDemo(API);
+// registerDemo 会顺带完成教学（排队要求教学已完成），用户名 dsh* → 来源标记 TEST。
+const user = await registerDemo(API, 'queue', Date.now().toString(36), 'Passw0rd!23');
 ok(!!user.token, '拿到线上测试账号（dsh* 前缀 → 来源标记 TEST）');
 
 const msgs: Array<Record<string, any>> = [];
