@@ -32,7 +32,24 @@ console.log('[reconstitute] out=' + OUT);
 if (existsSync(OUT)) rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 
-let ok = run('extract', 'powershell', ['-NoProfile', '-Command', 'Expand-Archive -LiteralPath "' + ZIP + '" -DestinationPath "' + OUT + '" -Force']);
+// 解压优先用 tar（Windows 10+ 自带 bsdtar，Linux 自带 GNU tar），失败才退回 PowerShell。
+// 现场实测（同一份 354 文件的交付包）：tar 6 秒，PowerShell 5.1 的 Expand-Archive **2439.9 秒**。
+// 功能都对，但 40 分钟的解压会让“可重建性证明”在真实评审里根本跑不完。
+const extractWithTar = () => {
+  const t0 = Date.now();
+  const r = spawnSync('tar', ['-xf', ZIP, '-C', OUT], { stdio: 'inherit' });
+  const row = { step: 'extract', tool: 'tar', exitCode: r.status, seconds: Math.round((Date.now() - t0) / 100) / 10 };
+  steps.push(row);
+  console.log('[reconstitute] extract(tar) exit=' + r.status + ' (' + row.seconds + 's)');
+  return r.status === 0 && existsSync(join(OUT, 'package.json'));
+};
+const extractWithPowerShell = () =>
+  run('extract(Expand-Archive)', 'powershell', ['-NoProfile', '-Command', 'Expand-Archive -LiteralPath "' + ZIP + '" -DestinationPath "' + OUT + '" -Force']);
+let ok = extractWithTar();
+if (!ok) {
+  console.log('[reconstitute] tar 解压不可用或不完整，退回 PowerShell Expand-Archive（会很慢）');
+  ok = extractWithPowerShell();
+}
 if (ok) ok = npm('npm-ci', ['ci', '--include=dev']);
 if (ok) ok = npm('typecheck', ['run', 'typecheck']);
 if (ok) ok = run('product-suites', 'cmd', ['/c', 'node scripts/product/run-tests.mjs --all']);
