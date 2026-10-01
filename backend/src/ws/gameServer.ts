@@ -5,7 +5,7 @@
  * 房间（共享引擎校验每步）/ 广播 / 终局落盘与排行 / 断线重连 / 邀请对局。
  */
 import { WebSocketServer, WebSocket } from 'ws';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { Db, SettledMatch } from '../db.js';
 import { createInitialState, applyMove, forcePass, skipCurrentPlayer } from '../../../shared/src/game/rules.js';
@@ -16,7 +16,7 @@ import { pickOnlineSingleHumanAiDifficulty, pickOnlineTwoHumanAiDifficulty, shuf
 import type { AiDifficulty, MatchPolicyContext } from '../../../shared/src/ai/types.js';
 import { DEFAULT_QUEUE_TIMEOUT_MS } from '../../../shared/src/product/queuePolicy.js';
 import { sessionTokenFrom } from '../sessionCookie.js';
-import { WS_CLOSE_REPLACED } from '../../../shared/src/product/protocol.js';
+import { WS_CLOSE_REPLACED, WS_TICKET_PROTOCOL_PREFIX, ticketFromProtocolHeader } from '../../../shared/src/product/protocol.js';
 import { MatchmakingQueue, type MatchmakingEntry } from './matchmaking.js';
 import { AiWorkerHost } from '../ai/aiWorkerHost.js';
 import { decideWebSocketOrigin, rejectFrame, SlidingWindowLimiter, WS_MAX_MESSAGE_BYTES, WS_COMMAND_RATE_LIMIT, WS_COMMAND_RATE_WINDOW_MS } from './security.js';
@@ -47,6 +47,12 @@ import {
 
 export type Seat = 'A' | 'B' | 'C';
 const SEATS: Seat[] = ['A', 'B', 'C'];
+
+/**
+ * 升级阶段把已认证用户挂到请求上（S04：票据路径没有 token/cookie 可供 onSocket 再解析一次）。
+ * 用可选字段而不是全局 map：请求对象生命周期与连接严格一致，不会泄漏也不会串号。
+ */
+type AuthedRequest = IncomingMessage & { srszqUser?: import('../models.js').User | null };
 
 /**
  * 终局原因（matches.end_reason / match_results.end_reason / MATCH_ENDED.reason）：
@@ -304,7 +310,17 @@ export class GameServer {
     this.wsLimiter = new SlidingWindowLimiter(this.opts.wsCommandRateLimit, this.opts.wsCommandRateWindowMs);
     this.allowedOrigins = new Set(opts.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS);
     this.matchmaking = new MatchmakingQueue(this.opts.queueTimeoutMs);
-    this.wss = new WebSocketServer({ noServer: true });
+    this.wss = new WebSocketServer({
+      noServer: true,
+      // S04：客户端可以把一次性票据声明成子协议（`srszq.ticket.<hex>`）。
+      // 服务端必须**回选**其中一个声明过的子协议，否则浏览器会直接判定握手失败；
+      // 回选票据本身是可以的：它 30 秒过期、只能消费一次，且不落在 URL 里。
+      handleProtocols: (protocols: Set<string>) => {
+        for (const p of protocols) if (p.startsWith(WS_TICKET_PROTOCOL_PREFIX)) return p;
+        const first = protocols.values().next();
+        return first.done ? false : first.value;
+      },
+    });
   }
 
   /** 挂到 HTTP server 的 upgrade 事件 */
@@ -336,7 +352,13 @@ export class GameServer {
       // 连 WebSocket 都不建立，避免给未授权来源分配任何服务端资源。
       // S05：认证也在升级之前完成。未认证客户端连 WebSocket 都不建立，
       // 不再"先握手再关闭"——那会为一个未授权来源分配真实的连接资源。
-      if (!this.resolveSessionUser(url.searchParams.get('token') ?? '', req)) {
+      const ticket = ticketFromProtocolHeader(req.headers['sec-websocket-protocol']);
+      const ticketUser = ticket
+        ? this.db.peekWsTicket(createHash('sha256').update(ticket).digest('hex'), Date.now())
+        : null;
+      const sessionUser = this.resolveSessionUser(url.searchParams.get('token') ?? '', req);
+      if (!sessionUser && !ticketUser) {
+        // 日志里**只有事件名与时间**：既不记 token 也不记票据（S04 要求两者都不出现在日志）。
         console.warn(JSON.stringify({ event: 'ws_unauthenticated_rejected', timestamp: Date.now() }));
         socket.write(['HTTP/1.1 401 Unauthorized', 'Connection: close', '', ''].join(String.fromCharCode(13, 10)));
         socket.destroy();
@@ -350,6 +372,26 @@ export class GameServer {
         socket.destroy();
         return;
       }
+      // 票据是**单次**的：真正消费放在所有拒绝路径之后，避免一个来源不合法的请求白烧掉一张票据。
+      let upgradeUser = sessionUser;
+      if (!upgradeUser && ticket) {
+        const consumed = this.db.consumeWsTicket(createHash('sha256').update(ticket).digest('hex'), Date.now());
+        if (!consumed) {
+          // 重复消费 / 刚好过期：一律拒绝（这正是规格要求的“重复消费拒绝”）。
+          console.warn(JSON.stringify({ event: 'ws_ticket_rejected', timestamp: Date.now() }));
+          socket.write(['HTTP/1.1 401 Unauthorized', 'Connection: close', '', ''].join(String.fromCharCode(13, 10)));
+          socket.destroy();
+          return;
+        }
+        upgradeUser = this.db.findUserById(consumed.userId);
+        if (!upgradeUser) {
+          socket.write(['HTTP/1.1 401 Unauthorized', 'Connection: close', '', ''].join(String.fromCharCode(13, 10)));
+          socket.destroy();
+          return;
+        }
+      }
+      // 把已认证用户在升级阶段就挂到请求上：onSocket 不再重新解析（票据那条路本来就没有 token/cookie 可解析）。
+      (req as AuthedRequest).srszqUser = upgradeUser ?? null;
       this.wss.handleUpgrade(req, socket, head, (ws) => this.onSocket(ws, req));
     });
   }
@@ -369,7 +411,8 @@ export class GameServer {
   private async onSocket(ws: WebSocket, req: IncomingMessage): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const token = url.searchParams.get('token') ?? '';
-    const user = this.resolveSessionUser(token, req);
+    // 升级阶段已经认过人（含票据路径）就直接用，避免两处判定漂移。
+    const user = (req as AuthedRequest).srszqUser ?? this.resolveSessionUser(token, req);
     if (!user) {
       ws.send(JSON.stringify({ type: 'error', error: 'unauthorized' }));
       ws.close(4001, 'unauthorized');

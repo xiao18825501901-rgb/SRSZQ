@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { DailySessionRow, Db } from './db.js';
 import { avatarFor, createSessionToken, hashPassword, makeSalt, sessionExpiry, validateEmail, validatePassword, validateUsername, verifyPassword } from './auth.js';
 import type { PublicUser, User } from './models.js';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { SlidingWindowLimiter } from './ws/security.js';
 import {
   isProvisionalEmail, makeProvisionalUsername, provisionalPlaceholderEmail,
@@ -15,6 +15,7 @@ import {
   featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID,
   asBoardSize, moveListOf, replayGame, reviewKeyMoves, stateDigest, threatWindows, classifyAccountSource,
   PLAYER_LABELS, RULESET_VERSION, RELEASE_ID,
+  WS_TICKET_TTL_MS,
   expandTrails, gradeAnswer,
   buildDailySession, isValidDailyKey,
   TRAINING_CONSENT_VERSION, TRAINING_CONSENT_NOTICE, decideTrainingConsent, buildDataset, DEFAULT_DATASET_POLICY,
@@ -1081,6 +1082,25 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           // 临时账号的占位邮箱不外泄；账号类型如实返回，前端据此提示“完善账号”。
           const emailView = isProvisionalEmail(full.email) ? {} : { email: full.email };
           return send(res, 200, { user: { ...toPublic(full), ...emailView }, provisional: full.accountType === 'PROVISIONAL' });
+        }
+        /*
+         * S04：签发一张**一次性** WebSocket 票据。
+         *
+         * 为什么需要它：老流程把 session token 放在 WS 的查询串里（`?token=`），
+         * URL 会进反向代理访问日志、浏览器历史与 Referer。票据把这件事变成：
+         *   1) 用**已认证的 HTTP 请求**换一张 30 秒、只能消费一次的票据；
+         *   2) 客户端把它放在 WebSocket **子协议头**里（不是 URL）；
+         *   3) 服务端只存哈希，消费即作废。
+         * 也就是说：会话密钥永远不必出现在 URL 里，票据即使泄露也只有几十秒且只能用一次。
+         */
+        case 'POST /api/ws/ticket': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          // 32 字节随机 -> 64 位十六进制；表里只存 sha256，库里永远没有票据明文。
+          const ticket = randomBytes(32).toString('hex');
+          const expiresAt = Date.now() + WS_TICKET_TTL_MS;
+          db.createWsTicket(createHash('sha256').update(ticket).digest('hex'), user.id, expiresAt);
+          return send(res, 201, { ticket, expiresAt, ttlMs: WS_TICKET_TTL_MS });
         }
         case 'POST /api/tutorial/complete': {
           const user = ctx.authUser(req);

@@ -48,6 +48,14 @@ const SUITES = {
     covers: ['G16'],
     phase: 'G16',
   },
+  wsticket: {
+    title: 'S04 WebSocket 一次性认证票据（30 秒 / 单次 / 重复消费拒绝 / 凭据不进 URL 与日志）',
+    entry: 'backend/tests/ws.ticket.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['S04'],
+    phase: 'S04',
+  },
   quickaccount: {
     title: '增量 C 一键创建账号并开始（临时账号 / 原地领取 / 迁移幂等 / 不进正式排位）',
     entry: 'backend/tests/quickAccount.flow.ts',

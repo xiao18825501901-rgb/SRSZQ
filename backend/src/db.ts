@@ -190,6 +190,12 @@ export interface Db {
   touchOnline(id: string, status: User['onlineStatus']): void;
   createSession(token: string, userId: string, expiresAt: number): void;
   findSession(token: string): { token: string; userId: string; expiresAt: number } | null;
+  /** S04：签发一张一次性 WS 票据（只存哈希）。 */
+  createWsTicket(ticketHash: string, userId: string, expiresAt: number): void;
+  /** S04：只查不消费（升级前校验用，避免“看一眼”就把票据用掉）。 */
+  peekWsTicket(ticketHash: string, now: number): { userId: string } | null;
+  /** S04：单次消费。已经用过或已过期一律返回 null。 */
+  consumeWsTicket(ticketHash: string, now: number): { userId: string } | null;
   deleteSession(token: string): void;
   setTutorialCompleted(userId: string, done: boolean): void;
   ranking(limit: number, offset?: number): RankingRow[];
@@ -358,6 +364,14 @@ export function openDb(path: string): Db {
       token TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id),
       expires_at INTEGER NOT NULL
+    );
+    -- S04：WebSocket 一次性认证票据。主键是**哈希**——库里永远不出现票据明文。
+    CREATE TABLE IF NOT EXISTS ws_tickets (
+      ticket_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      expires_at INTEGER NOT NULL,
+      consumed_at INTEGER,
+      created_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS ranking (
       user_id TEXT PRIMARY KEY REFERENCES users(id),
@@ -782,7 +796,26 @@ export function openDb(path: string): Db {
     createSession(token, userId, expiresAt) {
       raw.prepare('INSERT INTO sessions (token,user_id,expires_at) VALUES (?,?,?)').run(token, userId, expiresAt);
     },
-    findSession(token) {
+    createWsTicket(ticketHash, userId, expiresAt) {
+    raw.prepare('INSERT INTO ws_tickets (ticket_hash,user_id,expires_at,consumed_at,created_at) VALUES (?,?,?,NULL,?)')
+      .run(ticketHash, userId, expiresAt, Date.now());
+  },
+  peekWsTicket(ticketHash, now) {
+    const r = raw.prepare('SELECT user_id, expires_at, consumed_at FROM ws_tickets WHERE ticket_hash = ?').get(ticketHash) as
+      { user_id: string; expires_at: number; consumed_at: number | null } | undefined;
+    if (!r || r.consumed_at !== null || r.expires_at < now) return null;
+    return { userId: r.user_id };
+  },
+  consumeWsTicket(ticketHash, now) {
+    // 单次消费必须是**原子**的：UPDATE ... WHERE consumed_at IS NULL 的 changes 才是唯一判据，
+    // “先查再改”在并发下会让同一张票据被用两次。
+    const r = raw.prepare('UPDATE ws_tickets SET consumed_at = ? WHERE ticket_hash = ? AND consumed_at IS NULL AND expires_at >= ?')
+      .run(now, ticketHash, now);
+    if (Number(r.changes ?? 0) !== 1) return null;
+    const row = raw.prepare('SELECT user_id FROM ws_tickets WHERE ticket_hash = ?').get(ticketHash) as { user_id: string } | undefined;
+    return row ? { userId: row.user_id } : null;
+  },
+  findSession(token) {
       const r = raw.prepare('SELECT token,user_id,expires_at FROM sessions WHERE token = ?').get(token) as
         | { token: string; user_id: string; expires_at: number }
         | undefined;

@@ -203,6 +203,9 @@ async function main(): Promise<void> {
 
     console.log('=== 3. 页面不得自动重连（等 5 秒观察）===');
     ok(wsCreated.length >= 1, '已观测到页面自身的 WebSocket 连接（' + wsCreated.length + ' 条：' + wsCreated.join(', ') + '）');
+    // S04：握手 URL 里不得出现任何会话凭据（session token / 一次性票据都不行）。
+    const credentialInUrl = wsCreated.filter((u) => /[?&](token|ticket|sid|session)=/i.test(u));
+    ok(credentialInUrl.length === 0, '页面 WebSocket URL 里没有任何凭据参数（S04）' + (credentialInUrl.length ? ' → ' + JSON.stringify(credentialInUrl) : ''));
     const socketsAtReplace = wsCreated.length;
     const framesAtReplace = framesSent.length;
     await sleep(5000);

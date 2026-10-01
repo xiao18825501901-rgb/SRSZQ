@@ -68,6 +68,18 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
   return { status: res.status, data };
 }
 
+/**
+ * S04：换一张一次性 WebSocket 票据（30 秒、只能消费一次）。
+ *
+ * 为什么要多这一次 HTTP 往返：老流程把 session token 直接放进 WS 的查询串，
+ * URL 会进访问日志/历史/Referer。现在会话密钥留在 Authorization 头里，
+ * WS 握手只带一张用完即废的票据（而且放在子协议头，不放 URL）。
+ */
+export async function requestWsTicket(): Promise<string> {
+  const { data } = await api<{ ticket?: string }>('POST', '/api/ws/ticket');
+  return typeof data?.ticket === 'string' ? data.ticket : '';
+}
+
 /* ---- P2 复盘与题库接口（R01-R08） ---- */
 
 export interface HistoryItem {

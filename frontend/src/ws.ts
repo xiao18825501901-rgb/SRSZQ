@@ -1,9 +1,9 @@
 /** SRSZQ 前端 WebSocket 客户端（后端 ws://127.0.0.1:8081/ws） */
-import { WS_URL, getToken } from './api';
+import { WS_URL, getToken, requestWsTicket } from './api';
 import { colorName } from './playerPresentation';
 import type { GameState, Player } from '../../shared/src/game/types';
 import type { QualificationView } from '../../shared/src/game/qualification';
-import { PROTOCOL_VERSION, RULESET_VERSION, WS_CLOSE_REPLACED } from '../../shared/src/product/protocol';
+import { PROTOCOL_VERSION, RULESET_VERSION, WS_CLOSE_REPLACED, WS_TICKET_PROTOCOL_PREFIX } from '../../shared/src/product/protocol';
 import { DEFAULT_QUEUE_TIMEOUT_MS } from '../../shared/src/product/queuePolicy';
 
 export type WSHandler = (msg: Record<string, any>) => void;
@@ -19,20 +19,52 @@ class SrszqSocket {
   private ws: WebSocket | null = null;
   private handlers = new Set<WSHandler>();
   private closed = false;
+  /** 正在换票/建连：避免并发 connect() 建出两条连接。 */
+  private connecting = false;
   onOpen: (() => void) | null = null;
 
   connect(): void {
-    if (this.ws) return;
+    void this.connectAsync();
+  }
+
+  /**
+   * S04：建立连接。
+   *
+   * 凭据来源按优先级：
+   *   1) 老流程的 localStorage 令牌 -> 先用它换一张**一次性票据**，票据放在
+   *      WebSocket 子协议头（`srszq.ticket.<hex>`）里 —— 会话密钥不再进 URL；
+   *   2) 一键账号的 HttpOnly cookie -> 不需要任何 URL 凭据（服务端从 cookie 认会话）。
+   * 两种情况下 URL 里都不含任何会话密钥。
+   */
+  private async connectAsync(): Promise<void> {
+    if (this.ws || this.connecting) return;
+    this.connecting = true;
     this.closed = false;
-    // O06：连接时显式声明协议/规则版本。服务端版本不一致会直接拒绝，而不是静默降级。
-    // 增量 C：一键账号没有令牌——不带 token 参数，服务端会从 HttpOnly cookie 认会话。
-    // 这样会话密钥永远不出现在 URL 里（老流程仍按 token 参数走，行为不变）。
-    const token = getToken() ?? '';
-    this.ws = new WebSocket(
-      (token ? `${WS_URL}?token=${encodeURIComponent(token)}&` : `${WS_URL}?`) +
-      `protocol=${PROTOCOL_VERSION}&ruleset=${encodeURIComponent(RULESET_VERSION)}`,
-    );
-    this.ws.onmessage = (ev) => {
+    try {
+      // O06：连接时显式声明协议/规则版本。服务端版本不一致会直接拒绝，而不是静默降级。
+      const url = `${WS_URL}?protocol=${PROTOCOL_VERSION}&ruleset=${encodeURIComponent(RULESET_VERSION)}`;
+      const token = getToken() ?? '';
+      let protocols: string[] | undefined;
+      if (token) {
+        const ticket = await requestWsTicket();
+        if (ticket) protocols = [WS_TICKET_PROTOCOL_PREFIX + ticket];
+      }
+      // 票据是异步换来的：期间可能已经有人调用 close()（例如登出/换号），此时不要再建连接。
+      if (this.closed || this.ws) return;
+      const ws = new WebSocket(url, protocols);
+      this.ws = ws;
+      this.attach(ws);
+    } catch {
+      // 换票失败（会话过期/网络问题）：不静默退回“把会话密钥写进 URL”的老做法，
+      // 直接按连接失败处理，由上层决定重试或提示重新登录。
+      if (!this.closed) setTimeout(() => this.connect(), 1000);
+    } finally {
+      this.connecting = false;
+    }
+  }
+
+  private attach(ws: WebSocket): void {
+    ws.onmessage = (ev) => {
       let msg: Record<string, any>;
       try {
         msg = JSON.parse(String(ev.data));
@@ -41,8 +73,8 @@ class SrszqSocket {
       }
       for (const h of [...this.handlers]) h(msg);
     };
-    this.ws.onopen = () => this.onOpen?.();
-    this.ws.onclose = (ev) => {
+    ws.onopen = () => this.onOpen?.();
+    ws.onclose = (ev) => {
       this.ws = null;
       // G16：被“同一账号的更新连接”替换时**不要重连**。
       // 否则两个标签页会互相顶号：A 重连 → 服务端关 B → B 重连 → 服务端关 A …… 无限抖动。
@@ -54,7 +86,7 @@ class SrszqSocket {
       }
       if (!this.closed) setTimeout(() => this.connect(), 1000);
     };
-    this.ws.onerror = () => {
+    ws.onerror = () => {
       /* close 事件统一处理 */
     };
   }

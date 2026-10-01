@@ -12,7 +12,7 @@ class FakeWebSocket {
   onerror: (() => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
 
-  constructor(public readonly url: string) {
+  constructor(public readonly url: string, public readonly protocols?: string[]) {
     FakeWebSocket.instances.push(this);
   }
 
@@ -35,6 +35,9 @@ class FakeWebSocket {
   }
 }
 
+/** 等异步 connect（S04 会先换票据再建连）落到“已建出 WebSocket”这一步。 */
+const settle = async (): Promise<void> => { for (let i = 0; i < 5; i += 1) await Promise.resolve(); };
+
 describe('Online Match WebSocket 恢复', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -45,6 +48,12 @@ describe('Online Match WebSocket 恢复', () => {
       setItem: () => undefined,
       removeItem: () => undefined,
     });
+    // S04：握手前先用会话令牌换一张**一次性票据**（HTTP 请求），票据走子协议头而不是 URL。
+    // 这里把这次请求打桩成固定票据，测试才能同步地检查后续行为。
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ ok: true, ticket: 'a'.repeat(64), expiresAt: Date.now() + 30_000, ttlMs: 30_000 }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } },
+    )));
   });
 
   afterEach(() => {
@@ -53,9 +62,20 @@ describe('Online Match WebSocket 恢复', () => {
     vi.unstubAllGlobals();
   });
 
-  it('初次连接入队，排队重连后查询权威状态', () => {
+  it('连接 URL 里不带任何会话凭据，票据走子协议头（S04）', async () => {
+    gameLink.attach();
+    await settle();
+    const first = FakeWebSocket.instances[0];
+    expect(first).toBeTruthy();
+    expect(first.url).not.toMatch(/[?&](token|ticket|sid|session)=/i);
+    expect(first.url).toContain('protocol=');
+    expect(first.protocols?.[0]).toBe('srszq.ticket.' + 'a'.repeat(64));
+  });
+
+  it('初次连接入队，排队重连后查询权威状态', async () => {
     gameLink.attach();
     gameLink.joinQueue();
+    await settle();
 
     const first = FakeWebSocket.instances[0];
     expect(first.sent).toEqual([]);
@@ -66,16 +86,19 @@ describe('Online Match WebSocket 恢复', () => {
     expect(gameLink.phase).toBe('queue');
     first.close();
 
-    vi.advanceTimersByTime(1000);
+    // 重连同样是异步的：先跑定时器，再把异步换票/建连走完。
+    await vi.advanceTimersByTimeAsync(1000);
+    await settle();
     const reconnected = FakeWebSocket.instances[1];
     expect(reconnected).toBeTruthy();
     reconnected.open();
     expect(reconnected.sent.map((message) => JSON.parse(message))).toContainEqual({ type: 'queue.sync' });
   });
 
-  it('丢失首次 game.start 后，queue.state MATCHED + 重发快照仍进入棋局', () => {
+  it('丢失首次 game.start 后，queue.state MATCHED + 重发快照仍进入棋局', async () => {
     gameLink.attach();
     gameLink.joinQueue();
+    await settle();
     const socket = FakeWebSocket.instances[0];
     socket.open();
     socket.message({ type: 'queue.joined', queueId: 'q2', waiting: 1, timeoutMs: 50, enqueuedAt: 0, deadlineAt: 50, serverNow: 0 });

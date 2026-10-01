@@ -19,6 +19,37 @@ export const PROTOCOL_VERSION = 2;
  */
 export const WS_CLOSE_REPLACED = 4000;
 
+/* ---- S04：WebSocket 一次性认证票据 ---------------------------------- */
+
+/**
+ * 票据有效期（毫秒）。规格 S04：30 秒过期、**单次**消费、重复消费必须拒绝。
+ * 票据换来的是一次握手资格，不是会话：拿到它也不能在 30 秒后继续用。
+ */
+export const WS_TICKET_TTL_MS = 30_000;
+
+/**
+ * 票据通过 **WebSocket 子协议头**（Sec-WebSocket-Protocol）传递，而不是查询串。
+ *
+ * 为什么不用 `?ticket=`：规格要求「session/ticket 不出现在 URL 或日志」。
+ * URL 会进反向代理访问日志、浏览器历史、Referer；子协议头不会。
+ * 票据本身 30 秒过期且只能消费一次，即使被中间设备记录，价值也极低。
+ */
+export const WS_TICKET_PROTOCOL_PREFIX = 'srszq.ticket.';
+
+/** 从客户端声明的子协议头里取出票据（没有就返回空串）。 */
+export function ticketFromProtocolHeader(header: string | string[] | undefined): string {
+  const raw = Array.isArray(header) ? header.join(',') : (header ?? '');
+  for (const part of raw.split(',')) {
+    const v = part.trim();
+    if (v.startsWith(WS_TICKET_PROTOCOL_PREFIX)) {
+      const ticket = v.slice(WS_TICKET_PROTOCOL_PREFIX.length).trim();
+      // 只接受十六进制票据（服务端签发的形状），避免把任意字符串当票据塞进查表。
+      if (/^[0-9a-f]{32,128}$/.test(ticket)) return ticket;
+    }
+  }
+  return '';
+}
+
 /** 规则集版本：唯一规则真源（shared/game）的语义标识。 */
 export const RULESET_VERSION = 'formal-rules-v2';
 
