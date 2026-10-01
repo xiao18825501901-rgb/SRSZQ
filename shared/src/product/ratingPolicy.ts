@@ -43,6 +43,45 @@ export const RATING_SCALE = 24;
 export const RATING_DECIMALS = 4; // 定点 >= 1e-4
 
 /* ------------------------------------------------------------------ */
+/* 开局前预判（规格 4.2：第 4 局起不计分「且开局前提示」）              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * 开局前能确定的部分：这一局**结束时会不会计竞技分**。
+ *
+ * 为什么需要它：规格 4.2 要求重复对手保护「第 4 局起不计竞技分，**且开局前提示**，
+ * 不静默在赛后改政策」。此前只实现了前半句 —— 分数确实不变，但玩家是赛后才发现的。
+ *
+ * 口径与结算**共用同一套输入**（模式 / 座位是否真人 / 门禁 / 24h 内同组合第几局 / beta 开关），
+ * 所以预判与最终结算不会各说各话。
+ *
+ * 唯一不可预知的是终局原因：`noContest`（全离场 / SYSTEM_ABORT）只有打完才知道，
+ * 因此预判一律按 noContest=false 计算，并且**只用于提示**，绝不参与结算。
+ */
+export interface RatingPreview {
+  /** 结束后是否会变动真人竞技分。 */
+  ranked: boolean;
+  policy: RatingPolicyId;
+  /** 不计分的原因；计分时为 null。 */
+  reason: IneligibilityReason | null;
+}
+
+/**
+ * 预判入参：与结算同一组字段，但 `noContest` 是**可选且会被忽略**的
+ * （调用方常常手里就有一个完整的 EligibilityInput，没必要先删字段再传）。
+ */
+export type RatingPreviewInput = Omit<EligibilityInput, 'noContest'> & { noContest?: boolean };
+
+export function previewRatingAtStart(input: RatingPreviewInput): RatingPreview {
+  // 注意：无论调用方传了什么 noContest，这里都按 false 算 —— 终局原因只有打完才知道。
+  const base: EligibilityInput = { ...input, noContest: false };
+  const policy = resolveRatingPolicy(base);
+  if (policy !== NO_RATING_POLICY_ID) return { ranked: true, policy, reason: null };
+  const beta = evaluateBetaEligibility(base);
+  return { ranked: false, policy, reason: beta.eligible ? null : beta.reason };
+}
+
+/* ------------------------------------------------------------------ */
 /* 资格判定（规格 4.1 / 55 / 142）                                      */
 /* ------------------------------------------------------------------ */
 

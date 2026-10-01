@@ -111,6 +111,18 @@ export interface GameSnapshot {
   qualification?: QualificationView | null;
   turnDeadlineAt?: number | null;
   serverNow?: number;
+  /**
+   * 开局前的计分预判（服务器在 game.start 里下发，规格 4.2「第 4 局起不计分且开局前提示」）。
+   * 只用于显示；真正的结算结果以 MATCH_ENDED 的下发为准。
+   */
+  rating?: RatingPreviewWire | null;
+}
+
+/** 服务器 game.start 里的计分预判（与 shared 的 RatingPreview 同形，含 policy/reason）。 */
+export interface RatingPreviewWire {
+  ranked: boolean;
+  policy: string;
+  reason: string | null;
 }
 
 /** 本座位在服务器权威名次中的结果；VOID = 本局无竞技后果（不记胜负、不扣分）。 */
@@ -327,6 +339,7 @@ class GameLink {
           qualification: msg.qualification as QualificationView | undefined,
           turnDeadlineAt: msg.turnDeadlineAt ?? null,
           serverNow: msg.serverNow ?? Date.now(),
+          rating: (msg.rating as RatingPreviewWire | undefined) ?? null,
         };
         this.serverOffsetMs = Number(msg.serverNow ?? Date.now()) - Date.now();
         this.result = '';

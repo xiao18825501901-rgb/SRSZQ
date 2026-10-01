@@ -18,7 +18,7 @@ import { openDb, type Db } from '../src/db.js';
 import { createApi } from '../src/api.js';
 import { GameServer } from '../src/ws/gameServer.js';
 import {
-  computeRatingDeltas, computeLegacyDeltas, evaluateBetaEligibility, resolveRatingPolicy,
+  computeRatingDeltas, computeLegacyDeltas, evaluateBetaEligibility, resolveRatingPolicy, previewRatingAtStart,
   deriveScoreTargets, applyDeltas,
   LEGACY_POLICY_ID, BETA_V1_POLICY_ID, NO_RATING_POLICY_ID,
   type EligibilityInput, type Eligibility,
@@ -286,6 +286,51 @@ async function main(): Promise<void> {
     assert.equal(ineligibleReason(evaluateBetaEligibility(fourth)), 'REPEAT_OPPONENTS');
   });
 
+  // 规格 4.2 的后半句：「**且开局前提示**，不静默赛后改政策」。
+  // 之前只做了前半句（分数确实不变），玩家是打完才发现分数没动。
+  await check('I7 开局前预判：与结算同源，且第 4 局能在开局前就说出原因（规格 4.2「开局前提示」）', async () => {
+    // 1) 预判必须与结算一致：同一输入下 ranked != (policy === none)。
+    //    这里穷举一组输入组合，任何一处口径漂移都会被抓住。
+    const combos: Array<Partial<EligibilityInput>> = [
+      {}, { sameTrioMatchNumber: 3 }, { sameTrioMatchNumber: 4 }, { sameTrioMatchNumber: 9 },
+      { ratingBeta: false }, { ratingBeta: false, sameTrioMatchNumber: 4 },
+      { seatIsHuman: { A: true, B: false, C: true } },
+      { seatGatePassed: { A: true, B: false, C: true } },
+      { mode: 'invite' }, { noContest: true },
+    ];
+    for (const extra of combos) {
+      const full = eligibility(extra);
+      const preview = previewRatingAtStart({ ...full, noContest: false });
+      if (!full.noContest) {
+        // 可预知的部分：预判必须与结算**逐字一致**（否则就是“提示说计分、结算却不计分”）。
+        const settled = resolveRatingPolicy(full);
+        assert.equal(
+          preview.ranked, settled !== NO_RATING_POLICY_ID,
+          '预判与结算不一致：' + JSON.stringify(extra) + ' preview=' + JSON.stringify(preview) + ' settled=' + settled,
+        );
+      } else {
+        // 唯一不可预知的一项是终局原因（全离场 / SYSTEM_ABORT）。预判一律按 noContest=false 算，
+        // 所以这里断言的是「预判不依赖赛后才知道的信息」，而结算依然更保守地取 none。
+        assert.deepEqual(
+          preview, previewRatingAtStart({ ...full, noContest: false }),
+          '预判不得依赖赛后才知道的 noContest',
+        );
+        assert.equal(resolveRatingPolicy(full), NO_RATING_POLICY_ID, '无竞技后果的终局结算仍是不计分（更保守）');
+      }
+      if (!preview.ranked) assert.ok(preview.reason, '不计分必须给出原因：' + JSON.stringify(extra));
+      if (preview.ranked) assert.equal(preview.reason, null, '计分时不应有原因');
+    }
+
+    // 2) 第 4 局的预判原因必须是 REPEAT_OPPONENTS —— 提示要能说清“为什么”
+    const fourth = previewRatingAtStart({ ...eligibility({ sameTrioMatchNumber: 4 }), noContest: false });
+    assert.equal(fourth.ranked, false);
+    assert.equal(fourth.reason, 'REPEAT_OPPONENTS');
+    // 3) 第 3 局仍然计分（边界不能提前）
+    const third = previewRatingAtStart({ ...eligibility({ sameTrioMatchNumber: 3 }), noContest: false });
+    assert.equal(third.ranked, true);
+    assert.equal(third.reason, null);
+  });
+
   console.log('--- J 真实对局：积分到底有没有被改（本轮修的缺陷）---');
 
   await check('J1 真实 1H+2AI 快速局：真人 rating 必须不变（修复前会被 -10/+30）', async () => {
@@ -298,6 +343,10 @@ async function main(): Promise<void> {
       const gameId = start.gameId as string;
       const aiCount = Object.values(start.seats).filter((s: any) => s.kind === 'ai').length;
       assert.equal(aiCount, 2, '应为 1H+2AI');
+      // 开局前预判随 game.start 下发：AI 补位局当场就告诉玩家“不计竞技分”。
+      assert.ok(start.rating, 'game.start 必须带计分预判 rating');
+      assert.equal(start.rating.ranked, false, 'AI 补位局预判为不计分');
+      assert.equal(start.rating.reason, 'NOT_THREE_HUMANS');
       send(c, { type: 'PLAYER_RESIGN' });
       const row = await pollUntil(() => rawRow('SELECT * FROM match_results WHERE game_id = ?', gameId));
       assert.ok(row, '必须落盘');
@@ -335,12 +384,13 @@ async function main(): Promise<void> {
     } finally { cs.forEach(close); await sleep(250); }
   });
 
-  await check('J3 重复对手保护在真实流程中生效：第 4 局被判定为 REPEAT_OPPONENTS', async () => {
-    const ids = [
-      (await registerUser('RepA')).id,
-      (await registerUser('RepB')).id,
-      (await registerUser('RepC')).id,
+  await check('J3 重复对手保护在真实流程中生效：第 4 局开局前就告知 REPEAT_OPPONENTS，且与结算一致', async () => {
+    const users = [
+      await registerUser('RepA'),
+      await registerUser('RepB'),
+      await registerUser('RepC'),
     ];
+    const ids = users.map((u) => u.id);
     const now = Date.now();
     // 直接构造 3 条已结算记录（同一三人组合）
     for (let i = 0; i < 3; i++) {
@@ -362,6 +412,25 @@ async function main(): Promise<void> {
     assert.equal(policy, NO_RATING_POLICY_ID, '第 4 局必须不计竞技分');
     // 24 小时窗口外不计入
     assert.equal(db.countRecentMatchesForUsers(ids, now + 3600 * 1000), 0, '窗口之后应清零');
+
+    // 真实第 4 局：开局前必须把话说清楚（规格 4.2「开局前提示」，不许赛后静默改政策）
+    const cs = await Promise.all(users.map((u) => connect(u.token)));
+    try {
+      for (const c of cs) send(c, { type: 'queue.join' });
+      const starts = await Promise.all(cs.map((c) => waitFor(c, 'game.start', 8000)));
+      assert.equal(new Set(starts.map((s) => s.gameId)).size, 1, '三人必须进同一局');
+      for (const s of starts) {
+        assert.ok(s.rating, 'game.start 必须带计分预判 rating');
+        assert.equal(s.rating.ranked, false, '第 4 局开局前就要告知不计分');
+        assert.equal(s.rating.reason, 'REPEAT_OPPONENTS', '原因必须说清是重复对手');
+      }
+      send(cs[0], { type: 'PLAYER_RESIGN' });
+      await Promise.all(cs.map((c) => waitFor(c, 'MATCH_ENDED', 6000)));
+      const row = await pollUntil(() => rawRow('SELECT * FROM match_results WHERE game_id = ?', starts[0].gameId));
+      assert.ok(row, '第 4 局必须落盘');
+      assert.equal(row.score_policy, NO_RATING_POLICY_ID, '结算必须与开局前的预判一致');
+      assert.equal(row.is_ranked, 0, '第 4 局不得标记为排位');
+    } finally { cs.forEach(close); await sleep(250); }
   });
 
   await check('J4 排行榜过滤合成/测试/演示账号（规格 4.1）', async () => {

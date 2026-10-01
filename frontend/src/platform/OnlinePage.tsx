@@ -6,6 +6,7 @@ import { MatchPanel, PositionHints, ReplayControls, ColorChip } from '../compone
 import { Modal } from '../components/Modal';
 import { gameLink } from '../ws';
 import { colorName } from '../playerPresentation';
+import { ratingNoticeOf } from './ratingNotice';
 
 export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void}){
  const [,force]=useState(0),[now,setNow]=useState(Date.now()),[confirm,setConfirm]=useState(false);
@@ -50,6 +51,8 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
  const seconds=ms===null?null:Math.ceil(ms/1000);
  const current=currentPlayerOf(g.state);
  const lostConnection=gameLink.seatStatus?.status==='disconnected'&&now-gameLink.seatStatus.ts<10000;
+ // 开局前就告诉玩家这一局计不计分（规格 4.2：不许赛后静默改政策）。
+ const ratingNotice=ratingNoticeOf(g.rating);
  return <main className="game-shell online-game" data-testid="online-game">
    <div className="match-layout">
      <div className="match-board-column"><Board state={view} showLegal={!review&&showLegal} showWinning={!review&&showWinning} showNumbers={review}
@@ -60,6 +63,7 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
        <MatchPanel state={view} qualification={review?null:g.qualification} seats={g.seats} mySeat={g.mySeat} ended={ended} thinking={!ended&&g.seats[current].kind==='ai'}/>
        <PositionHints state={view} showLegal={showLegal} showWinning={showWinning} onLegal={setShowLegal} onWinning={setShowWinning}/>
        {lostConnection&&!ended&&<div className="notice">对手正在重连…</div>}
+       {!ended&&ratingNotice&&<div className="notice" data-testid="rating-notice">{ratingNotice}</div>}
        {ended?<section className="result-card" role="status"><h2>{result}</h2><div className="game-actions">{isOnline&&<button className="btn primary" onClick={rematch}>再来一局</button>}<button className="btn" onClick={exit}>返回大厅</button></div></section>:
        <div className="online-controls"><button className="btn danger" onClick={()=>setConfirm(true)}>退出对局</button>{isOnline&&<div className={`turn-clock ${seconds!==null&&seconds<=10?'urgent':''}`} role="timer" aria-label="落子倒计时"><span>{seconds===null?'对手思考':'落子剩余'}</span><b>{seconds===null?'—':seconds}<small>{seconds===null?'':'秒'}</small></b></div>}</div>}
        <ReplayControls active={review} index={cursor} total={g.state.moves.length} onToggle={()=>{if(!review)setCursor(g.state.moves.length);setReview(!review)}} onIndex={setCursor} onReturn={()=>setReview(false)} live={isOnline&&!ended}/>

@@ -30,6 +30,7 @@ import {
   COMMAND_ERRORS,
   commandPayloadDigest,
   resolveRatingPolicy,
+  previewRatingAtStart,
   deriveScoreTargets,
   computeRatingDeltas,
   LEGACY_POLICY_ID,
@@ -41,6 +42,7 @@ import {
   type EndReason,
   type SettlementPlan,
   type SettlementParticipantInput,
+  type RatingPreview,
 } from '../../../shared/src/index.js';
 
 export type Seat = 'A' | 'B' | 'C';
@@ -675,6 +677,8 @@ export class GameServer {
           revision: room.revision,
           seq: room.seq,
           phase: room.phase,
+          // 规格 4.2：重复对手保护要在**开局前**告诉玩家，不能赛后才发现不计分。
+          rating: this.ratingPreviewFor(room),
           protocol: { ...PROTOCOL_INFO },
         });
         this.logMatchmaking('broadcast_start', {
@@ -1263,7 +1267,18 @@ export class GameServer {
    *   - 恰好 3 真人且 beta 关闭 -> 过渡期保留 legacy +30/-10；
    *   - 恰好 3 真人且 beta 开启 -> 规格 4.2 的 V1 算法（按当前分值算 p_i）。
    */
-  private applyRatingPolicy(room: Room, plan: SettlementPlan): SettlementPlan {
+  /**
+   * 座位事实：是否真人 / 门禁是否通过 / 真人 userId / 未领取临时账号座位数。
+   *
+   * 结算（applyRatingPolicy）与开局前预判（ratingPreviewFor）**共用同一份**，
+   * 否则两处口径一旦漂移，就会出现「提示说计分、结算却不计分」这种最坏情况。
+   */
+  private seatFacts(room: Room): {
+    seatIsHuman: Record<Seat, boolean>;
+    seatGatePassed: Record<Seat, boolean>;
+    humanIds: string[];
+    provisionalSeats: number;
+  } {
     const seatIsHuman = {} as Record<Seat, boolean>;
     const seatGatePassed = {} as Record<Seat, boolean>;
     const humanIds: string[] = [];
@@ -1285,13 +1300,38 @@ export class GameServer {
         seatGatePassed[s] = false;
       }
     }
+    return { seatIsHuman, seatGatePassed, humanIds, provisionalSeats };
+  }
+
+  /** 本局是同一三人组合 24 小时内的第几局（1 = 首局）。结算与预判共用。 */
+  private sameTrioMatchNumberOf(humanIds: string[]): number {
+    return humanIds.length === 3
+      ? this.db.countRecentMatchesForUsers(humanIds, Date.now() - 24 * 3600 * 1000) + 1
+      : 1;
+  }
+
+  /**
+   * 开局前的计分预判（规格 4.2：第 4 局起不计竞技分**且开局前提示**，不许赛后静默改政策）。
+   * 只用于提示；真正的结算仍走 applyRatingPolicy。
+   */
+  private ratingPreviewFor(room: Room): RatingPreview {
+    const { seatIsHuman, seatGatePassed, humanIds } = this.seatFacts(room);
+    return previewRatingAtStart({
+      mode: room.mode,
+      seatIsHuman,
+      seatGatePassed,
+      ratingBeta: this.featureFlags.ratingBeta,
+      sameTrioMatchNumber: this.sameTrioMatchNumberOf(humanIds),
+    });
+  }
+
+  private applyRatingPolicy(room: Room, plan: SettlementPlan): SettlementPlan {
+    const { seatIsHuman, seatGatePassed, humanIds, provisionalSeats } = this.seatFacts(room);
     const humanParticipants = plan.participants.filter((p) => p.kind === 'human');
     const humanLosses = humanParticipants.filter((p) => p.outcome === 'LOSS').length;
     const noContest = plan.endReason === 'SYSTEM_ABORT'
       || (humanParticipants.length > 0 && humanLosses === humanParticipants.length);
-    const sameTrioMatchNumber = humanIds.length === 3
-      ? this.db.countRecentMatchesForUsers(humanIds, Date.now() - 24 * 3600 * 1000) + 1
-      : 1;
+    const sameTrioMatchNumber = this.sameTrioMatchNumberOf(humanIds);
 
     const policy = resolveRatingPolicy({
       mode: room.mode, seatIsHuman, seatGatePassed,
@@ -1562,6 +1602,8 @@ export class GameServer {
       revision: room.revision,
       seq: room.seq,
       phase: room.phase,
+      // 续局（断线重连 / queue.sync 补发）也要带上，否则重连后就看不到这条提示了。
+      rating: this.ratingPreviewFor(room),
       protocol: { ...PROTOCOL_INFO },
     });
     this.sendRoomEvent(room, { type: 'player.status', seat, status: 'reconnected' });
