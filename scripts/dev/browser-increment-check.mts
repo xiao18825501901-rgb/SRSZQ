@@ -181,15 +181,15 @@ async function main(): Promise<void> {
     ok(!!contrast && parseFloat(contrast.borderWidth) >= 1 && !/rgba\(0, 0, 0, 0\)/.test(String(contrast.borderColor)), '白棋有可见描边：' + JSON.stringify(contrast && { w: contrast.borderWidth, c: contrast.borderColor }));
     ok(!!contrast && contrast.hasFill === true, '白棋有可见底色（渐变或实色），不是透明圆点');
     ok(!!contrast && Number(contrast.worstRatio) >= 3, '白棋文字与底色最差对比度 >= 3（色标 ' + JSON.stringify(contrast && contrast.fills) + '，最差 ' + (contrast && contrast.worstRatio ? Number(contrast.worstRatio).toFixed(2) : 'n/a') + '）');
-    const hasPrev = await page.evaluate('!!document.querySelector("[data-testid=puzzle-step-prev]")');
-    ok(hasPrev === true, '有「上一步」可以复盘');
-    for (let i = 0; i < 3; i += 1) { await page.evaluate('document.querySelector("[data-testid=puzzle-step-prev]").click()'); await sleep(200); }
-    const round1 = await page.evaluate('document.querySelector("[data-testid=puzzle-timeline]").getAttribute("data-round")');
-    ok(Number(round1) < Number(round0), '后退后时间线跟随当前查看的局面：Round ' + round0 + ' -> ' + round1);
-    await page.evaluate('document.querySelector("[data-testid=puzzle-step-live]").click()');
-    await sleep(300);
-    const round2 = await page.evaluate('document.querySelector("[data-testid=puzzle-timeline]").getAttribute("data-round")');
-    ok(round2 === round0, '回到当前局面后时间线回到原值：' + round2);
+    ok(Number(round0) > 0, '时间线带当前轮次：Round ' + round0);
+    // 每日训练 Session 改版后，每日题页面**不再有**历史回放控件（上一步/下一步/回到当前局面）
+    // 与棋子手数，「下一题」在答对前是禁用的。这里改断言新契约（旧断言已随功能下线）。
+    const historyControls = await page.evaluate('["[data-testid=puzzle-steps]","[data-testid=puzzle-step-prev]","[data-testid=puzzle-step-next]","[data-testid=puzzle-step-first]","[data-testid=puzzle-step-live]","[data-testid=puzzle-step-info]","[data-testid=puzzle-rewound]","[data-testid=back-to-daily]",".rv-scrub"].filter((s) => document.querySelector(s)).length');
+    ok(Number(historyControls) === 0, '每日题页面已无历史回放控件（找到 ' + historyControls + ' 个）');
+    const numbers = await page.evaluate('Array.from(document.querySelectorAll(".go-stone")).filter((el) => /[0-9]/.test(el.textContent || "")).length');
+    ok(Number(numbers) === 0, '棋盘棋子不显示手数（带数字的棋子数=' + numbers + '）');
+    const nextDisabled = await page.evaluate('(() => { const b = document.querySelector("[data-testid=puzzle-next]"); return b ? b.disabled === true : null; })()');
+    ok(nextDisabled === true, '未答对时「下一题」是 disabled（实际 ' + nextDisabled + '）');
     const puzzleShot = await page.shot(join(OUT, 'desktop-1440x900-puzzle-timeline.png'));
     ok(puzzleShot.width === 1440 && puzzleShot.height === 900, '每日一题截图 1440x900（' + puzzleShot.bytes + ' bytes）');
 

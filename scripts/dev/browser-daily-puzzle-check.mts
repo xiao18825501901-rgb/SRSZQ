@@ -127,7 +127,7 @@ async function main(): Promise<void> {
       ['每日一题', '页面标题'],
       ['胜权时间线', '胜权时间线面板'],
       ['我的进度', '我的进度面板'],
-      ['回到今日题目', '回到今日题目按钮'],
+      ['今日进度', '今日训练进度面板'],
     ] as const;
     for (const [needle, label] of stillThere) ok(text.includes(needle), '保留：' + label);
     const typeLabel = await page.evaluate('document.querySelector("[data-testid=puzzle-type]")?.innerText ?? ""');
@@ -142,31 +142,29 @@ async function main(): Promise<void> {
     ok(Number(emptyCount) > 0, '棋盘存在可点的空交叉点（' + emptyCount + ' 个）');
     const clicked = await page.evaluate(CLICK_EMPTY);
     ok(!!clicked, '点击了一个空交叉点：' + JSON.stringify(clicked));
-    const gotVerdict = await page.waitFor('[data-testid="puzzle-verdict"]', 20000);
+    // 新契约：答对是 puzzle-verdict，答错/非法是 puzzle-feedback（旧的单一 testid 只覆盖了答对）。
+    const gotVerdict = await page.waitFor('[data-testid="puzzle-verdict"], [data-testid="puzzle-feedback"]', 20000);
     ok(gotVerdict, '提交后出现判题结论（不再无反应/Not Found）');
-    const verdict = String(await page.evaluate('document.querySelector("[data-testid=puzzle-verdict]")?.innerText ?? ""'));
-    ok(/正确|不对|这一手不合法|开放研究题/.test(verdict), '判题结论可读：' + verdict);
+    const verdict = String(await page.evaluate('(document.querySelector("[data-testid=puzzle-verdict]")||document.querySelector("[data-testid=puzzle-feedback]"))?.innerText ?? ""'));
+    ok(/正确|不对|再想想|这一手不合法|开放研究题/.test(verdict), '判题结论可读：' + verdict);
     const pageText2 = String(await page.evaluate('document.body.innerText'));
     ok(!/not found|Not Found|HTTP 404/i.test(pageText2), '页面上没有 Not Found / 404 字样');
     const hasErr = await page.evaluate('!!document.querySelector("[data-testid=puzzle-error]")');
     const errText = String(await page.evaluate('document.querySelector("[data-testid=puzzle-error]")?.innerText ?? ""'));
     ok(hasErr === false, '没有出现错误提示条' + (hasErr ? '（实际：' + errText + '）' : ''));
 
-    console.log('=== 3. 复盘后回到当前局面：仍可正常作答 ===');
-    await page.evaluate('document.querySelector("[data-testid=puzzle-step-prev]").click()');
-    await sleep(300);
-    ok(await page.evaluate('!!document.querySelector("[data-testid=puzzle-rewound]")'), '回放态给出提示');
-    const clickableInReplay = await page.evaluate(EMPTY_COUNT);
-    ok(Number(clickableInReplay) === 0, '回放态棋盘不可点（可点交叉点 ' + clickableInReplay + ' 个）');
-    await page.evaluate('document.querySelector("[data-testid=puzzle-step-live]").click()');
-    await sleep(400);
+    console.log('=== 3. 新版每日训练契约：无历史回放控件，且连续作答仍然正常 ===');
+    // 每日训练 Session 改版后，历史回放控件已从每日题页面移除（普通对局复盘不受影响）。
+    // 这一节原本测「复盘往返后仍可作答」，现在改为测新契约 + 连续作答（保住当初 404 缺陷的回归覆盖）。
+    const historyControls = await page.evaluate('["[data-testid=puzzle-steps]","[data-testid=puzzle-step-prev]","[data-testid=puzzle-step-next]","[data-testid=puzzle-step-first]","[data-testid=puzzle-step-live]","[data-testid=puzzle-step-info]","[data-testid=puzzle-rewound]",".rv-scrub"].filter((s) => document.querySelector(s)).length');
+    ok(Number(historyControls) === 0, '每日题页面已无历史回放控件（找到 ' + historyControls + ' 个）');
     const clickableLive = await page.evaluate(EMPTY_COUNT);
-    ok(Number(clickableLive) > 0, '回到当前局面后棋盘恢复可点（' + clickableLive + ' 个）');
+    ok(Number(clickableLive) > 0, '棋盘仍可继续点击（可点交叉点 ' + clickableLive + ' 个）');
     const clicked2 = await page.evaluate(CLICK_EMPTY);
     ok(!!clicked2, '再次点击空交叉点：' + JSON.stringify(clicked2));
     await sleep(1200);
     const pageText3 = String(await page.evaluate('document.body.innerText'));
-    ok(!/not found|HTTP 404/i.test(pageText3), '复盘往返后依然没有 Not Found');
+    ok(!/not found|HTTP 404/i.test(pageText3), '连续作答后依然没有 Not Found');
     const attemptsLine = String(await page.evaluate('document.querySelector("[data-testid=progress-line]")?.innerText ?? ""'));
     ok(/累计尝试/.test(attemptsLine), '进度已更新：' + attemptsLine);
 
