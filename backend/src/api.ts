@@ -1,6 +1,6 @@
 /** SRSZQ backend — HTTP API 服务（用户/认证/排行），WebSocket 见 ws/ */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import type { Db } from './db.js';
+import type { DailySessionRow, Db } from './db.js';
 import { avatarFor, createSessionToken, hashPassword, makeSalt, sessionExpiry, validateEmail, validatePassword, validateUsername, verifyPassword } from './auth.js';
 import type { PublicUser, User } from './models.js';
 import { randomUUID } from 'node:crypto';
@@ -15,7 +15,8 @@ import {
   featureFlagEvidence, parseFeatureFlags, PROTOCOL_INFO, SCORE_POLICY_ID,
   asBoardSize, moveListOf, replayGame, reviewKeyMoves, stateDigest, threatWindows, classifyAccountSource,
   PLAYER_LABELS, RULESET_VERSION, RELEASE_ID,
-  dailyPuzzleId, expandTrails, gradeAnswer,
+  expandTrails, gradeAnswer,
+  buildDailySession, isValidDailyKey,
   TRAINING_CONSENT_VERSION, TRAINING_CONSENT_NOTICE, decideTrainingConsent, buildDataset, DEFAULT_DATASET_POLICY,
   type PersistedEvent, type GameState, type Player, type Puzzle, type ReplayOutcome, type ReviewMove, type ThreatWindow,
 } from '../../shared/src/index.js';
@@ -126,6 +127,71 @@ export function requireTutorialDone(res: ServerResponse, user: User | null): boo
     return false;
   }
   return true;
+}
+
+/** 载入或创建当天 Session：不存在就按 (userId, dailyKey) 确定性选一次并落库，之后顺序不再变。 */
+function ensureDailySession(db: Db, userId: string, dailyKey: string): DailySessionRow {
+  const existing = db.getDailySession(userId, dailyKey);
+  if (existing) return existing;
+  const selection = buildDailySession({ puzzles: PUZZLE_BANK, userId, dailyKey });
+  return db.createDailySession({ userId, dailyKey, puzzleIds: selection.puzzleIds });
+}
+
+/** Session 对外可见字段（不暴露内部实现）。 */
+function sessionPublic(s: DailySessionRow): Record<string, unknown> {
+  const complete = s.completedAt !== null || s.currentIndex >= s.total;
+  return {
+    dailyKey: s.dailyKey,
+    total: s.total,
+    currentIndex: Math.min(s.currentIndex, s.total),
+    position: Math.min(s.currentIndex + 1, s.total),
+    solvedCount: s.solvedCount,
+    completedAt: s.completedAt,
+    phase: complete ? 'COMPLETE' : 'ANSWERING',
+  };
+}
+
+/** 当前题目视图 + 阶段（ANSWERING / SOLVED / COMPLETE）+ 玩家已保存的正解落子。 */
+function dailySessionView(db: Db, userId: string, session: DailySessionRow): { session: Record<string, unknown>; puzzle: Record<string, unknown> | null } {
+  const base = sessionPublic(session);
+  const complete = session.completedAt !== null || session.currentIndex >= session.total;
+  if (complete) return { session: { ...base, phase: 'COMPLETE' }, puzzle: null };
+  const puzzleId = session.puzzleIds[session.currentIndex];
+  const puzzle = puzzleId ? PUZZLE_INDEX.get(puzzleId) : undefined;
+  if (!puzzle) {
+    // 题库变了导致索引越界：如实报完成，不硬凑一道题出来。
+    db.markDailySessionCompleted(userId, session.dailyKey);
+    return { session: { ...base, phase: 'COMPLETE' }, puzzle: null };
+  }
+  const prog = db.raw
+    .prepare('SELECT status, attempts FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
+    .get(userId, puzzle.puzzleId) as { status?: string; attempts?: number } | undefined;
+  const solved = db.getDailySolution(userId, session.dailyKey, puzzle.puzzleId);
+  return {
+    session: { ...base, phase: solved ? 'SOLVED' : 'ANSWERING' },
+    puzzle: puzzleView(puzzle, {
+      myStatus: prog?.status ?? null,
+      myAttempts: Number(prog?.attempts ?? 0),
+      // 玩家自己下的那一步（不是答案集里的第一个）——刷新后靠它还原棋盘。
+      solvedMove: solved ? { row: solved.row, col: solved.col, seat: solved.seat } : null,
+    }),
+  };
+}
+
+/**
+ * 把玩家选择的正确落子记进今天的 Session。
+ * 只有这道题**正是今天 Session 的当前题**才记；重复提交由 (user,dailyKey,puzzleId) 主键幂等挡住。
+ * 返回 null 表示这道题不属于今天的训练（例如错题重练里重做的题）。
+ */
+function recordDailySolve(
+  db: Db, userId: string, puzzleId: string, row: number, col: number, seat: string, attemptId: string,
+): Record<string, unknown> | null {
+  const dailyKey = dayKey();
+  const session = db.getDailySession(userId, dailyKey);
+  if (!session || session.completedAt !== null) return null;
+  if (session.puzzleIds[session.currentIndex] !== puzzleId) return null;
+  const rec = db.recordDailySolved({ userId, dailyKey, puzzleId, row, col, seat, attemptId });
+  return { dailyKey, total: session.total, solvedCount: rec.solvedCount, newlySolved: rec.inserted, solvedMove: { row, col, seat } };
 }
 
 /* ---- P2 题库接口（R07/R08）：每日一题、作答幂等、进度与错题本 ---- */
@@ -723,12 +789,17 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
             return send(res, 409, { error: 'ATTEMPT_ID_CONFLICT', prior: { puzzleId: prior.puzzleId, row: prior.row, col: prior.col, verdict: prior.verdict } });
           }
           const rec = db.recordPuzzleAttempt({ userId: user.id, puzzleId: puzzle.puzzleId, attemptId, row, col, verdict: prior.verdict });
+          // 重发同样要保证“正解落子已持久化”（对已经解出的题是幂等补记）。
+          const dailyDup = prior.verdict === 'CORRECT'
+            ? recordDailySolve(db, user.id, puzzle.puzzleId, prior.row, prior.col, puzzle.actorSeat, attemptId)
+            : null;
           return send(res, 200, {
             verdict: prior.verdict,
             duplicate: true,
             attempts: rec.attempts,
             solved: rec.solved,
             ...(prior.verdict === 'CORRECT' ? puzzleSolution(puzzle) : {}),
+            ...(dailyDup ? { daily: dailyDup } : {}),
           });
         }
         const trail = PUZZLE_TRAIL_INDEX.get(puzzle.sourceGameId);
@@ -736,6 +807,11 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
         const graded = gradeAnswer(puzzle, trail, row, col);
         const rec = db.recordPuzzleAttempt({ userId: user.id, puzzleId: puzzle.puzzleId, attemptId, row, col, verdict: graded.verdict });
         const reveal = graded.verdict === 'CORRECT' || rec.attempts >= PUZZLE_REVEAL_AFTER_ATTEMPTS;
+        // 每日训练：答对的是**今天 Session 的当前题**时，把玩家选择的这一步落库。
+        // (user,dailyKey,puzzleId) 主键保证双击/重发不会让 solvedCount +2。
+        const dailyRec = graded.verdict === 'CORRECT'
+          ? recordDailySolve(db, user.id, puzzle.puzzleId, row, col, puzzle.actorSeat, attemptId)
+          : null;
         // 进度持久化后复核一次：客户端拿到的是落库之后的真实状态。
         const progRow = db.raw
           .prepare('SELECT status, attempts FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
@@ -747,6 +823,7 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           solved: progRow?.status === 'SOLVED',
           reveal,
           ...(reveal ? puzzleSolution(puzzle) : {}),
+          ...(dailyRec ? { daily: dailyRec } : {}),
         });
       }
 
@@ -1021,25 +1098,62 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           return send(res, 200, { ranking: db.ranking(limit, offset), total, offset, limit });
         }
         case 'GET /api/puzzles/daily': {
+          // 每日训练 Session：当天最多 20 道**已验证**题，顺序当天固定（刷新/重登不重新随机）。
           const user = ctx.authUser(req);
           if (!user) return send(res, 401, { error: 'unauthorized' });
           const day = url.searchParams.get('day') ?? dayKey();
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return send(res, 400, { error: 'day 必须是 YYYY-MM-DD' });
-          const published = PUZZLE_BANK.filter((x) => x.status === 'PUBLISHED');
-          const id = dailyPuzzleId(published, day);
-          const puzzle = id ? PUZZLE_INDEX.get(id) : undefined;
-          if (!puzzle) return send(res, 503, { error: 'puzzle bank empty' });
-          const prog = db.raw
-            .prepare('SELECT status, attempts FROM puzzle_progress WHERE user_id = ? AND puzzle_id = ?')
-            .get(user.id, puzzle.puzzleId) as { status?: string; attempts?: number } | undefined;
+          if (!isValidDailyKey(day)) return send(res, 400, { error: 'day 必须是 YYYY-MM-DD' });
+          const session = ensureDailySession(db, user.id, day);
+          if (session.total === 0) return send(res, 503, { error: 'puzzle bank empty' });
+          const view = dailySessionView(db, user.id, session);
           return send(res, 200, {
             day,
-            puzzle: puzzleView(puzzle, {
-              myStatus: prog?.status ?? null,
-              myAttempts: Number(prog?.attempts ?? 0),
-            }),
+            session: view.session,
+            puzzle: view.puzzle,
             bank: { total: PUZZLE_BANK_META.total, byType: PUZZLE_BANK_META.byType, solverVersion: PUZZLE_BANK_META.solverVersion },
           });
+        }
+
+        // 每日训练：服务器权威的“下一题”。未答对一律拒绝；双请求只前进一格。
+        case 'POST /api/puzzles/daily/next': {
+          const user = ctx.authUser(req);
+          if (!user) return send(res, 401, { error: 'unauthorized' });
+          const body = await readJson(req);
+          const expectedIndex = body.expectedIndex === undefined || body.expectedIndex === null ? null : Number(body.expectedIndex);
+          const dailyKey = typeof body.day === 'string' ? body.day : dayKey();
+          if (!isValidDailyKey(dailyKey)) return send(res, 400, { error: 'day 必须是 YYYY-MM-DD' });
+          const session = db.getDailySession(user.id, dailyKey);
+          if (!session) return send(res, 409, { error: '今天还没有训练 Session，请先加载每日一题', code: 'DAILY_SESSION_NOT_FOUND' });
+          // 已经完成：幂等返回“今日训练完成”，绝不吐第 21 题。
+          if (session.completedAt !== null || session.currentIndex >= session.total) {
+            db.markDailySessionCompleted(user.id, dailyKey);
+            const done = db.getDailySession(user.id, dailyKey)!;
+            return send(res, 200, { completed: true, advanced: false, session: sessionPublic(done), puzzle: null });
+          }
+          const currentId = session.puzzleIds[session.currentIndex];
+          const solved = db.getDailySolution(user.id, dailyKey, currentId);
+          if (!solved) {
+            return send(res, 409, { error: '当前题目还没有答对', code: 'CURRENT_PUZZLE_NOT_SOLVED', session: sessionPublic(session), position: session.currentIndex + 1 });
+          }
+          // 幂等：调用方如果拿着旧的索引，直接把它拉回服务器当前状态，不做任何前进。
+          if (expectedIndex !== null && Number.isInteger(expectedIndex) && expectedIndex !== session.currentIndex) {
+            const view0 = dailySessionView(db, user.id, session);
+            return send(res, 409, { error: '索引已过期', code: 'STALE_INDEX', session: view0.session, puzzle: view0.puzzle, advanced: false });
+          }
+          const adv = db.advanceDailySession(user.id, dailyKey, session.currentIndex);
+          const after = adv.session ?? db.getDailySession(user.id, dailyKey)!;
+          if (!adv.advanced) {
+            // 并发双请求：另一个已经推进过了，这里只如实返回当前状态（不会 +2）。
+            const view0 = dailySessionView(db, user.id, after);
+            return send(res, 200, { completed: view0.session.phase === 'COMPLETE', advanced: false, session: view0.session, puzzle: view0.puzzle });
+          }
+          if (after.currentIndex >= after.total) {
+            db.markDailySessionCompleted(user.id, dailyKey);
+            const done = db.getDailySession(user.id, dailyKey)!;
+            return send(res, 200, { completed: true, advanced: true, session: sessionPublic(done), puzzle: null });
+          }
+          const view = dailySessionView(db, user.id, after);
+          return send(res, 200, { completed: false, advanced: true, session: view.session, puzzle: view.puzzle });
         }
         case 'GET /api/puzzles/progress': {
           const user = ctx.authUser(req);

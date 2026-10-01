@@ -520,21 +520,29 @@ async function main(): Promise<void> {
     observed.r08o = { afterWrong: p1.json.progress.failed, afterCorrect: p2.json.progress.solved };
   });
 
-  await check('R08p 题面时间线：R13 绿 / R14 红 / 之后按循环继续（每日题真实局面）', async () => {
+  await check('R08p 题面时间线：由真实题面局面算出，R13 绿 / R14 红 / 之后按循环继续', async () => {
+    // 注意：每日训练改成 Session 之后，当天首题不再固定是 R13，所以这里**不能**假设轮次；
+    // 真正要保证的是“时间线由真实局面算出并与正式规则一致”，以及 R13/R14 的循环口径。
     const u = await registerUser('PuzzleL');
     const daily = await api('GET', '/api/puzzles/daily', undefined, u.token);
     const pz = daily.json.puzzle as { boardSize: BoardSize; moves: Array<{ row: number; col: number }>; round: number };
     let state = createInitialState(pz.boardSize);
     for (const m of pz.moves) state = applyMove(state, m.row, m.col).state;
     const view = qualificationFromState(state);
-    const next = view.upcoming[0];
-    assert.equal(view.currentRound, pz.round, '当前轮必须等于题目自报轮次');
-    assert.equal(view.currentEligible, 'B', 'R13 应为绿棋（与正式规则一致）');
-    assert.equal(next.round, 14);
-    assert.equal(next.player, 'A', 'R14 应为红棋');
-    const cycle = view.upcoming.slice(0, 3).map((x) => x.player);
+    assert.equal(view.currentRound, pz.round, '当前轮必须由真实局面算出并等于题目自报轮次');
+    assert.equal(view.currentEligible, getEligiblePlayer(pz.round), '当前胜权必须等于正式规则');
+    assert.equal(view.upcoming[0].round, pz.round + 1, '下一轮必须是当前轮 +1');
+    assert.equal(view.upcoming[0].player, getEligiblePlayer(pz.round + 1), '下一轮胜权必须等于正式规则');
+    // R13 / R14 的循环口径：显式构造引擎局面来断言（与当天抽到哪道题无关）
+    const r13 = qualificationFromState({ ...createInitialState(pz.boardSize), turnIndex: 36 });
+    const r14 = qualificationFromState({ ...createInitialState(pz.boardSize), turnIndex: 39 });
+    assert.equal(r13.currentRound, 13);
+    assert.equal(r13.currentEligible, 'B', 'R13 应为绿棋');
+    assert.equal(r14.currentRound, 14);
+    assert.equal(r14.currentEligible, 'A', 'R14 应为红棋');
+    const cycle = r13.upcoming.slice(0, 3).map((x) => x.player);
     assert.deepEqual(cycle, ['A', 'C', 'B'], 'R14/R15/R16 应为 红 -> 白 -> 绿，实际 ' + JSON.stringify(cycle));
-    observed.r08p = { round: view.currentRound, current: view.currentEligible, next: next.player, cycle };
+    observed.r08p = { puzzleRound: pz.round, puzzleEligible: view.currentEligible, r13: r13.currentEligible, r14: r14.currentEligible, cycle };
   });
 
   await check('R08q 复盘退回历史再回到当前局面后，仍可正常作答（不产生 404）', async () => {

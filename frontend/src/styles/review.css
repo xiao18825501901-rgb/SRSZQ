@@ -77,6 +77,9 @@
 .rv-shares li,.rv-seats li,.rv-wrong li{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:13px}
 .rv-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .rv-tag{background:#fdf6e3;border:1px solid #e6d3a1;border-radius:999px;padding:2px 10px;font-size:12px;color:#8a6a12}
+/* 每日训练：答错时**只短暂标记那一格**，题面本身不改变（不落子、不显示答案）。 */
+.go-point.rv-flash-wrong{box-shadow:0 0 0 3px #d9534f inset,0 0 0 3px #d9534f;border-radius:50%;animation:rv-wrong-pulse .9s ease-out}
+@keyframes rv-wrong-pulse{0%{opacity:1}100%{opacity:.35}}
 .rv-verdict{font-weight:600}
 .rv-verdict-correct{color:#1f7a4d}
 .rv-verdict-incorrect{color:#a4322b}

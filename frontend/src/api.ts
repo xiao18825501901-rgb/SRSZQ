@@ -108,6 +108,19 @@ export interface PuzzleView {
   startMoves: number; moves: Array<{ seat: 'A' | 'B' | 'C'; row: number; col: number }>;
   sourceKind: string; split: string; status: string;
   myStatus: string | null; myAttempts: number;
+  /** 每日训练：玩家已经下对并保存下来的那一步（刷新后靠它还原棋盘）。 */
+  solvedMove?: { row: number; col: number; seat: string } | null;
+}
+
+/** 每日训练 Session（服务器权威）。 */
+export interface DailySessionView {
+  dailyKey: string;
+  total: number;
+  currentIndex: number;
+  position: number;
+  solvedCount: number;
+  completedAt: number | null;
+  phase: 'ANSWERING' | 'SOLVED' | 'COMPLETE';
 }
 export interface AttemptResult {
   verdict: 'CORRECT' | 'INCORRECT' | 'ILLEGAL' | 'OPEN';
@@ -117,6 +130,11 @@ export interface AttemptResult {
   threatsBefore?: number; threatsAfter?: number; excludedByForbidden?: number;
   threatenedSeat?: string | null;
   explanation?: { messageKey: string; args: Record<string, string | number> };
+  /** 每日训练回执：答对时包含“玩家选择的”正解落子与今日进度。 */
+  daily?: {
+    dailyKey: string; total: number; solvedCount: number; newlySolved: boolean;
+    solvedMove: { row: number; col: number; seat: string };
+  };
 }
 export interface PuzzleProgress {
   solved: number; failed: number; totalAttempts: number; firstSolvedAt: number | null;
@@ -133,7 +151,14 @@ export const reviewApi = {
 };
 
 export const puzzleApi = {
-  daily: (day?: string) => api<{ day: string; puzzle: PuzzleView; bank: { total: number; byType: Record<string, number>; solverVersion: string } }>('GET', `/api/puzzles/daily${day ? `?day=${day}` : ''}`),
+  daily: (day?: string) => api<{
+    day: string; session: DailySessionView; puzzle: PuzzleView | null;
+    bank: { total: number; byType: Record<string, number>; solverVersion: string };
+  }>('GET', `/api/puzzles/daily${day ? `?day=${day}` : ''}`),
+  /** 服务器权威的“下一题”：expectedIndex 用于并发保护（双请求不会跳两题）。 */
+  next: (expectedIndex: number) => api<{
+    completed: boolean; advanced: boolean; session: DailySessionView; puzzle: PuzzleView | null;
+  }>('POST', '/api/puzzles/daily/next', { expectedIndex }),
   get: (puzzleId: string) => api<{ puzzle: PuzzleView }>('GET', `/api/puzzles/${encodeURIComponent(puzzleId)}`),
   attempt: (puzzleId: string, attemptId: string, row: number, col: number) =>
     api<AttemptResult>('POST', `/api/puzzles/${encodeURIComponent(puzzleId)}/attempt`, { attemptId, row, col }),

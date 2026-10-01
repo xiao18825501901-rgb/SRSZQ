@@ -11,6 +11,19 @@ import { type DatasetCandidate } from '../../shared/src/product/dataset.js';
 import { RULESET_VERSION } from '../../shared/src/product/protocol.js';
 import { commandPayloadDigest } from '../../shared/src/product/protocol.js';
 
+/** 每日训练 Session 的一行（题目顺序当天固定）。 */
+export interface DailySessionRow {
+  userId: string;
+  dailyKey: string;
+  puzzleIds: string[];
+  currentIndex: number;
+  solvedCount: number;
+  total: number;
+  completedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface RankingRow {
   id: string;
   username: string;
@@ -270,6 +283,16 @@ export interface Db {
   anonymizeUser(userId: string): { deidentifiedParticipants: number; revokedShares: number; deletedSessions: number };
   /** R08：按 attemptId 查一次尝试（幂等重发时回放既有结论）。 */
   findPuzzleAttempt(userId: string, attemptId: string): { puzzleId: string; row: number; col: number; verdict: string; createdAt: number } | null;
+  /* ---- 每日训练 Session ---- */
+  getDailySession(userId: string, dailyKey: string): DailySessionRow | null;
+  createDailySession(input: { userId: string; dailyKey: string; puzzleIds: string[] }): DailySessionRow;
+  /** CAS 前进一格：只有 expectedIndex 仍然是当前值才会成功（防双击跳两题）。 */
+  advanceDailySession(userId: string, dailyKey: string, expectedIndex: number): { advanced: boolean; session: DailySessionRow | null };
+  markDailySessionCompleted(userId: string, dailyKey: string): void;
+  /** 记录玩家选择的正确落子；已存在则不变（幂等），返回是否本次新写入。 */
+  recordDailySolved(input: { userId: string; dailyKey: string; puzzleId: string; row: number; col: number; seat: string; attemptId: string | null }): { inserted: boolean; solvedCount: number };
+  getDailySolution(userId: string, dailyKey: string, puzzleId: string): { row: number; col: number; seat: string; solvedAt: number } | null;
+  listDailySolutions(userId: string, dailyKey: string): Array<{ puzzleId: string; row: number; col: number; seat: string; solvedAt: number }>;
   /** R08：记录一次尝试并更新进度（同一事务；(user_id, attempt_id) 唯一，重发不重复计数）。 */
   recordPuzzleAttempt(input: { userId: string; puzzleId: string; attemptId: string; row: number; col: number; verdict: string }): { duplicate: boolean; attempts: number; solved: boolean; firstSolvedAt: number | null };
   /** R08：本人题目进度（含错题本）。 */
@@ -512,6 +535,36 @@ export function openDb(path: string): Db {
     );
 
     CREATE INDEX IF NOT EXISTS idx_puzzle_attempts_user ON puzzle_attempts (user_id, puzzle_id);
+
+    /* ---- 每日训练 Session（本轮新增，纯增量、幂等）---- */
+
+    -- 每个用户每天一条：题目顺序当天固定，不再重新随机。
+    CREATE TABLE IF NOT EXISTS daily_puzzle_sessions (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      daily_key TEXT NOT NULL,
+      puzzle_ids_json TEXT NOT NULL,
+      current_index INTEGER NOT NULL DEFAULT 0,
+      solved_count INTEGER NOT NULL DEFAULT 0,
+      total INTEGER NOT NULL,
+      completed_at INTEGER,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, daily_key)
+    );
+
+    -- 正解落子持久化：刷新/重登后必须还能看到玩家自己下的那一步。
+    -- 存的是**玩家实际选择的**正确落子（不是答案集里的第一个）。
+    CREATE TABLE IF NOT EXISTS daily_puzzle_solutions (
+      user_id TEXT NOT NULL REFERENCES users(id),
+      daily_key TEXT NOT NULL,
+      puzzle_id TEXT NOT NULL,
+      row INTEGER NOT NULL,
+      col INTEGER NOT NULL,
+      seat TEXT NOT NULL,
+      attempt_id TEXT,
+      solved_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, daily_key, puzzle_id)
+    );
 
     /* ---- P3A 数据与隐私（规格 6.1 / 7.1 / 7.2，表名对齐 §8 建议） ---- */
 
@@ -1192,6 +1245,55 @@ export function openDb(path: string): Db {
       } catch {
         return null;
       }
+    },
+    getDailySession(userId, dailyKey) {
+      const r = raw.prepare('SELECT * FROM daily_puzzle_sessions WHERE user_id = ? AND daily_key = ?').get(userId, dailyKey) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      let ids: string[] = [];
+      try { ids = JSON.parse(String(r.puzzle_ids_json)) as string[]; } catch { ids = []; }
+      return {
+        userId: String(r.user_id), dailyKey: String(r.daily_key), puzzleIds: ids,
+        currentIndex: Number(r.current_index), solvedCount: Number(r.solved_count), total: Number(r.total),
+        completedAt: r.completed_at == null ? null : Number(r.completed_at),
+        createdAt: Number(r.created_at), updatedAt: Number(r.updated_at),
+      };
+    },
+    createDailySession(input) {
+      const now = Date.now();
+      // OR IGNORE：两个并发请求同时创建时，只有第一条生效（题目顺序因此不会被后到的请求改掉）。
+      raw.prepare('INSERT OR IGNORE INTO daily_puzzle_sessions (user_id,daily_key,puzzle_ids_json,current_index,solved_count,total,completed_at,created_at,updated_at) VALUES (?,?,?,0,0,?,NULL,?,?)')
+        .run(input.userId, input.dailyKey, JSON.stringify(input.puzzleIds), input.puzzleIds.length, now, now);
+      return db.getDailySession(input.userId, input.dailyKey)!;
+    },
+    advanceDailySession(userId, dailyKey, expectedIndex) {
+      // CAS：只有当前索引仍然是调用方看到的那个值才前进，双请求只会成功一次。
+      const r = raw.prepare('UPDATE daily_puzzle_sessions SET current_index = current_index + 1, updated_at = ? WHERE user_id = ? AND daily_key = ? AND current_index = ?')
+        .run(Date.now(), userId, dailyKey, expectedIndex);
+      return { advanced: Number(r.changes ?? 0) === 1, session: db.getDailySession(userId, dailyKey) };
+    },
+    markDailySessionCompleted(userId, dailyKey) {
+      raw.prepare('UPDATE daily_puzzle_sessions SET completed_at = COALESCE(completed_at, ?), updated_at = ? WHERE user_id = ? AND daily_key = ?')
+        .run(Date.now(), Date.now(), userId, dailyKey);
+    },
+    recordDailySolved(input) {
+      const inserted = raw.prepare('INSERT OR IGNORE INTO daily_puzzle_solutions (user_id,daily_key,puzzle_id,row,col,seat,attempt_id,solved_at) VALUES (?,?,?,?,?,?,?,?)')
+        .run(input.userId, input.dailyKey, input.puzzleId, input.row, input.col, input.seat, input.attemptId, Date.now());
+      const isNew = Number(inserted.changes ?? 0) === 1;
+      if (isNew) {
+        raw.prepare('UPDATE daily_puzzle_sessions SET solved_count = solved_count + 1, updated_at = ? WHERE user_id = ? AND daily_key = ?')
+          .run(Date.now(), input.userId, input.dailyKey);
+      }
+      const row = raw.prepare('SELECT solved_count FROM daily_puzzle_sessions WHERE user_id = ? AND daily_key = ?').get(input.userId, input.dailyKey) as { solved_count?: number } | undefined;
+      return { inserted: isNew, solvedCount: Number(row?.solved_count ?? 0) };
+    },
+    getDailySolution(userId, dailyKey, puzzleId) {
+      const r = raw.prepare('SELECT row, col, seat, solved_at FROM daily_puzzle_solutions WHERE user_id = ? AND daily_key = ? AND puzzle_id = ?').get(userId, dailyKey, puzzleId) as Record<string, unknown> | undefined;
+      if (!r) return null;
+      return { row: Number(r.row), col: Number(r.col), seat: String(r.seat), solvedAt: Number(r.solved_at) };
+    },
+    listDailySolutions(userId, dailyKey) {
+      const rows = raw.prepare('SELECT puzzle_id, row, col, seat, solved_at FROM daily_puzzle_solutions WHERE user_id = ? AND daily_key = ? ORDER BY solved_at ASC').all(userId, dailyKey) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({ puzzleId: String(r.puzzle_id), row: Number(r.row), col: Number(r.col), seat: String(r.seat), solvedAt: Number(r.solved_at) }));
     },
     findPuzzleAttempt(userId, attemptId) {
       const r = raw

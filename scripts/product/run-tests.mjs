@@ -32,6 +32,14 @@ const ROOT = resolve(HERE, '..', '..');
  * 它们会出现在报告里，但永远不会被算作 PASS。
  */
 const SUITES = {
+  daily20: {
+    title: '每日训练 Session（<=20 题 / 正解落子持久化 / 服务器权威下一题 / 幂等）',
+    entry: 'backend/tests/daily.session.ts',
+    runner: 'tsx',
+    implemented: true,
+    covers: ['R08_DAILY_TRAINING'],
+    phase: 'DAILY20',
+  },
   multitab: {
     title: 'G16 多标签新连接替换旧连接（旧连接必须被关闭且不再生效）',
     entry: 'backend/tests/ws.multitab.ts',
