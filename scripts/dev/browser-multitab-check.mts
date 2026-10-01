@@ -7,16 +7,19 @@
  * 对服务端来说这就是“同一账号的第二个连接”，效果与另开标签页一致；
  * 但避开了本机 CDP 在同一浏览器里管理多个 target 时的会话不稳定（attach/enable 偶发超时，实测多次踩到）。
  *
- * ⚠️ 本机环境状态（如实记录）：这份脚本在 DSH 这台机器上**尚未跑通** ——
- *    步骤 1（页面进入排队）在前台运行时 PASS，但随后外部 WS 连接会挂起；
- *    另外后台运行时重定向日志不会刷新。G16 的通过证据目前是 WS 级套件 `multitab`
- *    （backend/tests/ws.multitab.ts，4/4 PASS，含“修复前会失败”的对照）。
- *    这份脚本保留给具备稳定执行环境的人使用，**未被任何套件引用**。
+ * 现场缺陷（已修，2026-10-01）：这条脚本以前**跑不通**，报“第二条连接没建立”然后退出。
+ *    根因有两个，都不是环境问题：
+ *      1. 外部 WebSocket 建在**启动浏览器之前**（原第 115 行），于是它成了“第一个连接”，
+ *         被服务端替换掉的是它自己 —— 脚本的设计是“页面先排队，外部连接后到”，顺序反了；
+ *      2. `open`/`close` 监听器晚了几十秒才挂上（挂在步骤 2），事件早就发过了，
+ *         等 `open` 必然超时。修法：**页面排队成功之后**才建连接，且所有监听器同一 tick 挂齐。
+ *    另注：后台运行时 PowerShell 的重定向日志不刷新，所以这条脚本用 cmd 重定向跑（见 README/日志）。
  *
  * 断言：
  *  1. 页面本来在排队（连接活着）；
  *  2. 第二条连接建立后，页面的连接被服务端替换，页面给出明确提示；
- *  3. 页面**不会自动重连**（等 5 秒确认没有回到排队）——否则两个标签页会互相顶号、无限抖动；
+ *  3. 页面**不会自动重连**：等 5 秒后确认页面既没有新建 WebSocket，也没有再发任何帧
+ *     （直接量网络，不用 DOM 元素当代理）；
  *  4. 存活的那条（第二条）连接可用：能入队并收到服务端广播。
  */
 import { spawn, spawnSync } from 'node:child_process';
@@ -42,6 +45,8 @@ const QUEUE_UI = '.matching-seconds';
 class Cdp {
   private id = 0;
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
+  /** CDP 事件回调（无 id 的消息）。用来直接观测网络行为，而不是靠 DOM 猜。 */
+  private listeners = new Map<string, Array<(params: any) => void>>();
   constructor(private ws: WebSocket, private sessionId: string) {
     ws.on('message', (raw) => {
       const msg = JSON.parse(String(raw));
@@ -49,8 +54,15 @@ class Cdp {
         const pr = this.pending.get(msg.id)!;
         this.pending.delete(msg.id);
         if (msg.error) pr.reject(new Error(msg.error.message)); else pr.resolve(msg.result);
+      } else if (msg.method) {
+        for (const cb of this.listeners.get(msg.method) ?? []) cb(msg.params);
       }
     });
+  }
+  on(method: string, cb: (params: any) => void): void {
+    const list = this.listeners.get(method) ?? [];
+    list.push(cb);
+    this.listeners.set(method, list);
   }
   send(method: string, params: Record<string, unknown> = {}, sessionId: string | null = this.sessionId): Promise<any> {
     const id = ++this.id;
@@ -112,11 +124,14 @@ async function main(): Promise<void> {
   const profile = join(tmpdir(), 'srszq-mt-' + Date.now());
   mkdirSync(profile, { recursive: true });
   const proc = spawn(bin, ['--headless=new', '--disable-gpu', '--no-first-run', '--disable-extensions', '--hide-scrollbars', '--remote-debugging-port=' + PORT, '--user-data-dir=' + profile, 'about:blank'], { stdio: 'ignore' });
-  const ext = new WebSocket(WSURL + '?token=' + encodeURIComponent(token) + '&protocol=' + PROTOCOL_VERSION + '&ruleset=' + encodeURIComponent(RULESET_VERSION), { handshakeTimeout: 8000 });
   const extMsgs: Array<Record<string, any>> = [];
   let extCloseCode: number | null = null;
   let extError = '';
-  ext.on('error', (e) => { extError = String((e as Error).message ?? e); console.log('  外部连接错误：' + extError + '（URL=' + WSURL + '）'); });
+  // 第二条连接必须**在页面已经排队之后**才建立：谁后连，谁的连接才会被服务端替换。
+  // （以前建在启动浏览器之前，外部连接成了“第一个连接”，被替换的是它自己。）
+  let ext: WebSocket | null = null;
+  // 通过函数读取：赋值发生在 Promise 回调里，直接读会让 TS 把 ext 收窄成 null/never。
+  const extSocket = (): WebSocket | null => ext;
   try {
     let info: any = null;
     for (let i = 0; i < 80 && !info; i += 1) { try { const r = await fetch('http://127.0.0.1:' + PORT + '/json/version'); if (r.ok) info = await r.json(); } catch { /* 等 */ } if (!info) await sleep(250); }
@@ -129,6 +144,15 @@ async function main(): Promise<void> {
     await page.send('Page.enable');
     await page.send('Runtime.enable');
     await page.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+
+    // 直接观测页面的网络行为：新建了多少个 WebSocket、发出了哪些帧。
+    // “有没有偷偷重连/重新入队”这件事必须这样量，不能拿 DOM 元素当代理
+    // （`.matching-seconds` 在 phase=idle 时同样会渲染 —— 旧版断言因此误报）。
+    await page.send('Network.enable');
+    const wsCreated: string[] = [];
+    const framesSent: string[] = [];
+    page.on('Network.webSocketCreated', (p) => wsCreated.push(String(p?.url ?? '')));
+    page.on('Network.webSocketFrameSent', (p) => framesSent.push(String(p?.response?.payloadData ?? '')));
 
     console.log('=== 1. 页面以该账号进入排队（连接活着）===');
     await page.send('Page.addScriptToEvaluateOnNewDocument', {
@@ -155,13 +179,17 @@ async function main(): Promise<void> {
     }
 
     console.log('=== 2. 第二条连接（同一 token）建立 -> 页面连接必须被替换 ===');
-    ext.on('message', (raw) => { extMsgs.push(JSON.parse(String(raw))); });
-    ext.on('close', (code) => { extCloseCode = code; });
-    const extOpen = await new Promise<boolean>((res) => {
+    const extOpenPromise = new Promise<boolean>((res) => {
       const t = setTimeout(() => res(false), 10000);
-      ext.on('open', () => { clearTimeout(t); res(true); });
-      ext.on('error', () => { clearTimeout(t); res(false); });
+      const done = (v: boolean) => { clearTimeout(t); res(v); };
+      ext = new WebSocket(WSURL + '?token=' + encodeURIComponent(token) + '&protocol=' + PROTOCOL_VERSION + '&ruleset=' + encodeURIComponent(RULESET_VERSION), { handshakeTimeout: 8000 });
+      // 监听器必须与构造**同一 tick** 挂上：晚一步就漏掉 open/close（这正是本脚本以前卡住的原因）。
+      ext.on('open', () => done(true));
+      ext.on('error', (e) => { extError = String((e as Error).message ?? e); console.log('  外部连接错误：' + extError + '（URL=' + WSURL + '）'); done(false); });
+      ext.on('message', (raw) => { extMsgs.push(JSON.parse(String(raw))); });
+      ext.on('close', (code) => { extCloseCode = code; });
     });
+    const extOpen = extSocket()?.readyState === WebSocket.OPEN || await extOpenPromise;
     ok(extOpen === true, '第二条连接建立成功（ws=' + WSURL + '）' + (extOpen ? '' : ' 错误=' + extError));
     if (!extOpen) { console.log('  跳过后续步骤：第二条连接没建立'); ws.close(); process.exit(1); }
     ok(extCloseCode === null, '第二条连接没有被服务端关闭');
@@ -174,14 +202,21 @@ async function main(): Promise<void> {
     ok(replaced === true, '页面被告知连接已被替换（显示“' + REPLACED_TEXT + '”）');
 
     console.log('=== 3. 页面不得自动重连（等 5 秒观察）===');
+    ok(wsCreated.length >= 1, '已观测到页面自身的 WebSocket 连接（' + wsCreated.length + ' 条：' + wsCreated.join(', ') + '）');
+    const socketsAtReplace = wsCreated.length;
+    const framesAtReplace = framesSent.length;
     await sleep(5000);
-    const backToQueue = await page.evaluate('!!document.querySelector(' + JSON.stringify(QUEUE_UI) + ')');
-    ok(backToQueue === false, '页面没有重新进入排队（没有自动重连顶号）');
+    const newSockets = wsCreated.slice(socketsAtReplace);
+    const newFrames = framesSent.slice(framesAtReplace);
+    ok(newSockets.length === 0, '替换后页面没有新建 WebSocket（新建数=' + newSockets.length + (newSockets.length ? ' → ' + JSON.stringify(newSockets) : '') + '）');
+    ok(!newFrames.some((s) => s.includes('queue.join')), '替换后页面没有再次发送 queue.join（否则两个标签页会无限互相顶号）');
+    ok(newFrames.length === 0, '替换后页面没有发出任何 WebSocket 帧（发送数=' + newFrames.length + '）');
     const stillText = String(await page.evaluate('document.body.innerText'));
     ok(stillText.includes(REPLACED_TEXT), '页面仍停留在“已被替换”的状态');
+    ok(!/正在寻找对手/.test(stillText), '页面不再显示“正在寻找对手”（断开后不再假装还在匹配）');
 
     console.log('=== 4. 存活的那条连接可用（能入队并收到广播）===');
-    ext.send(JSON.stringify({ type: 'queue.join' }));
+    extSocket()!.send(JSON.stringify({ type: 'queue.join' }));
     let joined: any = null;
     for (let i = 0; i < 60 && !joined; i += 1) { joined = extMsgs.find((m) => m.type === 'queue.joined') ?? null; if (!joined) await sleep(150); }
     ok(!!joined, '第二条连接能入队（收到 queue.joined）');
@@ -192,7 +227,7 @@ async function main(): Promise<void> {
     ok(shot.width === 1440 && shot.height === 900, '页面截图 1440x900（' + shot.bytes + ' bytes）');
     ws.close();
   } finally {
-    try { ext.close(); } catch { /* noop */ }
+    try { extSocket()?.close(); } catch { /* noop */ }
     if (proc.pid) spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' });
   }
   console.log('MULTITAB BROWSER CHECK: ' + (failures === 0 ? 'ALL PASS 0' : 'FAILED ' + failures));
