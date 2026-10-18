@@ -1,6 +1,8 @@
+import { useId } from 'react';
 /** Lightweight original SVG illustrations. No third-party assets or network requests. */
 export function ModeArtwork({mode}:{mode:'online'|'vsai'|'local'|'friends'}){
- const id=`art-${mode}`;
+ const instance=useId();
+ const id=`art-${mode}-${instance.replace(/:/g,'')}`;
  return <svg viewBox="0 0 280 190" className="mode-art" role="img" aria-label={{online:'三色棋子连接成在线对局',vsai:'机器人与棋子',local:'线条棋盘与三色棋子',friends:'好友围坐对弈'}[mode]}>
  <defs><linearGradient id={id} x2="0" y2="1"><stop stopColor="#e7c998"/><stop offset="1" stopColor="#cca269"/></linearGradient><filter id={`${id}-shadow`} x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="5" stdDeviation="4" floodColor="#694629" floodOpacity=".18"/></filter></defs>
  {mode==='online'&&<><ellipse cx="140" cy="158" rx="91" ry="11" fill="#654526" opacity=".06"/><path d="M63 119L140 49L217 119Z" fill="none" stroke="#bea075" strokeWidth="2" strokeDasharray="5 6"/><circle cx="140" cy="102" r="30" fill="#f2e5ce" stroke="#c8a775"/><path d="M119 102h42m-21-21c-15 17-15 25 0 42m0-42c15 17 15 25 0 42" fill="none" stroke="#a88150" strokeWidth="2"/><circle cx="140" cy="42" r="20" fill="#c64336" filter={`url(#${id}-shadow)`}/><circle cx="61" cy="122" r="20" fill="#32785a" filter={`url(#${id}-shadow)`}/><circle cx="219" cy="122" r="20" fill="#faf8f0" stroke="#b9ab93" filter={`url(#${id}-shadow)`}/></>}

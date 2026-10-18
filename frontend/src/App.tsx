@@ -1,3 +1,4 @@
+import { Btn } from './ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { GameState, Player, BoardSize } from '../../shared/src/game/types';
@@ -48,7 +49,7 @@ export default function App({hostTitle='离线模式',presetSeats,onExit,onGameE
      <aside className="match-sidebar"><div className="side-title"><h1>{hostTitle}</h1>{review&&<span className="badge">复盘</span>}</div>
        <MatchPanel state={view} seats={seatViews} mySeat={mySeat} thinking={!review&&!!ai.thinking} ended={view.status!=='playing'}/>
        <PositionHints state={view} showLegal={showLegal} showWinning={showWinning} onLegal={setShowLegal} onWinning={setShowWinning}/>
-       <div className="game-actions"><button className="btn primary" onClick={()=>{setPendingSize(state.boardSize);setConfirmNew(true)}}>新游戏</button><button className="btn" onClick={undo} disabled={!state.moves.length}>悔棋</button><button className="btn" onClick={()=>{setPendingSize(state.boardSize);setSettings(true)}}>设置</button></div>
+       <div className="game-actions"><Btn type="button" variant="primary" icon="plus" onClick={()=>{setPendingSize(state.boardSize);setConfirmNew(true)}}>新游戏</Btn><Btn type="button" icon="undo" onClick={undo} disabled={!state.moves.length}>悔棋</Btn><Btn type="button" icon="settings" onClick={()=>{setPendingSize(state.boardSize);setSettings(true)}}>设置</Btn></div>
        <ReplayControls active={review} index={cursor} total={state.moves.length} onToggle={toggleReview} onIndex={setCursor} onReturn={()=>setReview(false)}/>
        {coach&&<div className="coach-note">{coach({state,round:game.round,current:game.current,eligible:game.eligible,currentIsAI:ai.currentIsAI,thinking:!!ai.thinking})}</div>}
        {error&&<p role="alert">{error}</p>}
@@ -56,10 +57,10 @@ export default function App({hostTitle='离线模式',presetSeats,onExit,onGameE
      </aside>
    </div>
    <ConfirmModal open={confirmNew} title="开始新游戏？" message="当前棋局将清空，棋盘与对手设置保持不变。" onConfirm={startNew} onCancel={()=>setConfirmNew(false)}/>
-   <Modal open={settings} title="棋盘设置" onClose={()=>setSettings(false)} footer={<><button className="btn" onClick={()=>setSettings(false)}>取消</button><button className="btn primary" onClick={startNew}>开始新局</button></>}>
-     <div className="size-picker">{([13,17] as BoardSize[]).map(n=><button className={`btn ${pendingSize===n?'selected':''}`} key={n} onClick={()=>setPendingSize(n)}>{n} 路</button>)}</div><p className="muted">更换棋盘会开始一盘新对局。</p>
+    <Modal open={settings} title="棋盘设置" onClose={()=>setSettings(false)} footer={<><Btn data-dialog-cancel onClick={()=>setSettings(false)}>取消</Btn><Btn variant="primary" icon="plus" onClick={startNew}>开始新局</Btn></>}>
+      <div className="size-picker">{([13,17] as BoardSize[]).map(n=><Btn className={pendingSize===n?'selected':''} aria-pressed={pendingSize===n} key={n} onClick={()=>setPendingSize(n)}>{n} 路</Btn>)}</div><p className="muted">更换棋盘会开始一盘新对局。</p>
    </Modal>
    <Modal open={rules} title="胜权规则" onClose={()=>setRules(false)}><RulesQuickView/></Modal>
-   <Modal open={state.status!=='playing'&&!dismissEnd&&!review} title={state.winner?`${playerName(state.winner)}获胜`:'和棋'} onClose={()=>setDismissEnd(true)} footer={<><button className="btn" onClick={()=>{setDismissEnd(true);setReview(true);setCursor(state.moves.length)}}>查看棋局</button><button className="btn primary" onClick={startNew}>再来一局</button></>}><p>{state.winner?'本次落子连成四子，对局结束。':'棋盘已满，对局结束。'}</p></Modal>
+    <Modal open={state.status!=='playing'&&!dismissEnd&&!review} title={state.winner?`${playerName(state.winner)}获胜`:'和棋'} onClose={()=>setDismissEnd(true)} footer={<><Btn data-dialog-cancel icon="history" onClick={()=>{setDismissEnd(true);setReview(true);setCursor(state.moves.length)}}>查看棋局</Btn><Btn variant="primary" icon="replay" onClick={startNew}>再来一局</Btn></>}><p>{state.winner?'本次落子连成四子，对局结束。':'棋盘已满，对局结束。'}</p></Modal>
  </main>;
 }

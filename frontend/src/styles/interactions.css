@@ -1,0 +1,172 @@
+/* SRSZQ · 纸面触感 v1. Original layout / board / rules remain untouched.
+   Import AFTER refresh.css, ink.css and review.css. No global transform on buttons:
+   the board uses positioned buttons, which must keep their hit geometry. */
+:root {
+  --sq-control-ink: #3b3027;
+  --sq-control-muted: #756a5b;
+  --sq-control-fill: #fffaf0;
+  --sq-control-soft: #f2eadc;
+  --sq-control-line: #cbbb9f;
+  --sq-control-accent: #795536;
+  --sq-control-accent-hover: #63442a;
+  --sq-control-danger: #a43e36;
+  --sq-control-focus: #327060;
+  --sq-control-success: #226248;
+  --sq-fast: 90ms;
+  --sq-settle: 160ms;
+  --sq-panel: 190ms;
+  --sq-ease: cubic-bezier(.2,.75,.25,1);
+}
+/* Existing .btn and .ds-btn call sites get the same state language, not new handlers. */
+body :is(.btn,.ds-btn) {
+  position: relative;
+  isolation: isolate;
+  min-height: 44px;
+  border: 1px solid var(--sq-control-line);
+  border-radius: 12px;
+  background: var(--sq-control-fill);
+  color: var(--sq-control-ink);
+  box-shadow: 0 1px 2px #43301b0c, inset 0 1px 0 #ffffffb0;
+  font-weight: 600;
+  text-decoration: none;
+  transform: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--sq-settle) var(--sq-ease), background-color var(--sq-settle), border-color var(--sq-settle), box-shadow var(--sq-settle), color var(--sq-settle), opacity var(--sq-fast);
+}
+body :is(.btn,.ds-btn).primary {
+  background: var(--sq-control-accent);
+  border-color: var(--sq-control-accent);
+  color: #fffaf2;
+  box-shadow: 0 2px 5px #50382124, inset 0 1px 0 #ffffff1f;
+}
+body :is(.btn,.ds-btn).danger {
+  background: var(--sq-control-danger);
+  border-color: var(--sq-control-danger);
+  color: #fffaf2;
+  box-shadow: 0 1px 3px #79322a20;
+}
+body :is(.btn,.ds-btn).ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+body :is(.btn,.ds-btn):is(.selected,.active,[aria-pressed='true']) {
+  background: #e8efe8;
+  border-color: #648273;
+  color: #234f42;
+  box-shadow: inset 0 0 0 1px #64827330;
+}
+body :is(.btn,.ds-btn):is(:disabled,[aria-disabled='true']) {
+  opacity: .52;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+body :is(.btn,.ds-btn)[aria-busy='true'] {cursor: progress;opacity: .85;}
+body :is(.btn,.ds-btn,.mode-card,.size-tile,.text-back,.linklike,.site-nav button):focus-visible {
+  outline: 3px solid var(--sq-control-focus);
+  outline-offset: 4px;
+}
+.sq-icon { flex:0 0 auto; vertical-align:-.125em; pointer-events:none; }
+.sq-button { gap:8px; overflow:hidden; }
+.sq-button__label { position:relative; min-width:0; overflow-wrap:anywhere; }
+.sq-button__wash { position:absolute; inset:0; z-index:-1; border-radius:inherit; background:currentColor; opacity:0; pointer-events:none; transition:opacity var(--sq-settle); }
+.sq-button__status { display:inline-flex; width:19px; height:19px; align-items:center; justify-content:center; flex:none; }
+body .sq-icon-button { width:44px; min-width:44px; height:44px; padding:0; flex:none; }
+.sq-spinner { width:16px;height:16px;border:2px solid currentColor;border-inline-end-color:transparent;border-radius:50%;animation:sq-spin .8s linear infinite; }
+.sq-button[data-feedback='success']:not([aria-busy='true']) {border-color:var(--sq-control-success);}
+.sq-button[data-feedback='error']:not([aria-busy='true']) {border-color:var(--sq-control-danger);}
+@keyframes sq-spin { to {transform:rotate(360deg);} }
+/* No invented success on pointer-down: only the visible press responds immediately. */
+body :is(.btn,.ds-btn):not(:disabled):not([aria-disabled='true']):active {
+  transform:translateY(1px) scale(.98);
+  box-shadow:inset 0 1px 3px #3929161a;
+  transition-duration:var(--sq-fast);
+}
+.sq-button:not(:disabled):active .sq-button__wash {opacity:.07;}
+@media (hover:hover) and (pointer:fine) {
+  body :is(.btn,.ds-btn):not(:disabled):not([aria-disabled='true']):hover {background:#f0e6d5;border-color:#ac9271;transform:translateY(-1px);box-shadow:0 3px 9px #4b372212;}
+  body :is(.btn,.ds-btn).primary:not(:disabled):hover {background:var(--sq-control-accent-hover);color:#fffaf2;}
+  body :is(.btn,.ds-btn).danger:not(:disabled):hover {background:#8d302c;color:#fffaf2;}
+  body :is(.btn,.ds-btn).ghost:not(:disabled):hover {background:#e8ddca80;border-color:transparent;box-shadow:none;}
+  body :is(.btn,.ds-btn):not(:disabled):active {transform:translateY(1px) scale(.98);box-shadow:inset 0 1px 3px #3929161a;}
+}
+/* Navigation and feature-card dimensions, grid and artwork remain unchanged. */
+.site-nav nav>button,.text-back,.linklike {
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  transition:background-color var(--sq-settle),color var(--sq-settle),box-shadow var(--sq-settle);
+  border-radius:7px;
+}
+.site-nav nav>button:active,.text-back:active,.linklike:active {background:#ddcdb57a;color:#493520;}
+.site-nav nav>button.nav-active {color:#684c32;box-shadow:0 2px #9c7a56;}
+.mode-card {transition:transform 180ms var(--sq-ease),border-color 180ms,box-shadow 180ms;touch-action:manipulation;}
+.mode-card .mode-art {transition:transform 180ms var(--sq-ease);}
+@media (hover:hover) and (pointer:fine) {
+ .mode-card:hover {transform:translateY(-3px);border-color:#ab916a;box-shadow:0 12px 26px #53412b14;}
+ .mode-card:hover .mode-art {transform:translateY(-2px);}
+}
+.mode-card:active {transform:translateY(1px);box-shadow:inset 0 1px 5px #47321d13;}
+.mode-card:active .mode-art {transform:scale(.98);}
+/* Native controls stay native: spacebar, focus, label click, zoom and IME work. */
+body input:not([type=checkbox]):not([type=range]),body select,body textarea {
+ transition:border-color var(--sq-settle),box-shadow var(--sq-settle),background-color var(--sq-settle);
+ border-color:var(--sq-control-line);
+ background-color:#fffdf7;
+}
+body input:not([type=checkbox]):not([type=range]):focus-visible,body select:focus-visible,body textarea:focus-visible {
+ outline:2px solid var(--sq-control-focus);outline-offset:2px;border-color:var(--sq-control-focus);
+}
+body input[aria-invalid='true'],body select[aria-invalid='true'] {border-color:var(--sq-control-danger);}
+body input[type=checkbox] {width:18px;height:18px;flex:none;accent-color:var(--sq-control-focus);}
+body .position-hints {gap:8px;}
+body .position-hints>label {
+ display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:6px 10px;
+ border:1px solid transparent;border-radius:10px;cursor:pointer;user-select:none;
+ transition:background-color var(--sq-settle),border-color var(--sq-settle);
+}
+body .position-hints>label:has(input:checked) {background:#e4ece280;border-color:#b1c1ab;}
+body .position-hints>label:focus-within {outline:2px solid var(--sq-control-focus);outline-offset:2px;}
+body .position-hints>label:active {background:#dce6d8;}
+body .size-tile {touch-action:manipulation;transition:background-color var(--sq-settle),border-color var(--sq-settle),box-shadow var(--sq-settle);}
+body .size-tile.selected {border-color:#628171;box-shadow:inset 0 0 0 1px #628171;background:#e9efe6;}
+/* Do not move/resize the board. A keyboard focus ring is geometry-neutral. */
+.go-point:focus-visible {outline:2px solid var(--sq-control-focus);outline-offset:1px;border-radius:50%;z-index:5;}
+.go-point[aria-disabled='true'] {cursor:default;}
+.go-point.forbidden:focus-visible {outline-color:var(--sq-control-danger);}
+/* Native <dialog> takes its own top layer. No overlay remains after unmount. */
+dialog.sq-dialog:not([open]) {display:none;}
+dialog.sq-dialog[open] {
+ position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+ width:100%;height:100%;max-width:none;max-height:none;padding:20px;margin:0;
+ border:0;background:transparent;color:inherit;box-sizing:border-box;backdrop-filter:none;overflow:hidden;
+}
+dialog.sq-dialog::backdrop {background:#302b2352;backdrop-filter:blur(3px);}
+.sq-dialog .sq-dialog__surface {
+ border:1px solid #c6b99d;border-radius:18px;box-shadow:0 18px 60px #2b22182b;
+ overscroll-behavior:contain;animation:sq-dialog-in var(--sq-panel) var(--sq-ease) both;
+}
+.sq-dialog .modal-head {border-color:#dfd4c0;gap:16px;}
+.sq-dialog .modal-head .sq-icon-button {min-height:44px;padding:0;}
+.sq-dialog .modal-foot {border-color:#dfd4c0;}
+@keyframes sq-dialog-in {from{opacity:0;transform:translateY(6px) scale(.985)}to{opacity:1;transform:none}}
+@media(max-width:600px) {
+ body :is(.btn,.ds-btn,.replay-control>.btn,.game-actions .btn,.online-controls>.btn) {min-height:44px;}
+ .site-nav nav>button {min-height:36px;}
+ .site-nav .nav-auth {min-height:44px;}
+ .sq-dialog[open] {padding:16px max(14px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));}
+ .sq-dialog .sq-dialog__surface {max-height:85svh;padding:18px;}
+ .sq-dialog .modal-foot {flex-wrap:wrap;}
+}
+/* User preference wins, including the original theme's ambient motion. */
+@media(prefers-reduced-motion:reduce) {
+ body :is(.btn,.ds-btn,.mode-card,.mode-art,.size-tile,.sq-dialog__surface,.page-enter,.search-stones .color-chip) {animation:none!important;transition:none!important;transform:none!important;}
+ .sq-button__wash {transition:none!important;}
+ .sq-spinner {animation:none;border-style:dotted;}
+}
+@media(forced-colors:active) {
+ body :is(.btn,.ds-btn) {border:1px solid ButtonText;box-shadow:none;forced-color-adjust:auto;}
+ body :is(.btn,.ds-btn):focus-visible {outline:3px solid Highlight;}
+ .sq-spinner {border-color:ButtonText;border-right-color:transparent;}
+}

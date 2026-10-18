@@ -21,6 +21,9 @@ import { VictoryTrack } from '../components/MatchPanel';
 import { timelineCopy, timelineOf } from './puzzleTimeline';
 import { ACCEPTANCE_LABEL, explainPuzzle } from './reviewCopy';
 import { playerName } from '../playerPresentation';
+import { Btn } from '../ui';
+import { useAsyncFeedback } from '../interaction/useAsyncFeedback';
+import { isAcceptedPuzzleAttempt } from './puzzleFeedback';
 
 const VERDICT_LABEL: Record<string, string> = {
   CORRECT: '正确', INCORRECT: '不对', ILLEGAL: '这一手不合法', OPEN: '开放研究题',
@@ -49,8 +52,11 @@ export function PuzzlePage() {
   const [wrong, setWrong] = useState<{ row: number; col: number } | null>(null);
   const [mode, setMode] = useState<'session' | 'single'>('session');
   const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
   const seq = useRef(0);
+  const attemptOperation = useAsyncFeedback(`puzzle-attempt:${mode}:${puzzle?.puzzleId ?? 'none'}`);
+  const nextOperation = useAsyncFeedback(`puzzle-next:${session?.dailyKey ?? 'none'}:${session?.currentIndex ?? -1}`);
+  const busy = loading || attemptOperation.pending || nextOperation.pending;
 
   const loadProgress = useCallback(async () => {
     try {
@@ -62,7 +68,7 @@ export function PuzzlePage() {
   }, []);
 
   const loadTraining = useCallback(async () => {
-    setBusy(true);
+    setLoading(true);
     setResult(null);
     setWrong(null);
     try {
@@ -76,13 +82,13 @@ export function PuzzlePage() {
       console.warn('[puzzle] load training failed', e);
       setErr(friendlyPuzzleError(e));
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }, []);
 
   /** 错题重练：单题模式（不属于今天的 Session，因此不参与今日进度与“下一题”）。 */
   const loadSingle = useCallback(async (puzzleId: string) => {
-    setBusy(true);
+    setLoading(true);
     setResult(null);
     setWrong(null);
     try {
@@ -94,7 +100,7 @@ export function PuzzlePage() {
       console.warn('[puzzle] load single failed', e);
       setErr(friendlyPuzzleError(e));
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }, []);
 
@@ -132,50 +138,57 @@ export function PuzzlePage() {
 
   const submit = useCallback(async (row: number, col: number) => {
     if (!puzzle || busy || solved) return;
-    setBusy(true);
-    try {
-      seq.current += 1;
-      const attemptId = 'ui-' + puzzle.puzzleId + '-' + Date.now().toString(36) + '-' + seq.current;
-      const r = await puzzleApi.attempt(puzzle.puzzleId, attemptId, row, col);
-      setResult(r.data);
-      await loadProgress();
-      if (r.data.verdict === 'CORRECT') {
+    seq.current += 1;
+    const attemptId = 'ui-' + puzzle.puzzleId + '-' + Date.now().toString(36) + '-' + seq.current;
+    const outcome = await attemptOperation.run(
+      async () => {
+        const response = await puzzleApi.attempt(puzzle.puzzleId, attemptId, row, col);
+        await loadProgress();
+        return response;
+      },
+      (response) => isAcceptedPuzzleAttempt(response.data),
+    );
+    if ('skipped' in outcome) return;
+    if ('error' in outcome) {
+      console.warn('[puzzle] attempt failed', outcome.error);
+      setErr(friendlyPuzzleError(outcome.error));
+      return;
+    }
+    const r = outcome.value;
+    setResult(r.data);
+    if (outcome.ok) {
         // 保存并显示的是**玩家选择的**这一步（服务端回执里带回来）。
         const mv = r.data.daily?.solvedMove ?? { row, col, seat: puzzle.actorSeat };
         setPuzzle((p) => (p ? { ...p, solvedMove: mv } : p));
         setSession((s) => (s ? { ...s, phase: 'SOLVED', solvedCount: r.data.daily?.solvedCount ?? s.solvedCount } : s));
         setWrong(null);
-      } else {
-        // 合法但不是答案（或非法落点）：短暂标记后恢复题面，不显示答案。
-        setWrong({ row, col });
-      }
-      setErr('');
-    } catch (e) {
-      console.warn('[puzzle] attempt failed', e);
-      setErr(friendlyPuzzleError(e));
-    } finally {
-      setBusy(false);
+    } else {
+      // HTTP 成功但领域判定未通过：显示错误反馈，绝不推进题目。
+      setWrong({ row, col });
     }
-  }, [puzzle, busy, solved, loadProgress]);
+    setErr('');
+  }, [puzzle, busy, solved, loadProgress, attemptOperation]);
 
   const nextPuzzle = useCallback(async () => {
     if (!session || complete) return;
-    setBusy(true);
-    try {
-      const r = await puzzleApi.next(session.currentIndex);
+    const outcome = await nextOperation.run(() => puzzleApi.next(session.currentIndex));
+    if ('skipped' in outcome) return;
+    if (outcome.ok) {
+      const r = outcome.value;
       setSession(r.data.session);
       setPuzzle(r.data.puzzle);
       setResult(null);
       setWrong(null);
       setErr('');
-    } catch (e) {
-      console.warn('[puzzle] next failed', e);
-      setErr(friendlyPuzzleError(e));
+    } else if ('error' in outcome) {
+      console.warn('[puzzle] next failed', outcome.error);
+      setErr(friendlyPuzzleError(outcome.error));
       void loadTraining(); // 409 之后把状态拉回服务器真相
-    } finally {
-      setBusy(false);
+    } else {
+      // next() 没有领域拒绝器；保留防御分支，避免未来接入拒绝器时误推进。
+      setErr('服务器没有接受下一题请求，请重试。');
     }
-  }, [session, complete, loadTraining]);
+  }, [session, complete, loadTraining, nextOperation]);
 
   return (
     <main className="rv-page" data-testid="puzzle-page">
@@ -254,18 +267,21 @@ export function PuzzlePage() {
               <p data-testid="puzzle-today-progress">{session?.solvedCount ?? 0} / {session?.total ?? 0}</p>
               {mode === 'session' ? (
                 <>
-                  <button
-                    className="btn primary wide"
+                  <Btn
+                    variant="primary"
+                    className="wide"
                     data-testid="puzzle-next"
                     disabled={!solved || busy || complete}
+                    loading={nextOperation.pending}
+                    feedback={nextOperation.feedback}
                     onClick={() => void nextPuzzle()}
                   >
                     {complete ? '今日训练完成' : isLastPuzzle ? '完成今日训练' : '下一题'}
-                  </button>
+                  </Btn>
                   {!solved && <p className="muted" data-testid="puzzle-next-hint">答对当前题目后才能进入下一题。</p>}
                 </>
               ) : (
-                <button className="btn wide" data-testid="back-to-training" onClick={() => void loadTraining()} disabled={busy}>返回今日训练</button>
+                <Btn className="wide" data-testid="back-to-training" onClick={() => void loadTraining()} disabled={busy} loading={loading}>返回今日训练</Btn>
               )}
             </div>
 

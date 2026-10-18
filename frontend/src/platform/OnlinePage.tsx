@@ -7,6 +7,7 @@ import { Modal } from '../components/Modal';
 import { gameLink } from '../ws';
 import { colorName } from '../playerPresentation';
 import { ratingNoticeOf } from './ratingNotice';
+import { Btn } from '../ui';
 
 export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void}){
  const [,force]=useState(0),[now,setNow]=useState(Date.now()),[confirm,setConfirm]=useState(false);
@@ -33,9 +34,9 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
    {queued&&<><div className="matching-seconds">{remaining}<small>秒</small></div><div className="matching-progress"><span style={{width:`${Math.max(0,remaining/(gameLink.timeoutMs/1000)*100)}%`}}/></div>
    <p className="muted">20 秒内不足 3 名真人时，将由 AI 补位自动开局。</p></>}
    {gameLink.error&&<p className="error-text" role="alert">{gameLink.error}</p>}
-   <button className="btn" onClick={exit}>取消并返回</button>
+   <Btn icon="close" onClick={exit}>取消并返回</Btn>
  </main>;}
- if(!g||!view)return <main className="simple-state panel"><h1>对局已结束</h1><button className="btn" onClick={exit}>返回大厅</button></main>;
+ if(!g||!view)return <main className="simple-state panel"><h1>对局已结束</h1><Btn icon="arrowLeft" onClick={exit}>返回大厅</Btn></main>;
  const isOnline=g.mode==='online',ended=phase==='end';
  const info=gameLink.endInfo,myOutcome=info?.myOutcome??null,iWon=myOutcome==='WIN',iLost=myOutcome==='LOSS',wonByColor=info?.winnerSeat??g.state.winner;
  const result=myOutcome==='VOID'?'本局对你不计胜负'
@@ -64,13 +65,13 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
        <PositionHints state={view} showLegal={showLegal} showWinning={showWinning} onLegal={setShowLegal} onWinning={setShowWinning}/>
        {lostConnection&&!ended&&<div className="notice">对手正在重连…</div>}
        {!ended&&ratingNotice&&<div className="notice" data-testid="rating-notice">{ratingNotice}</div>}
-       {ended?<section className="result-card" role="status"><h2>{result}</h2><div className="game-actions">{isOnline&&<button className="btn primary" onClick={rematch}>再来一局</button>}<button className="btn" onClick={exit}>返回大厅</button></div></section>:
-       <div className="online-controls"><button className="btn danger" onClick={()=>setConfirm(true)}>退出对局</button>{isOnline&&<div className={`turn-clock ${seconds!==null&&seconds<=10?'urgent':''}`} role="timer" aria-label="落子倒计时"><span>{seconds===null?'对手思考':'落子剩余'}</span><b>{seconds===null?'—':seconds}<small>{seconds===null?'':'秒'}</small></b></div>}</div>}
+       {ended?<section className="result-card" role="status"><h2>{result}</h2><div className="game-actions">{isOnline&&<Btn variant="primary" icon="replay" onClick={rematch}>再来一局</Btn>}<Btn icon="arrowLeft" onClick={exit}>返回大厅</Btn></div></section>:
+       <div className="online-controls"><Btn variant="danger" icon="exit" onClick={()=>setConfirm(true)}>退出对局</Btn>{isOnline&&<div className={`turn-clock ${seconds!==null&&seconds<=10?'urgent':''}`} role="timer" aria-label="落子倒计时"><span>{seconds===null?'对手思考':'落子剩余'}</span><b>{seconds===null?'—':seconds}<small>{seconds===null?'':'秒'}</small></b></div>}</div>}
        <ReplayControls active={review} index={cursor} total={g.state.moves.length} onToggle={()=>{if(!review)setCursor(g.state.moves.length);setReview(!review)}} onIndex={setCursor} onReturn={()=>setReview(false)} live={isOnline&&!ended}/>
        {gameLink.error&&<p className="error-text" role="alert">{gameLink.error}</p>}
      </aside>
    </div>
-   <Modal open={confirm} title="退出对局？" onClose={()=>setConfirm(false)} footer={<><button className="btn" onClick={()=>setConfirm(false)}>继续对局</button><button className="btn danger" onClick={()=>{setConfirm(false);if(isOnline)gameLink.resign();else{gameLink.leaveInvite();exit()}}}>确认退出</button></>}>
+   <Modal open={confirm} title="退出对局？" onClose={()=>setConfirm(false)} footer={<><Btn data-dialog-cancel onClick={()=>setConfirm(false)}>继续对局</Btn><Btn variant="danger" icon="exit" onClick={()=>{setConfirm(false);if(isOnline)gameLink.resign();else{gameLink.leaveInvite();exit()}}}>确认退出</Btn></>}>
      <p>{isOnline?'主动退出将判负并结束本局。':'退出将结束这盘好友对弈，不影响积分。'}</p>
    </Modal>
  </main>;

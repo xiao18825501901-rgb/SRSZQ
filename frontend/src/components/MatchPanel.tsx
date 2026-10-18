@@ -5,6 +5,7 @@ import { getEligiblePlayer } from '../../../shared/src/game/eligibility';
 import type { QualificationView } from '../../../shared/src/game/qualification';
 import { qualificationFromState } from '../../../shared/src/game/qualification';
 import { colorName, playerName } from '../playerPresentation';
+import { Btn, IconButton } from '../ui';
 
 export interface MatchSeat { kind: 'human'|'ai'; username?: string; stars?: number; }
 export function ColorChip({player,small=false}:{player:Player|null;small?:boolean}){
@@ -54,12 +55,12 @@ export function PositionHints({state,showLegal,showWinning,onLegal,onWinning}:{s
  </div>;
 }
 export function ReplayControls({active,index,total,onToggle,onIndex,onReturn,live=false}:{active:boolean;index:number;total:number;onToggle:()=>void;onIndex:(i:number)=>void;onReturn:()=>void;live?:boolean}){
- return <section className="replay-control"><button className={`btn ${active?'selected':''}`} onClick={onToggle} aria-pressed={active}>棋局日志</button>
+ return <section className="replay-control"><Btn type="button" icon="history" className={active?'selected':''} onClick={onToggle} aria-pressed={active}>棋局日志</Btn>
  {active&&<div className="replay-tools"><div className="replay-status"><span>复盘 · 第 {index} / {total} 步</span>{live&&<small>在线计时继续</small>}</div><div className="replay-buttons">
- <button className="btn icon-btn" aria-label="回到开局" onClick={()=>onIndex(0)} disabled={index===0}>|‹</button>
- <button className="btn icon-btn" aria-label="上一手" onClick={()=>onIndex(index-1)} disabled={index===0}>‹</button>
- <button className="btn icon-btn" aria-label="下一手" onClick={()=>onIndex(index+1)} disabled={index>=total}>›</button>
- <button className="btn" onClick={onReturn}>返回对局</button>
+ <IconButton icon="first" label="回到开局" onClick={()=>onIndex(0)} disabled={index===0}/>
+ <IconButton icon="chevronLeft" label="上一手" onClick={()=>onIndex(index-1)} disabled={index===0}/>
+ <IconButton icon="chevronRight" label="下一手" onClick={()=>onIndex(index+1)} disabled={index>=total}/>
+ <Btn type="button" icon="replay" onClick={onReturn}>返回对局</Btn>
  </div><input type="range" aria-label="复盘进度" min={0} max={total} value={index} onChange={e=>onIndex(Number(e.target.value))}/></div>}
  </section>;
 }

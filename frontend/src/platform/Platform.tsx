@@ -22,6 +22,8 @@ import { SharedReplayPage } from './SharedReplayPage';
 import { AdminPage } from './AdminPage';
 import { HERO_GAME } from '../data/heroGame';
 import { colorName, playerName } from '../playerPresentation';
+import { Btn } from '../ui';
+import { useAsyncFeedback } from '../interaction/useAsyncFeedback';
 
 export const STAR_LEVELS: AILevel[]=[1,2,3,4,5];
 export function useSession(){
@@ -128,7 +130,7 @@ function AuthCard({busy,err,onAuth}:{busy:boolean;err:string;onAuth:(m:'login'|'
  <label className="field"><span>{mode==='register'?'用户名':'用户名或邮箱'}</span><input required value={name} onChange={e=>setName(e.target.value)} autoComplete="username" placeholder="你的名字"/></label>
  <label className="field"><span>密码</span><input type="password" minLength={6} required value={pwd} onChange={e=>setPwd(e.target.value)} autoComplete={mode==='register'?'new-password':'current-password'} placeholder="至少 6 位"/></label>
  {err&&<p className="error-text" role="alert">{err}</p>}
- <button className="btn primary wide" disabled={busy}>{busy?'处理中…':mode==='register'?'注册并开始':'登录'}</button>
+ <Btn variant="primary" className="wide" loading={busy} feedback={err?'error':'idle'}>{mode==='register'?'注册并开始':'登录'}</Btn>
  </form></section></main>;
 }
 const MODES=[{key:'online',title:'在线匹配'},{key:'vsai',title:'人机对战'},{key:'local',title:'离线模式'},{key:'friends',title:'好友对弈'}] as const;
@@ -146,16 +148,22 @@ function RankingPage({onBack}:{onBack:()=>void}){
 }
 function FriendsPage(){
  const [name,setName]=useState(''),[message,setMessage]=useState(''),[friends,setFriends]=useState<PublicUser[]>([]),[invs,setInvs]=useState<Array<{id:string;senderName:string;status:string}>>([]);
+ const inviteOperation=useAsyncFeedback(`friend-invite:${name.trim()}`);
  const load=useCallback(async()=>{try{const [f,i]=await Promise.all([authApi.friends(),authApi.invitations()]);setFriends(f.data.friends);setInvs(i.data.invitations.filter(x=>x.status==='pending'))}catch{}},[]);
  useEffect(()=>{void load();const t=setInterval(()=>void load(),3000);return()=>clearInterval(t)},[load]);
- async function invite(){try{await authApi.invite(name.trim());setMessage('邀请已发送，等待好友接受。');setName('');await load()}catch(e){setMessage(e instanceof Error?e.message:String(e))}}
- async function answer(id:string,yes:boolean){try{yes?await authApi.acceptInvite(id):await authApi.rejectInvite(id);await load()}catch(e){setMessage(e instanceof Error?e.message:String(e))}}
+ async function invite(){const target=name.trim();if(!target)return;const outcome=await inviteOperation.run(async()=>{const response=await authApi.invite(target);await load();return response});if(outcome.ok){setMessage('邀请已发送，等待好友接受。');setName('')}else if('error' in outcome){setMessage(outcome.error instanceof Error?outcome.error.message:String(outcome.error))}}
  return <main className="friends-card panel"><div className="page-heading"><h1>好友与邀请</h1><span>{friends.length} 位好友</span></div>
- <form className="invite-form" onSubmit={e=>{e.preventDefault();void invite()}}><input aria-label="受邀好友用户名" placeholder="输入好友用户名" value={name} onChange={e=>setName(e.target.value)}/><button className="btn primary" disabled={!name.trim()}>邀请对弈</button></form>
+ <form className="invite-form" onSubmit={e=>{e.preventDefault();void invite()}}><input aria-label="受邀好友用户名" placeholder="输入好友用户名" value={name} onChange={e=>setName(e.target.value)}/><Btn variant="primary" disabled={!name.trim()} loading={inviteOperation.pending} feedback={inviteOperation.feedback}>邀请对弈</Btn></form>
  {message&&<p className="notice" role="status">{message}</p>}<h2>待处理邀请</h2>{!invs.length&&<p className="empty-state">暂无新邀请</p>}
- {invs.map(iv=><div className="friend-row" key={iv.id}><span className="avatar-mark">●</span><span>{iv.senderName} 邀请你对弈</span><button className="btn primary small" onClick={()=>answer(iv.id,true)}>接受</button><button className="btn small" onClick={()=>answer(iv.id,false)}>拒绝</button></div>)}
+ {invs.map(iv=><InviteDecisionRow key={iv.id} invitation={iv} onReload={load} onMessage={setMessage}/>)}
  <h2>好友</h2>{!friends.length&&<p className="empty-state">邀请朋友，一起落子。</p>}{friends.map(f=><div className="friend-row" key={f.id}><span className="avatar-mark">●</span><strong>{f.username}</strong><Status value={f.onlineStatus}/><button className="btn small" onClick={()=>{setName(f.username)}}>邀请</button></div>)}
  </main>;
+}
+function InviteDecisionRow({invitation,onReload,onMessage}:{invitation:{id:string;senderName:string};onReload:()=>Promise<void>;onMessage:(message:string)=>void}){
+ const [decision,setDecision]=useState<'accept'|'reject'|null>(null);
+ const operation=useAsyncFeedback(`friend-decision:${invitation.id}`);
+ const answer=async(yes:boolean)=>{const selected=yes?'accept':'reject';setDecision(selected);const outcome=await operation.run(async()=>{const response=yes?await authApi.acceptInvite(invitation.id):await authApi.rejectInvite(invitation.id);await onReload();return response});if(outcome.ok){onMessage(yes?'已接受好友邀请。':'已拒绝好友邀请。')}else if('error' in outcome){onMessage(outcome.error instanceof Error?outcome.error.message:String(outcome.error))}};
+ return <div className="friend-row"><span className="avatar-mark">●</span><span>{invitation.senderName} 邀请你对弈</span><Btn variant="primary" size="small" onClick={()=>void answer(true)} disabled={operation.pending} loading={operation.pending&&decision==='accept'} feedback={decision==='accept'?operation.feedback:'idle'}>接受</Btn><Btn size="small" onClick={()=>void answer(false)} disabled={operation.pending} loading={operation.pending&&decision==='reject'} feedback={decision==='reject'?operation.feedback:'idle'}>拒绝</Btn></div>;
 }
 function TutorialPage({user,applyAuth,onDone}:{user:PublicUser;applyAuth:(t:string,u:PublicUser)=>void;onDone:()=>void}){
  const [assignment]=useState(()=>createTutorialAssignment());const [started,setStarted]=useState(false),[finished,setFinished]=useState(false),[error,setError]=useState('');
@@ -192,8 +200,8 @@ function QuickStartPage({busy,err,onStart,onLogin}:{busy:boolean;err:string;onSt
   <p className="muted">不需要邮箱和密码。系统会先给你一个随机昵称，之后可以在「账号」里改成你自己的。</p>
   {err&&<p role="alert" className="rv-alert" data-testid="quick-start-error">{err}</p>}
   <div className="rv-btnrow">
-   {err&&<button className="btn primary" data-testid="quick-start-retry" onClick={()=>{started.current=false;onStart()}} disabled={busy}>重试</button>}
-   <button className="btn" data-testid="quick-start-login" onClick={onLogin}>已有账号？登录</button>
+   {err&&<Btn variant="primary" data-testid="quick-start-retry" onClick={()=>{started.current=false;onStart()}} loading={busy} feedback="error">重试</Btn>}
+   <Btn data-testid="quick-start-login" onClick={onLogin}>已有账号？登录</Btn>
   </div>
  </main>;
 }
@@ -204,8 +212,8 @@ function NeedAccount({what,onStart,onLogin}:{what:string;onStart:()=>void;onLogi
   <h1>先要一个账号</h1>
   <p className="muted">{what}需要保存在账号里。</p>
   <div className="rv-btnrow">
-   <button className="btn primary" data-testid="need-account-start" onClick={onStart}>创建账号并开始</button>
-   <button className="btn" data-testid="need-account-login" onClick={onLogin}>已有账号？登录</button>
+   <Btn variant="primary" data-testid="need-account-start" onClick={onStart}>创建账号并开始</Btn>
+   <Btn data-testid="need-account-login" onClick={onLogin}>已有账号？登录</Btn>
   </div>
  </main>;
 }
@@ -218,12 +226,12 @@ function ProfilePage({user,applyAuth,logout}:{user:PublicUser;applyAuth:(t:strin
  const [name,setName]=useState(user.username);
  const [pwd,setPwd]=useState('');
  const [email,setEmail]=useState(user.email??'');
- const [busy,setBusy]=useState(false),[err,setErr]=useState(''),[ok,setOk]=useState('');
- const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setErr('');setOk('');
-  try{
-   const {data}=await authApi.claimAccount(name,pwd,email.trim()||undefined);
-   applyAuth(getToken()??'',data.user);setOk('已保存。昵称和密码现在归你了，战绩与好友都还在。');setPwd('');
-  }catch(ex){setErr(ex instanceof Error?ex.message:String(ex))}finally{setBusy(false)}};
+ const [err,setErr]=useState(''),[ok,setOk]=useState('');
+ const saveOperation=useAsyncFeedback(`claim-account:${user.id}`);
+ const submit=async(e:React.FormEvent)=>{e.preventDefault();setErr('');setOk('');
+  const outcome=await saveOperation.run(()=>authApi.claimAccount(name,pwd,email.trim()||undefined));
+  if(outcome.ok){applyAuth(getToken()??'',outcome.value.data.user);setOk('已保存。昵称和密码现在归你了，战绩与好友都还在。');setPwd('')}
+  else if('error' in outcome){setErr(outcome.error instanceof Error?outcome.error.message:String(outcome.error))}};
  return <main className="rv-page" data-testid="profile-page">
   <div className="rv-page-head"><h1>账号</h1>
    <p className="muted">当前昵称 <b data-testid="profile-username">{user.username}</b> · 积分 {user.rating}</p></div>
@@ -236,8 +244,8 @@ function ProfilePage({user,applyAuth,logout}:{user:PublicUser;applyAuth:(t:strin
    <label className="field"><span>密码（至少 6 位）</span><input data-testid="claim-password" type="password" value={pwd} onChange={(e)=>setPwd(e.target.value)} required minLength={6}/></label>
    <label className="field"><span>邮箱（可选，仅用于找回）</span><input data-testid="claim-email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)}/></label>
    <div className="rv-btnrow">
-    <button className="btn primary" data-testid="claim-submit" disabled={busy}>{busy?'保存中…':'保存'}</button>
-    <button type="button" className="btn" data-testid="profile-logout" onClick={logout}>退出登录</button>
+    <Btn variant="primary" data-testid="claim-submit" loading={saveOperation.pending} feedback={saveOperation.feedback}>保存</Btn>
+    <Btn type="button" data-testid="profile-logout" onClick={logout}>退出登录</Btn>
    </div>
    {err&&<p role="alert" className="rv-alert" data-testid="claim-error">{err}</p>}
    {ok&&<p className="rv-notice" data-testid="claim-ok">{ok}</p>}
