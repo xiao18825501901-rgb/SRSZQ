@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "baseCommit": "1878587c36121ef5805b67d6fb06c1a8aa5d69cc",
+  "sourceCommit": "5aa35ab7830790f872a04bfba46fb6edff5b93ff",
+  "files": [
+    {
+      "path": "docs/ui-interaction-polish/PLAN.md",
+      "bytes": 2655,
+      "sha256": "0001158e78f23ff750f3ac35aeb177841c8068c852a5e15ba846ec257b21a246"
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "bytes": 6838,
+      "sha256": "f5ed7033592bd9e686a486c92e6e6582e78ee69e5d2cf3b621a41bbdd26f81ee"
+    },
+    {
+      "path": "frontend/src/components/MatchPanel.tsx",
+      "bytes": 5703,
+      "sha256": "6393b2e1db1b2355370e10ec9db96d90c0ac1e47b75af0492ab46a3330542deb"
+    },
+    {
+      "path": "frontend/src/components/Modal.tsx",
+      "bytes": 3119,
+      "sha256": "fe3d64b72e79e600bfa980f2ff41e20b962701330e1eb5c7c3405a205e25b634"
+    },
+    {
+      "path": "frontend/src/components/ModeArtwork.tsx",
+      "bytes": 3203,
+      "sha256": "799bcee0d8827d0fab2ba2268edbc45219b140cc7e93172054c70423b849489b"
+    },
+    {
+      "path": "frontend/src/interaction/Icon.tsx",
+      "bytes": 1790,
+      "sha256": "85702f673fad85fcec312983895565d48faa77e6aef26c32222c8e2ebf7300d8"
+    },
+    {
+      "path": "frontend/src/interaction/useAsyncFeedback.ts",
+      "bytes": 2191,
+      "sha256": "0bf3ebdbf197da6828245f9e0f1dca70659bd9c9b9f92cea08bd7c41d3579415"
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "bytes": 372,
+      "sha256": "308b31cc4ebdd68409c71af60547b4774c3130ca0e42c915cec6a16ec6cea3c7"
+    },
+    {
+      "path": "frontend/src/platform/OnlinePage.tsx",
+      "bytes": 7307,
+      "sha256": "e44307c70ddc8f34526f265382aad31ece8abc51b1e7ea7ff5d381ace5392c52"
+    },
+    {
+      "path": "frontend/src/platform/Platform.tsx",
+      "bytes": 26696,
+      "sha256": "d917acb664d89f716650e67baa5706887e5e182ec1e7a0fdb0daaf37fd444b68"
+    },
+    {
+      "path": "frontend/src/platform/PuzzlePage.tsx",
+      "bytes": 15399,
+      "sha256": "6572d6028cfe4fb652b036a61c83d00eab0657fe13422fb82de76aecad7fdab7"
+    },
+    {
+      "path": "frontend/src/platform/__tests__/puzzleFeedback.test.ts",
+      "bytes": 965,
+      "sha256": "4d0a26479d479d58d4f309901c59c4f259fdbc0d1e6eaccfa945b4529ccbe09f"
+    },
+    {
+      "path": "frontend/src/platform/puzzleFeedback.ts",
+      "bytes": 577,
+      "sha256": "195bdf19283ddfb06a931240badbd3da0ad6e0e30f3c2aaa2a61b91d21b09c3e"
+    },
+    {
+      "path": "frontend/src/styles/interactions.css",
+      "bytes": 9459,
+      "sha256": "a472de82b8b971bbb6ae27db9cf7dd2ab93ca5ea73726404a8ffb2a8e74345c8"
+    },
+    {
+      "path": "frontend/src/ui.tsx",
+      "bytes": 3050,
+      "sha256": "96899282837501719d96f65d5f8e8150f91dde95e2a00992221b3664f69551d3"
+    },
+    {
+      "path": "scripts/dev/browser-ui-polish-check.mts",
+      "bytes": 15156,
+      "sha256": "ba06211c6c6bd72b6be2afeb4d727807e1a544dfb19740e1290b345d279807d1"
+    }
+  ]
+}
