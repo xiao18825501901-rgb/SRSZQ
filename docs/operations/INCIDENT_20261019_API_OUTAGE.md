@@ -1,81 +1,83 @@
 # SRSZQ API outage — 2026-10-19
 
-## Impact
+## Final status
 
-`https://srszq.com` continues to load from Netlify, but account creation,
-login, quick account, matchmaking and online games fail because the production
-API and WebSocket origin are unavailable.
+**RESOLVED.** `https://srszq.com`, account registration, login, ranking,
+WebSocket authentication, 20-second matchmaking, AI fill, timeout settlement
+and active resignation all pass through the real production domain.
 
-## Confirmed root cause
+## Root cause
 
-- `api.srszq.com` resolves to the former Hong Kong host `8.210.58.22`.
-- TCP ports 22, 80 and 443 on that host all time out.
-- Requests to `https://api.srszq.com` time out before an HTTP response.
-- The current frontend bundle was built from
-  `1878587c36121ef5805b67d6fb06c1a8aa5d69cc` and still targets
+- `api.srszq.com` resolved to the Hong Kong light server `8.210.58.22`.
+- That server expired at `2026-10-13 23:59:59 +08:00`; SSH, HTTP and HTTPS
+  were unavailable while it was expired.
+- The Netlify frontend remained healthy and continued targeting
   `https://api.srszq.com` / `wss://api.srszq.com/ws`.
 
-The failure is therefore at the production backend host/DNS boundary, not in
-the account form or interaction-polish UI.
+The outage was at the backend host boundary, not in the account UI.
 
-## Data findings
+## Recovery and data preservation
 
-- The unreachable Hong Kong host cannot currently be read or frozen.
-- The available Hangzhou migration snapshot passes SQLite `quick_check` and
-  contains 140 users and 30 games.
-- The older Hangzhou live instance contains only 2 users and 0 games.
-- The Hangzhou snapshot predates later production evidence, so switching it to
-  public writes without first checking the old ECS would create a recovery
-  point objective gap and possible split-brain history.
+- The Hong Kong server was renewed by the owner and returned online.
+- Alibaba snapshot `s-j6c6jtq0jh6ijkxlal5o` was created as
+  `SRSZQ-HK-pre-recovery-20261019` before migration.
+- The authoritative SQLite database passed `quick_check` and contained:
+  - users: 381
+  - games: 113
+  - matches: 113
+  - sessions: 390
+  - ranking rows: 366
+  - product events: 248
+- Final frozen backup:
+  `/home/admin/srszq-final-cutover-20261019T103134Z.sqlite`
+- Final frozen backup SHA-256:
+  `2dfacbcb94177e3607a65674f2994b1a28ed256eafac9454a384bb649e45ea4e`
+- The backup was copied to Hangzhou, hash-matched, opened read-only, and passed
+  SQLite `quick_check` before activation.
 
-No existing database was overwritten or deleted.
+No 140-user fallback snapshot was promoted over the newer production state.
 
-## Recovery environment prepared
+## Production topology
 
-- Host: Hangzhou `47.114.34.175`
-- Source commit: `ba75b2c0deb11ac24ea6fee496ad34aed1a30bc2`
-- Source archive SHA-256:
-  `1ea8dec3d68568f4bb3bd91f92dd1d7e79de89f0bfd681e3abc2885c1d5d47c3`
-- Release directory:
-  `/var/www/SRSZQ-recovery-ba75b2c-20261019`
-- PM2 process: `srszq-recovery`
-- Loopback API/WS: `127.0.0.1:18080` / `127.0.0.1:18081`
-- HTTP virtual host for `api.srszq.com` is prepared on port 80 and proxies to
-  the recovery ports.
+- Public DNS remains `api.srszq.com -> 8.210.58.22`.
+- Hong Kong terminates public TLS with Caddy, then Nginx relays API and
+  WebSocket traffic to Hangzhou.
+- Hangzhou backend:
+  - host: `47.114.34.175`
+  - release: `/var/www/SRSZQ-recovery-ba75b2c-20261019`
+  - PM2 process: `srszq-recovery`
+  - API: `127.0.0.1:18080`
+  - WebSocket: `127.0.0.1:18081`
+- The former Hong Kong `srszq-backend` PM2 process is stopped and preserved for
+  rollback.
 
-The recovery database is an independent copy of the 140-user migration
-snapshot. Startup migrations and synthetic checks affected only this copy.
+Direct public TLS with SNI to the Hangzhou mainland ECS is reset upstream, so
+the paused `api -> 47.114.34.175` DNS record remains disabled. The Hong Kong
+edge is required until the mainland-domain/TLS gate is resolved or a different
+compliant edge is selected.
 
-## Verification completed
+## Verification
 
-- Typecheck: pass.
-- Unit tests: 19 files / 169 tests pass.
-- Backend API integration: pass.
-- WebSocket integration: pass.
-- Frontend production build: pass.
-- Production dependency audit: 0 vulnerabilities.
-- Runtime `/ready`: all checks pass, including migrations, writable rollback
-  transaction and AI worker warm-up.
-- Runtime flow: registration, login, quick-account cookie, WebSocket ticket,
-  20-second queue and `game.start` all pass.
-- External request pinned to the Hangzhou IP with Host `api.srszq.com` returns
-  HTTP 200 from `/ready`.
+- Production database integrity: `quick_check=ok`.
+- Public `/ready` and `/health`: pass.
+- Public CORS preflight from `https://srszq.com`: HTTP 204 with the correct
+  `Access-Control-Allow-Origin`.
+- Registration, logout, login and authenticated WSS hello: pass.
+- Paginated ranking: pass.
+- 20-second matchmaking and 1-human + 2-AI `game.start`: pass.
+- 30-second turn timeout settlement: pass.
+- Active leave to `PLAYER_FORFEIT`: pass.
+- Nginx configuration on both servers: pass.
+- Hong Kong-to-Hangzhou upstream certificate verification: enabled and pass.
+- Frontend `https://srszq.com`: HTTP 200 from Netlify.
 
-## Remaining gates
-
-1. Inspect the old ECS in Alibaba Cloud. If it can be restarted or its disk can
-   be recovered, create a final SQLite backup and use that newer state.
-2. If the old state is irrecoverable, explicitly accept the 140-user snapshot
-   as the recovery point before public writes begin.
-3. Change only the `api.srszq.com` A record to `47.114.34.175`.
-4. Issue the TLS certificate on Hangzhou and enable the 443 virtual host.
-5. Run public register, login, quick account, WebSocket ticket, matchmaking and
-   online-game acceptance checks through the real domain.
+The acceptance run added four clearly synthetic QA users and two QA games.
+Post-test production counts were 385 users, 115 games and 115 matches, with
+zero live games.
 
 ## Rollback
 
-Before public cutover, rollback is simply removing the prepared HTTP virtual
-host and stopping `srszq-recovery`; no public traffic or authoritative data is
-affected. After cutover, revert the A record only if the previous backend is
-confirmed reachable and authoritative. Preserve the recovery database and all
-pre-cutover backups in either case.
+Rollback assets are preserved on both hosts. To revert, restore the saved Hong
+Kong Nginx site file, reload Nginx, and start `srszq-backend`. The frozen Hong
+Kong database and Hangzhou pre-swap database copies remain available. Do not
+change DNS during this rollback; public DNS already points to Hong Kong.

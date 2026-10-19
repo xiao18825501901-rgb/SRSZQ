@@ -3,34 +3,47 @@
 ## Phase 1 — diagnose and preserve
 
 - [x] Reproduce the public frontend/API split.
-- [x] Check DNS and the old host's SSH/HTTP/HTTPS ports.
-- [x] Inventory Hangzhou services and databases without modifying them.
-- [x] Verify the best available migration snapshot.
+- [x] Identify the expired Hong Kong light server as the outage cause.
+- [x] Renew the server and restore access.
+- [x] Create an Alibaba disk snapshot before migration.
+- [x] Preserve and hash the authoritative SQLite database.
 
-## Phase 2 — isolated recovery candidate
+## Phase 2 — isolated Hangzhou candidate
 
-- [x] Deploy the frontend-compatible backend source to an isolated directory.
-- [x] Use a copy of the migration snapshot.
-- [x] Run typecheck, unit, API, WebSocket, build and audit gates.
-- [x] Verify registration, login, quick account and a real match start.
-- [x] Prepare an HTTP virtual host without changing DNS or TLS.
+- [x] Deploy the frontend-compatible backend to an isolated directory.
+- [x] Run typecheck, unit, API, WebSocket, build and dependency-audit gates.
+- [x] Load a copy of the authoritative 381-user database on separate ports.
+- [x] Verify migrations, registration, ranking, WSS, AI fill and settlement.
+- [x] Preserve the older Hangzhou databases before replacement.
 
-## Phase 3 — authoritative-state decision
+## Phase 3 — production activation
 
-- [ ] Inspect the old ECS state through Alibaba Cloud.
-- [ ] Recover and verify its newest SQLite state, or record that it is
-  irrecoverable and select the preserved migration snapshot.
-- [ ] Confirm `quick_check=ok`, table counts and a frozen SHA-256 before
-  accepting public writes.
+- [x] Freeze Hong Kong writes with zero active games.
+- [x] Create and verify the final consistent SQLite backup.
+- [x] Transfer it to Hangzhou with matching SHA-256.
+- [x] Replace the Hangzhou candidate database atomically.
+- [x] Verify Hangzhou readiness and database counts.
+- [x] Stop the former Hong Kong application process.
+- [x] Relay Hong Kong TLS/API/WSS traffic to Hangzhou with upstream certificate
+  verification enabled.
+- [x] Save PM2 recovery state.
 
-## Phase 4 — cutover and acceptance
+## Phase 4 — public acceptance
 
-- [ ] Update the `api.srszq.com` A record.
-- [ ] Issue and verify the TLS certificate.
-- [ ] Verify `/ready`, `/api/version`, CORS and security headers publicly.
-- [ ] Verify registration, login and quick account in a real browser.
-- [ ] Verify WebSocket tickets, 20-second matchmaking and an online game.
-- [ ] Observe logs and database integrity after cutover.
+- [x] Verify `/ready`, `/health`, CORS and security headers publicly.
+- [x] Verify registration, logout, login and authenticated WebSocket.
+- [x] Verify paginated ranking.
+- [x] Verify 20-second matchmaking and AI fill.
+- [x] Verify timeout and active-resignation settlement.
+- [x] Verify Netlify frontend availability.
+- [x] Recheck SQLite integrity and zero live games after acceptance.
 
-Completion requires all Phase 4 checks through the real public domain. The
-isolated recovery candidate alone does not close the incident.
+## Deferred infrastructure gate
+
+- [ ] Remove the Hong Kong TLS-edge dependency only after direct SNI TLS to the
+  Hangzhou mainland ECS is permitted or a different compliant edge is ready.
+- [ ] Then update the authoritative `api.srszq.com` A record and re-run the
+  complete public acceptance suite.
+
+The incident is closed with the Hong Kong relay topology. Direct DNS cutover to
+Hangzhou remains intentionally blocked because it would break browser TLS.
