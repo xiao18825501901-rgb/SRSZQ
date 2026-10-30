@@ -1,0 +1,24 @@
+{
+  "CodeSHA": "dc752f0393a515b86b86d0d7a75749831e7dd13f",
+  "builtAtUTC": "2026-10-30T06:47:33.987468+00:00",
+  "command": "VITE_SOURCE_SHA=dc752f0393a515b86b86d0d7a75749831e7dd13f npm run build",
+  "nativeBuild": "PASS",
+  "fixtureAdaptersInBuild": false,
+  "runtime": "real API 127.0.0.1:8080 / WS 127.0.0.1:8081",
+  "lockSha256": "d679ef7b3c8683db9fc9a86ec39cdf1cd35697f005263ad164b78ce253d2b9da",
+  "artifacts": {
+    "frontend\\dist\\index.html": "cee50355449f9d41bce1a2ed9dfd9e07d941a0f0e55c7507f6392aa2f23d45c7",
+    "frontend\\dist\\assets\\ai.worker-DqOPaC-Z.js": "cffda9b0ada8da9107a1f9f7e28ca1fda39e9faf6cd0c8494b2d06fe5e59f719",
+    "frontend\\dist\\assets\\index-BZQNT2HU.js": "f04f27dbcc3b333459eaae85eee9cbf09f55ec087f1c6bb3a2bbc65a25f99c5d",
+    "frontend\\dist\\assets\\index-C5nz2Q5P.css": "b19c2c40e40973bc0de413600de9f15bb4dee4f0b69db2c27165db31abb4babb",
+    "frontend\\dist\\fonts\\OFL-LXGW-WenKai-GB-Lite.txt": "ac72cb5d1615107d9abddd3b756d212fad14b1dfff7be15aadb721af46515385",
+    "frontend\\dist\\fonts\\srszq-wenkai-display.woff": "2718ec3955d533bd3f81a7804d9aa904758e01f6b36ae690e8d1b250bdc65fe2",
+    "frontend\\dist\\ink\\landscape-portrait.svg": "f469fc7682cb3ccb42034a55a41e1857651e1543afa5b8d802b0f3af44afab9b",
+    "frontend\\dist\\ink\\landscape-wide.svg": "d36e99e8f39424f09e72fa2c0e95305e8c7b118a3c6b05462165399538857b67",
+    "frontend\\dist\\ink\\paper-fiber.svg": "4d4c4749ec59d14e93c29495fd2f81b4c5a78b9875e3c896b50a54f8e3b8d369",
+    "frontend\\dist\\ink\\README.md": "e6c163598de1ab1f9b3ccb93245cae540f88b1156ab028355860cfde852bdab2"
+  },
+  "acceptance": "BROWSER_PARTIAL",
+  "mobile": "NOT_RUN - viewport setting did not change actual dimensions",
+  "productionTouched": false
+}

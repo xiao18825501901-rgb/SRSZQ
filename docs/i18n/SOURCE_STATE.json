@@ -11,5 +11,9 @@
   "RulesChanged": false,
   "ProductionTouched": false,
   "status": "IMPLEMENTED_NATIVE_PASS_BROWSER_PARTIAL",
-  "ScreenshotCount": 24
+  "ScreenshotCount": 24,
+  "CodeSHA": "dc752f0393a515b86b86d0d7a75749831e7dd13f",
+  "FinalSHA": "dc752f0393a515b86b86d0d7a75749831e7dd13f",
+  "CatalogCount": 498,
+  "NativeTests": 185
 }
