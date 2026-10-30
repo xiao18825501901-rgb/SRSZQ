@@ -1,16 +1,17 @@
 {
-  "CodeSHA": "dc752f0393a515b86b86d0d7a75749831e7dd13f",
-  "builtAtUTC": "2026-10-30T06:47:33.987468+00:00",
-  "command": "VITE_SOURCE_SHA=dc752f0393a515b86b86d0d7a75749831e7dd13f npm run build",
+  "CodeSHA": "eab686cd4bfbf8a17a8d00e2256475cf962e1361",
+  "builtAtUTC": "2026-10-30T08:42:33.506524+00:00",
+  "command": "VITE_SOURCE_SHA=eab686cd4bfbf8a17a8d00e2256475cf962e1361 npm run build",
   "nativeBuild": "PASS",
+  "unitTests": 189,
   "fixtureAdaptersInBuild": false,
-  "runtime": "real API 127.0.0.1:8080 / WS 127.0.0.1:8081",
+  "testHarnessIncludedInApp": false,
   "lockSha256": "d679ef7b3c8683db9fc9a86ec39cdf1cd35697f005263ad164b78ce253d2b9da",
   "artifacts": {
-    "frontend\\dist\\index.html": "cee50355449f9d41bce1a2ed9dfd9e07d941a0f0e55c7507f6392aa2f23d45c7",
+    "frontend\\dist\\index.html": "5fb7b2a533532fca696e0c07315b6a4b99488204a88bb608cbe081e535a8b41b",
     "frontend\\dist\\assets\\ai.worker-DqOPaC-Z.js": "cffda9b0ada8da9107a1f9f7e28ca1fda39e9faf6cd0c8494b2d06fe5e59f719",
-    "frontend\\dist\\assets\\index-BZQNT2HU.js": "f04f27dbcc3b333459eaae85eee9cbf09f55ec087f1c6bb3a2bbc65a25f99c5d",
-    "frontend\\dist\\assets\\index-C5nz2Q5P.css": "b19c2c40e40973bc0de413600de9f15bb4dee4f0b69db2c27165db31abb4babb",
+    "frontend\\dist\\assets\\index-B-gQzOTC.css": "6e1d81139705618f7f607d1593a9e5c4bcbb0051b9e74337b2775e1ba5a2ebf0",
+    "frontend\\dist\\assets\\index-C3DAse9P.js": "8436a96b77ed03d8596471a1452212635eca43b0f342688f08412e40d763cbf2",
     "frontend\\dist\\fonts\\OFL-LXGW-WenKai-GB-Lite.txt": "ac72cb5d1615107d9abddd3b756d212fad14b1dfff7be15aadb721af46515385",
     "frontend\\dist\\fonts\\srszq-wenkai-display.woff": "2718ec3955d533bd3f81a7804d9aa904758e01f6b36ae690e8d1b250bdc65fe2",
     "frontend\\dist\\ink\\landscape-portrait.svg": "f469fc7682cb3ccb42034a55a41e1857651e1543afa5b8d802b0f3af44afab9b",
@@ -18,7 +19,13 @@
     "frontend\\dist\\ink\\paper-fiber.svg": "4d4c4749ec59d14e93c29495fd2f81b4c5a78b9875e3c896b50a54f8e3b8d369",
     "frontend\\dist\\ink\\README.md": "e6c163598de1ab1f9b3ccb93245cae540f88b1156ab028355860cfde852bdab2"
   },
-  "acceptance": "BROWSER_PARTIAL",
-  "mobile": "NOT_RUN - viewport setting did not change actual dimensions",
+  "sourceChanges": [
+    "presentation CSS reflow",
+    "mode/outcome labels",
+    "share error descriptors",
+    "fixed internal metric note"
+  ],
+  "acceptance": "REQUESTED_LOCAL_ACCEPTANCE_PASS",
+  "threeAccountGameId": "dafdfc25-f5c5-455f-8d1b-327ca264273f",
   "productionTouched": false
 }

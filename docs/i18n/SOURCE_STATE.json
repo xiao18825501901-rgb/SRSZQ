@@ -10,10 +10,17 @@
   "BackendChanged": false,
   "RulesChanged": false,
   "ProductionTouched": false,
-  "status": "IMPLEMENTED_NATIVE_PASS_BROWSER_PARTIAL",
+  "status": "REQUESTED_LOCAL_ACCEPTANCE_PASS",
   "ScreenshotCount": 24,
-  "CodeSHA": "dc752f0393a515b86b86d0d7a75749831e7dd13f",
-  "FinalSHA": "dc752f0393a515b86b86d0d7a75749831e7dd13f",
-  "CatalogCount": 498,
-  "NativeTests": 185
+  "CodeSHA": "eab686cd4bfbf8a17a8d00e2256475cf962e1361",
+  "FinalSHA": "eab686cd4bfbf8a17a8d00e2256475cf962e1361",
+  "CatalogCount": 501,
+  "NativeTests": 189,
+  "Mobile390x844": "PASS",
+  "Mobile360x800": "PASS",
+  "TextResize200Percent": "PASS_REAL_BUILD_WITH_LOCAL_TEXT_ONLY_TEST_HARNESS",
+  "ThreeAccountUI": "PASS_3_DISTINCT_ORIGINS_SAME_CHROMIUM",
+  "SafariIOS": "NOT_RUN",
+  "GUI_NewCredentialEntry": "USER_HANDOFF_REQUIRED_NOT_RUN",
+  "ScreenshotCountThisRound": 27
 }

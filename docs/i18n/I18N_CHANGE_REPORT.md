@@ -1,48 +1,73 @@
-# SRSZQ bilingual upgrade — 2026-10-30
+# SRSZQ 双语真实验收报告 — 2026-10-30
 
-Status: IMPLEMENTED_NATIVE_PASS_BROWSER_PARTIAL. Full acceptance is not claimed.
+状态：**本轮指定三项 LOCAL_ACCEPTANCE_PASS**（手机、200%文字、三账号联调）。不是生产发布或 Safari 真机认证。
 
-## Source and merge
-Independent branch `feature/bilingual-ui-20261030`, based on current product commit `5712f7c`. The preferred Downloads copy has no Git metadata and is an older Ink archive. The clean product worktree includes the previous interaction implementation plus later operations documentation. No checkout of the supplied historical reference was performed.
+## 源码与边界
+- 工作区：srszq-bilingual-product-20261030；分支 feature/bilingual-ui-20261030。
+- 原始最新产品基点 5712f7c；前轮双语交付 5f5327d；本轮功能提交 eab686cd4bfbf8a17a8d00e2256475cf962e1361。
+- 保留当前业务、交互反馈、水墨布局、红绿白、13/17 路。英文词条现为 **501**。
+- backend、shared、api.ts、ws.ts、AI、账号/匹配/时钟/积分规则、package.json 与冻结锁均未改动。测试数据仅位于 evidence/runtime/srszq.sqlite。
+- 未 push、未合并 main、未生产部署、未修改 DNS、未付费。
 
-Installer `--check` returned CONFLICT_NO_WRITES for App, OnlinePage, Platform and PuzzlePage. Compared normalized baseline/overlay/current contents. The other files match verified baseline content after newline normalization. Merged the four conflicts while retaining Btn feedback, async-operation guards, per-invitation controls, queue recovery and isAcceptedPuzzleAttempt. Original files and source branches are preserved. main retains refresh.css, ink.css, review.css and interactions.css, with i18n.css appended.
+## 浏览器问题的解决
+内嵌浏览器处于隐藏状态时，viewport 设置返回成功却没有改变实际视口；设置还作用于当前显示的标签。解决方式：用可见的新测试标签明确选定页面，再设置尺寸，逐次读 innerWidth/innerHeight，并核对截图像素。没有修改浏览器安全设置或绕过网址识别限制，也没有控制用户的其他 Edge 页面。
+中途控制会话重新初始化；已完成的 20 手和逐步日志保存在磁盘并由 SQLite 核验，未重跑该对局。
 
-## Implementation
-Imported the supplied locale store, switcher, 490-entry catalog and translated page modules. Added eight current-version messages, for 498 catalog entries, including invitation decisions and next-question rejection. Retained the three original module-only interaction files without business changes. Existing notices are translated on rendering; invitation acceptance/rejection stores descriptors, not language-frozen success text. Online raw errors use the safe display mapping. No remote translation or DOM substitution is used. User text and protocol identifiers remain source data.
+## 本轮真实验收
+| 项目 | 实测结果 |
+|---|---|
+| 390×844，13 路 | 169 交叉点，无整页横向溢出，中英文截图 |
+| 390×844，17 路 | 289 交叉点，无整页横向溢出 |
+| 360×800，13/17 路 | 实测 169/289 点，无整页横向溢出 |
+| 手机内容顺序 | timeline order=2、board=3、actions=5；截图确认时间线在上、棋盘居中、操作在下 |
+| 200%文字 | 真实构建加本地测试脚本，计算字号精确×2；不是离线组件或翻译替身 |
+| 放大页面 | 中英首页、大厅、登录、对局设置、17路棋盘、弹窗、每日题、好友、分享复盘实测 |
+| 键盘与弹窗 | Enter 落子、Escape 取消；放大后设置、下一题、退出等操作可达 |
+| 登录与表单 | 既有测试账号通过真实登录；换语言保持输入长度，不额外提交 |
+| 网络保持 | 一次大厅切换前后均为 3 个 HTTP 请求、1 次 WS 构造，无新增请求或重连 |
+| AI 计算中切换 | 观测到真实“AI 思考中”，连切4次；最终仅人类1子+两AI各1子，回到人类行动，合计3子；2次 Worker 构造对应两个AI行动 |
+| 每日20题 | 真实 UI→真实服务端完成20/20；多题切换语言；只点下一题推进；完成后刷新仍完成，无21题 |
+| 邀请 | 双账号真实发送/收到/接受→好友棋局；成功提示随语言更新；退出正常 |
+| 分享 | 本轮真实棋谱生成分享；游标8/20换语言保持；撤销后实际410，最终中英原因提示正确 |
+| 管理 | 仅在隔离数据库临时给合成账号管理角色，检查只读中英界面、ready与指标；已恢复 USER，没有执行处罚/删除/改分 |
+| 最终普通构建 | 不加载测试脚本的4173预览实测360×800/17路、289点、零溢出；捕获日志无 warn/error |
 
-## Validation
-Native clean npm ci: PASS (60 packages). Frozen product lock unchanged.
-Native root/frontend/backend typecheck: PASS.
-Native Vitest: PASS, 20 files / 185 tests (169 existing + 16 locale tests).
-Native production build: PASS, 77 modules. Final JS about 354.05 kB, gzip 115.60 kB; CSS 47.79 kB.
-HTTP API integration: ALL PASS. WebSocket integration: ALL PASS. Puzzle bank/daily-session integration: ALL PASS.
-No backend, shared, API client, WS client, AI implementation, package manifest or product lock change.
+200%文字方法：scripts/dev/serve-i18n-acceptance.mjs 只在本地4176服务中给真实 index 注入验收脚本，当前计算字号×2，随语言/路由/视口重算；同时记录请求路径、WS消息类型和Worker数量，不记录凭据、请求头或请求体。它没有给API/WS提供fixture，也不进入 frontend/dist 的正常入口。记录如英文首页 21.8624px→43.7248px，按钮13px→26px。此结果不冒充浏览器原生缩放菜单或iOS系统字号测试。
 
-Real current frontend at http://127.0.0.1:4173 and real backend on 8080/8081, using evidence/runtime/srszq.sqlite only. Local CORS was enabled by process environment for this local origin; no backend source or production change.
+## 三账号完整对局
+3个独立前端 Origin（4173/4174/4175），各自独立localStorage与不同真实登录账号，连接同一隔离后端。共用一个Chromium运行环境，**不声称3个独立OS浏览器profile**。开始前通过正常退出清理遗留一键账号Cookie，避免共用Cookie jar把WS绑到旧账号。
 
-Observed browser PASS:
-- English/Chinese navigation, document title/lang and literal language names.
-- Login text/password field lengths preserved across language switch (synthetic test values; browser redacts content).
-- Reload, new-tab locale restoration, and actual cross-tab storage propagation.
-- Real one-click account creation, account settings, rules, friends and ranking views.
-- Actual daily wrong attempt: no success feedback, next disabled, board unchanged.
-- Actual correct attempt: accepted Red stone at row 10/column 8 remains; language switch stays at puzzle 1/20; reload restores solved state; Next alone advances to 2/20.
-- Daily page does not show move history or move numbers.
-- Local 17x17: 289 points; keyboard Enter creates exactly one stone; language switch preserves stone and route.
-- Native settings dialog remains open and updates language from a second tab; Escape cancels without resetting the board.
-- Real 20-second queue and AI fill create online game; displayed human clock within 30 seconds. Language switch observed same countdown second; real move accepted and AI responds; exit confirmation and resign outcome render correctly.
-- Independent HTTP/WS synthetic three-account scripted game: 3 human seats, 20 moves, zero missing ACKs, proper end and share creation. This is not three independent UI-browser profiles.
-- Shared replay backed by that actual server game; cursor moved to 8/20 and preserved across language switch, with 8 stones.
-- Current history and server replay verification shown; captured browser warning/error logs empty at final observation.
+实际对局：dafdfc25-f5c5-455f-8d1b-327ca264273f。
+- 三方收到真人 game.start、不同 A/B/C 座位和相同棋盘。
+- 每一手前切换语言，逐手核对棋子数和round保持，再通过真实按钮落子，共20手。
+- 三方均20子，绿棋第7轮获胜。
+- 权威SQLite：20个命令、20个唯一command ID；revision 0→20；A/B/C分别7/7/6手。没有把队列ACK当成开局。
+- 本轮每日会话权威记录：current_index=20、solved_count=20、total=20、completed_at非空。
 
-## Remaining acceptance gates
-NOT_RUN / BLOCKED: real 390x844 and 360x800 mobile acceptance. The browser viewport capability returned successfully but did not change observed innerWidth/innerHeight; purported mobile screenshots measured desktop sizes. Files were renamed and actual dimensions are in SCREENSHOT_PROVENANCE.json. No desktop image is claimed as mobile proof.
-A native Edge fallback was attempted. Computer Use then stopped because it could not reliably identify the current Windows browser URL for its policy checks. No further browser inputs were sent.
-NOT_RUN: 200% text zoom, Safari/iOS device, three isolated browser-account UI profiles, full admin UI, old-user login submission, full claim/save UI, daily completion through all 20 questions, simultaneous AI/worker duplicate-action tracing and network-count instrumentation, share revocation. Backend regressions cover their underlying unchanged policies but do not substitute for these UI checks.
-Denied storage tested with unit doubles, not real browser privacy mode. Daily cap 20 covered by existing regression tests and real displayed session total, not 20 browser-completed answers.
+## 验收中实际修复
+1. 首页标题取消强制不换行，网格子项允许收缩：英文390宽/200%原溢出178px，中文亦存在溢出；修复后均无整页横向溢出。
+2. 棋盘尺寸选择允许换行：360宽/200%原溢出42px，修复后无溢出。
+3. 大厅卡片标题允许换行、网格项可收缩：360宽/200%原溢出284px，修复后无溢出。
+4. 复盘长摘要允许换行：200%分享页长hash原造成117px溢出，最终完整内容零溢出。
+5. 历史invite模式、分享胜负结果、本地管理的固定统计说明接入双语展示；协议/棋谱原值保持。
+6. 分享410原因改存消息描述符，撤销/过期提示随语言渲染，不再落到通用错误。新增4项原生测试；先红后绿日志保留。
 
-## Next action
-Restore a browser automation session that exposes working viewport controls (verify actual innerWidth/innerHeight before any mobile screenshot), then execute remaining gates above against this branch and the isolated runtime. Do not repeat already-passed baseline tests unless source changes. No production publication authorization exists for this task.
+## 原生检查
+- 本轮最终 typecheck：PASS（root/frontend/backend）。
+- 本轮最终 unit：**22 files / 189 tests PASS**。
+- 本轮最终 Vite build：PASS（77 modules）。带 eab686cd4bfbf8a17a8d00e2256475cf962e1361 的独立构建记录及所有产物hash见 BUILD_PROVENANCE.json。
+- API/WS/题库原生回归已于前轮通过，本轮backend/shared未改；新增真实三账号对局、20题、邀请、分享撤销提供现场证据。不把旧脚本通过伪装成本轮重跑。
+- git diff --check：PASS。锁 SHA-256 未变。正常构建不包含验收脚本。
 
-## Rollback
-The original worktree and branch remain untouched. Switch back to the original worktree to inspect the prior version. To roll back in a branch where this feature has been merged, revert only the bilingual feature commits; do not reset/clean, delete databases or overwrite later business logic. Locale preference is display-only and can remain stored. No database migration is needed.
+## 明确未声称通过的项目
+- Safari/iOS真机：NOT_RUN，当前可用浏览器为Chromium；手机为实际尺寸模拟，非真机。
+- 浏览器原生200%菜单/系统字号：NOT_RUN；本轮完成的是精确200%文字重排测试。
+- 实际禁止存储/隐私模式：未做浏览器级测试；原生单测覆盖storage拒绝；正常localStorage刷新/新标签/跨标签已在前轮真实验证。
+- GUI创建/更改新密码与账号领取提交：未自动输入新凭据；浏览器操作规则要求用户接手新凭据输入。既有登录已实际通过，账号领取/保存的底层API回归沿用此前PASS。本轮未把它标成GUI PASS。
+- 未进行真实用户数据操作；所有合成数据和原始SQLite均不进入交付ZIP。
+
+## 复现与回滚
+从锁文件安装后启动真实后端，SRSZQ_DATA_DIR 指向项目 evidence/runtime，SRSZQ_ALLOWED_ORIGINS 精确列出本地4173–4176；普通预览用 npm run preview -w frontend；200%验收环境用 node scripts/dev/serve-i18n-acceptance.mjs，打开 http://127.0.0.1:4176/?textScale=2。
+此 helper 仅服务本地最终构建；请先 npm run build。不得把helper或测试数据库用作生产发布方案。
+
+原始产品工作树与分支保持。需要撤销本轮收尾时 revert eab686cd4bfbf8a17a8d00e2256475cf962e1361；需要撤销整个双语功能时按分支提交顺序逐个revert双语提交，保留后续业务修改。不reset/clean，不删除数据库，不改生产。所有改动仍停留在本地feature分支。

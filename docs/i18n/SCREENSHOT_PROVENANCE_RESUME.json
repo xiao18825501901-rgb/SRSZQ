@@ -1,0 +1,299 @@
+[
+  {
+    "file": "admin_en_mobile.jpg",
+    "actualPixels": [
+      375,
+      1185
+    ],
+    "sha256": "ee86bdd1beecb92b968f367b7a01829cdeea9cb006578881cbb1a90562130509",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "FINAL_local17_en_360x800.jpg",
+    "actualPixels": [
+      344,
+      1136
+    ],
+    "sha256": "ee4ef9c7fc2662408ab617ae45e66c7a93a71baeca6f02c933623be1850cf4cc",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "final fingerprint build"
+  },
+  {
+    "file": "home_en_390x844.jpg",
+    "actualPixels": [
+      375,
+      1064
+    ],
+    "sha256": "d976e450b5bc7a11692d79955e2cd040f1290a4ba4a8ef228f077ce00d364fed",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "local13_en_390x844.jpg",
+    "actualPixels": [
+      375,
+      1211
+    ],
+    "sha256": "a29f6a48ac75428125b805c9a175d0eed011bfd4cce5ede6d92200c416339dd2",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "local13_zh_390x844.jpg",
+    "actualPixels": [
+      375,
+      1119
+    ],
+    "sha256": "50117f099dfd72d2036e936a59a71a47fd9260235e62b7ab1fffc68cf5d9e3b8",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "local17_en_360x800.jpg",
+    "actualPixels": [
+      344,
+      1227
+    ],
+    "sha256": "7a8c60d3daa6328b527ccb87624db0959f4675b68c357394ecbbeb81f7a53d61",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "local17_en_390x844.jpg",
+    "actualPixels": [
+      375,
+      1211
+    ],
+    "sha256": "430816f8bee181367a474c5ff292878fef7c814c352730be00db0cd0087fb1b6",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "local17_zh_360x800.jpg",
+    "actualPixels": [
+      344,
+      1204
+    ],
+    "sha256": "167103721cf1dee6c5437ca5691649705114b1939f926ba8de9b8931af195bfa",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_daily_complete_360.jpg",
+    "actualPixels": [
+      344,
+      802
+    ],
+    "sha256": "95d759b3c5ded8f2790a2043eceacdb28e007e921f4d280328db88aabd6d7876",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_daily_solved_en_360.jpg",
+    "actualPixels": [
+      344,
+      2844
+    ],
+    "sha256": "c2ab2f42c1d461583ff86de6d8efbc6228fc2e87a8025bf4c2262ab3472919a2",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_exit_en_360.jpg",
+    "actualPixels": [
+      354,
+      1979
+    ],
+    "sha256": "370ad76431889733a3825131ce5f72e99c457987522216effb5666eab59fef41",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_friend_game_en_360.jpg",
+    "actualPixels": [
+      354,
+      1979
+    ],
+    "sha256": "11ce185cfa54e11a1a20e939ef201f2ec42caa51fd70381982cc15c95bab5dfb",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_friends_invited_en_360.jpg",
+    "actualPixels": [
+      344,
+      1553
+    ],
+    "sha256": "379abe4f3c8628c688444ad06f40f9ed9c27d47865b3a7ef61be1cc4ac6fc56c",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_home_before.jpg",
+    "actualPixels": [
+      568,
+      1684
+    ],
+    "sha256": "e94431e48ddf03f03684f12bb1f17eb9ffeb7f58381adca0cae2e196242dd449",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_home_en_390.jpg",
+    "actualPixels": [
+      375,
+      2053
+    ],
+    "sha256": "c2ed163bbf52376755628b380dbea3b09e7dd425a143e5a3f4ca852ba96634df",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_home_zh_390.jpg",
+    "actualPixels": [
+      375,
+      1505
+    ],
+    "sha256": "dd4ac10c9fd81a00956049f193b889e45d350045398a4fe1556e3bf2541d7cb3",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_lobby_en_360.jpg",
+    "actualPixels": [
+      344,
+      1146
+    ],
+    "sha256": "4d3ad0407c422759bc318e1a325dc99c45395afbd53445353b6e5e4e890d180a",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_local17_en_360.jpg",
+    "actualPixels": [
+      354,
+      1674
+    ],
+    "sha256": "158c0a850202c30a6ac4f10367b08873ffd9aa39b7f80469b7a247c5464c2976",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_local17_zh_360.jpg",
+    "actualPixels": [
+      344,
+      1458
+    ],
+    "sha256": "e635abdff26315c07eadd91824d23f5b31d5c12b52f92e7afd5b208b57f4b07a",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_settings_zh_360.jpg",
+    "actualPixels": [
+      344,
+      1458
+    ],
+    "sha256": "179340fbffc2a8f5f6f474c0c2e7b5c159de2317e4f6843c721ef63a73ca2f8c",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_setup_en_360.jpg",
+    "actualPixels": [
+      344,
+      1230
+    ],
+    "sha256": "bc49aac3f9643081f6091872e3eb1f970c46bd2e3cd6556400c4eb6fed270769",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_share_revoked_360.jpg",
+    "actualPixels": [
+      360,
+      800
+    ],
+    "sha256": "467496c73f84b84122b14c8ce17344ca082dc0e27744c086f05e3e78cb13fed6",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_shared_cursor8_360.jpg",
+    "actualPixels": [
+      476,
+      2360
+    ],
+    "sha256": "8b4d09c5ef15bca5f7539cfeb1661660243cb14ca0e896f658f5edd72311edbe",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_shared_final_en_360.jpg",
+    "actualPixels": [
+      344,
+      3069
+    ],
+    "sha256": "3d6d4700be3297a8be3c347427ee1970f914b07911773dd462a2dc0a351703f0",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "text200_shared_final_zh_360.jpg",
+    "actualPixels": [
+      344,
+      2403
+    ],
+    "sha256": "639c6f57451a175d2b4db5f2ce9a909c7985f29944560894d3c3801b88802311",
+    "source": "real current application + isolated backend",
+    "textResize": "200% local computed-font harness",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "trio_accountA_390.jpg",
+    "actualPixels": [
+      375,
+      1026
+    ],
+    "sha256": "0a524f12769de3eb1496033e0ac032bcea0ea9cd6bd4c7b371b86588efe1735e",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  },
+  {
+    "file": "trio_accountB.jpg",
+    "actualPixels": [
+      699,
+      1356
+    ],
+    "sha256": "0cc521a436158d1cdb641643a5298f4919eaf9c7c3fd6241c65066a563fd0932",
+    "source": "real current application + isolated backend",
+    "textResize": "100%",
+    "captureStage": "observed during acceptance; see raw JSON for viewport and state"
+  }
+]
