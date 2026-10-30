@@ -9,8 +9,8 @@
   "PatchMerged": true,
   "BackendChanged": false,
   "RulesChanged": false,
-  "ProductionTouched": false,
-  "status": "REQUESTED_LOCAL_ACCEPTANCE_PASS",
+  "ProductionTouched": true,
+  "status": "DEPLOYED_AND_SMOKE_VERIFIED",
   "ScreenshotCount": 24,
   "CodeSHA": "eab686cd4bfbf8a17a8d00e2256475cf962e1361",
   "FinalSHA": "eab686cd4bfbf8a17a8d00e2256475cf962e1361",
@@ -22,5 +22,9 @@
   "ThreeAccountUI": "PASS_3_DISTINCT_ORIGINS_SAME_CHROMIUM",
   "SafariIOS": "NOT_RUN",
   "GUI_NewCredentialEntry": "USER_HANDOFF_REQUIRED_NOT_RUN",
-  "ScreenshotCountThisRound": 27
+  "ScreenshotCountThisRound": 27,
+  "ProductionUrl": "https://srszq.com",
+  "ProductionDeployId": "6ae45b23fd1ffcb46b307278",
+  "DeployedSourceSHA": "fa2fe9af8575dd37217f68071bf03be04cce7a6b",
+  "GithubMainPushed": false
 }
