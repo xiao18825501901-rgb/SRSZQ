@@ -1,0 +1,15 @@
+{
+  "SourcePath": "C:\\Users\\Hp\\Documents\\Codex\\2026-09-06\\files-pasted-by-the-user-srszq\\srszq-bilingual-product-20261030",
+  "BaseSHA": "5712f7cb49dbe9b1bb0ff6942b472fd1493acfd4",
+  "Branch": "feature/bilingual-ui-20261030",
+  "UpstreamReferenceOnly": "1878587c36121ef5805b67d6fb06c1a8aa5d69cc",
+  "preferredArchive": "D:/UserData/Downloads/SRSZQ_Ink_Frontend_Update_Complete/three-player-connect-four",
+  "sourceChoice": "Preferred directory has no git metadata; current clean product worktree has completed interaction polish and subsequent operations documentation. Created independent worktree at current HEAD.",
+  "lockSha256": "d679ef7b3c8683db9fc9a86ec39cdf1cd35697f005263ad164b78ce253d2b9da",
+  "PatchMerged": true,
+  "BackendChanged": false,
+  "RulesChanged": false,
+  "ProductionTouched": false,
+  "status": "IMPLEMENTED_NATIVE_PASS_BROWSER_PARTIAL",
+  "ScreenshotCount": 24
+}

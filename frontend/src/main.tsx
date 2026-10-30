@@ -5,6 +5,7 @@ import './styles/refresh.css';
 import './styles/ink.css';
 import './styles/review.css';
 import './styles/interactions.css';
+import './styles/i18n.css';
 
 
 createRoot(document.getElementById('root')!).render(

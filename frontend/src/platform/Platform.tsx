@@ -1,3 +1,5 @@
+import { tx, encodeMessage, messageText, errorText, formatPercent, getLocale } from "../i18n/core";
+import { useLocale, LanguageSwitcher } from "../i18n/react";
 /** Incremental product shell; uses the existing auth, WebSocket, tutorial and AI services. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -47,182 +49,291 @@ export function useSession(){
  return {user,applyAuth,refresh,clear:()=>setUser(null)};
 }
 /** 登录/建号后要去的地方（例如从“每日一题”被引导过来，建完号回到题目）。 */
-let afterAuthPath='/lobby';
-const setAfterAuth=(p:string)=>{afterAuthPath=p};
-const takeAfterAuth=()=>{const p=afterAuthPath;afterAuthPath='/lobby';return p};
-export function Platform(){
- const route=useRoute(),{user,applyAuth,refresh,clear}=useSession();
- const [busy,setBusy]=useState(false),[err,setErr]=useState(''),[,render]=useState(0);
- useEffect(()=>{void refresh()},[refresh]);
- useEffect(()=>gameLink.subscribe(()=>render(x=>x+1)),[]);
- useEffect(()=>{if(!user)return;gameLink.attach();const off=gameLink.subscribe(()=>{
-   if(gameLink.phase==='game'&&gameLink.game&&route.path!=='/online')route.navigate('/online');
- });return off;},[user?.id,route.path]);
- const auth=async(mode:'login'|'register',email:string,name:string,pwd:string)=>{setBusy(true);setErr('');try{
-  const {data}=mode==='register'?await authApi.register(email,name,pwd):await authApi.login(name||email,pwd);
-  applyAuth(data.token,data.user);route.navigate(data.user.tutorialCompleted?takeAfterAuth():'/tutorial');
- }catch(e){setErr(e instanceof Error?e.message:String(e))}finally{setBusy(false)}};
- // 增量 C：一键创建账号并开始（不需要邮箱/密码；已有会话时服务端返回同一个账号）
- const quickStart=async()=>{setBusy(true);setErr('');try{
-  const {data}=await authApi.quickStart();
-  applyAuth('',data.user);route.navigate(data.user.tutorialCompleted?takeAfterAuth():'/tutorial');
- }catch(e){setErr(e instanceof Error?e.message:String(e))}finally{setBusy(false)}};
- const logout=async()=>{try{await authApi.logout()}catch{}clearAuth();resetSocket();clear();route.navigate('/')};
- const nav=<header className="site-nav"><button className="brand" onClick={()=>route.navigate(user?'/lobby':'/')}>三人四子棋</button><nav aria-label="网站导航">
-  {user&&<button className={route.path==='/lobby'?'nav-active':''} onClick={()=>route.navigate('/lobby')}>大厅</button>}
-  <button className={route.path==='/rules'?'nav-active':''} onClick={()=>route.navigate('/rules')}>怎么玩</button>
-  <button className={route.path==='/ranking'?'nav-active':''} onClick={()=>route.navigate('/ranking')}>排行榜</button>
-  {user?<>{user.role==='ADMIN'&&<button className={route.path==='/admin'?'nav-active':''} onClick={()=>route.navigate('/admin')}>管理</button>}<button className={route.path==='/puzzles'?'nav-active':''} onClick={()=>route.navigate('/puzzles')}>每日一题</button><button className={route.path==='/history'?'nav-active':''} onClick={()=>route.navigate('/history')}>历史复盘</button><button className={route.path==='/friends'?'nav-active':''} onClick={()=>route.navigate('/friends')}>好友</button><button className={route.path==='/me'?'nav-active':''} data-testid="nav-me" onClick={()=>route.navigate('/me')}>{user.provisional?'完善账号':'账号'}</button><span className="nav-rating" aria-label={`积分 ${user.rating}`}>{user.rating}<small>分</small></span><button className="nav-auth" onClick={logout}>退出</button></>:<button className="nav-auth" data-testid="nav-login" onClick={()=>route.navigate('/auth')}>登录</button>}
+let afterAuthPath = '/lobby';
+const setAfterAuth = (p: string) => { afterAuthPath = p; };
+const takeAfterAuth = () => { const p = afterAuthPath; afterAuthPath = '/lobby'; return p; };
+export function Platform() {
+    useLocale();
+    const route = useRoute(), { user, applyAuth, refresh, clear } = useSession();
+    const [busy, setBusy] = useState(false), [err, setErr] = useState(''), [, render] = useState(0);
+    useEffect(() => { void refresh(); }, [refresh]);
+    useEffect(() => gameLink.subscribe(() => render(x => x + 1)), []);
+    useEffect(() => {
+        if (!user)
+            return;
+        gameLink.attach();
+        const off = gameLink.subscribe(() => {
+            if (gameLink.phase === 'game' && gameLink.game && route.path !== '/online')
+                route.navigate('/online');
+        });
+        return off;
+    }, [user?.id, route.path]);
+    const auth = async (mode: 'login' | 'register', email: string, name: string, pwd: string) => {
+        setBusy(true);
+        setErr('');
+        try {
+            const { data } = mode === 'register' ? await authApi.register(email, name, pwd) : await authApi.login(name || email, pwd);
+            applyAuth(data.token, data.user);
+            route.navigate(data.user.tutorialCompleted ? takeAfterAuth() : '/tutorial');
+        }
+        catch (e) {
+            setErr(e instanceof Error ? e.message : String(e));
+        }
+        finally {
+            setBusy(false);
+        }
+    };
+    // 增量 C：一键创建账号并开始（不需要邮箱/密码；已有会话时服务端返回同一个账号）
+    const quickStart = async () => {
+        setBusy(true);
+        setErr('');
+        try {
+            const { data } = await authApi.quickStart();
+            applyAuth('', data.user);
+            route.navigate(data.user.tutorialCompleted ? takeAfterAuth() : '/tutorial');
+        }
+        catch (e) {
+            setErr(e instanceof Error ? e.message : String(e));
+        }
+        finally {
+            setBusy(false);
+        }
+    };
+    const logout = async () => { try {
+        await authApi.logout();
+    }
+    catch { } clearAuth(); resetSocket(); clear(); route.navigate('/'); };
+    const nav = <header className="site-nav"><button className="brand" onClick={() => route.navigate(user ? '/lobby' : '/')}>{getLocale() === "en" ? "SRSZQ" : tx("三人四子棋")}</button><nav aria-label={tx("网站导航")}>
+  {user && <button className={route.path === '/lobby' ? 'nav-active' : ''} onClick={() => route.navigate('/lobby')}>{tx("大厅")}</button>}
+  <button className={route.path === '/rules' ? 'nav-active' : ''} onClick={() => route.navigate('/rules')}>{tx("怎么玩")}</button>
+  <button className={route.path === '/ranking' ? 'nav-active' : ''} onClick={() => route.navigate('/ranking')}>{tx("排行榜")}</button>
+  {user ? <>{user.role === 'ADMIN' && <button className={route.path === '/admin' ? 'nav-active' : ''} onClick={() => route.navigate('/admin')}>{tx("管理")}</button>}<button className={route.path === '/puzzles' ? 'nav-active' : ''} onClick={() => route.navigate('/puzzles')}>{tx("每日一题")}</button><button className={route.path === '/history' ? 'nav-active' : ''} onClick={() => route.navigate('/history')}>{tx("历史复盘")}</button><button className={route.path === '/friends' ? 'nav-active' : ''} onClick={() => route.navigate('/friends')}>{tx("好友")}</button><button className={route.path === '/me' ? 'nav-active' : ''} data-testid="nav-me" onClick={() => route.navigate('/me')}>{user.provisional ? tx("完善账号") : tx("账号")}</button><span className="nav-rating" aria-label={tx("积分 {p0}", { p0: user.rating })}>{user.rating}<small>{tx("分")}</small></span><button className="nav-auth" onClick={logout}>{tx("退出")}</button></> : <button className="nav-auth" data-testid="nav-login" onClick={() => route.navigate('/auth')}>{tx("登录")}</button>}
+ <LanguageSwitcher />
  </nav></header>;
- const wrap=(child:ReactNode,noNav=false)=><div className={`site-page ${noNav?'immersive':''}`}>{!noNav&&nav}{child}</div>;
- const {path}=route;
- if(path==='/start')return wrap(<QuickStartPage busy={busy} err={err} onStart={()=>void quickStart()} onLogin={()=>route.navigate('/auth')}/>);
- if(path==='/me')return user?wrap(<ProfilePage user={user} applyAuth={applyAuth} logout={()=>void logout()}/>):<NeedAccount what="账号设置" onStart={()=>route.navigate('/start')} onLogin={()=>route.navigate('/auth')}/>;
- if(path==='/auth')return wrap(<AuthCard busy={busy} err={err} onAuth={auth}/>);
- if(path==='/rules')return wrap(<HowToPlayContent onBack={()=>route.navigate(user?'/lobby':'/')} onStartTutorial={user&&!user.tutorialCompleted?()=>route.navigate('/tutorial'):undefined}/>);
- if(path==='/ranking')return wrap(<RankingPage onBack={()=>route.navigate(user?'/lobby':'/')}/>);
- if(path==='/friends')return user?wrap(<FriendsPage/>):<RedirectTo to="/auth"/>;
- // 增量 C：未登录点“每日一题”不再弹旧的邮箱/密码注册表，而是引导一键建号（进度要存账号里）。
- if(path==='/puzzles')return user?wrap(<PuzzlePage/>):<NeedAccount what="每日一题的答题进度" onStart={()=>{setAfterAuth('/puzzles');route.navigate('/start')}} onLogin={()=>{setAfterAuth('/puzzles');route.navigate('/auth')}}/>;
- if(path==='/history')return user?wrap(<HistoryPage/>):<RedirectTo to="/auth"/>;
- // P4：管理控制台。入口只对 ADMIN 显示，页面内部再判一次；真正的门禁在服务端每个接口上。
- if(path==='/admin')return user?wrap(<AdminPage user={user}/>):<RedirectTo to="/auth"/>;
- if(path.startsWith('/s/'))return wrap(<SharedReplayPage token={path.slice(3)}/>,true);
- if(path==='/lobby')return !user?<RedirectTo to="/auth"/>:!user.tutorialCompleted?<RedirectTo to="/tutorial"/>:wrap(<Lobby/>);
- if(path==='/tutorial')return user?wrap(<TutorialPage user={user} applyAuth={applyAuth} onDone={()=>route.navigate('/lobby')}/>):<RedirectTo to="/auth"/>;
- if(path==='/online'){
-  if(!user)return <RedirectTo to="/auth"/>;
-  if(!user.tutorialCompleted&&gameLink.phase!=='game'&&gameLink.phase!=='end')return <RedirectTo to="/tutorial"/>;
-  return wrap(<OnlinePage user={user} onExit={()=>route.navigate('/lobby')}/>,gameLink.game?.mode==='online'&&(gameLink.phase==='game'||gameLink.phase==='end'));
- }
- if(path==='/local'||path==='/vsai'||path==='/tutgame')return wrap(<LocalHost mode={path==='/local'?'local':'vsai'} user={user} onExit={()=>route.navigate(user?'/lobby':'/')}/>);
- return wrap(<Landing/>);
+    const wrap = (child: ReactNode, noNav = false) => <div className={`site-page ${noNav ? 'immersive' : ''}`}>{!noNav ? nav : <div className="language-controls-row"><LanguageSwitcher compact /></div>}{child}</div>;
+    const { path } = route;
+    if (path === '/start')
+        return wrap(<QuickStartPage busy={busy} err={errorText(err)} onStart={() => void quickStart()} onLogin={() => route.navigate('/auth')}/>);
+    if (path === '/me')
+        return user ? wrap(<ProfilePage user={user} applyAuth={applyAuth} logout={() => void logout()}/>) : <NeedAccount what={tx("账号设置")} onStart={() => route.navigate('/start')} onLogin={() => route.navigate('/auth')}/>;
+    if (path === '/auth')
+        return wrap(<AuthCard busy={busy} err={errorText(err)} onAuth={auth}/>);
+    if (path === '/rules')
+        return wrap(<HowToPlayContent onBack={() => route.navigate(user ? '/lobby' : '/')} onStartTutorial={user && !user.tutorialCompleted ? () => route.navigate('/tutorial') : undefined}/>);
+    if (path === '/ranking')
+        return wrap(<RankingPage onBack={() => route.navigate(user ? '/lobby' : '/')}/>);
+    if (path === '/friends')
+        return user ? wrap(<FriendsPage />) : <RedirectTo to="/auth"/>;
+    // 增量 C：未登录点“每日一题”不再弹旧的邮箱/密码注册表，而是引导一键建号（进度要存账号里）。
+    if (path === '/puzzles')
+        return user ? wrap(<PuzzlePage />) : <NeedAccount what={tx("每日一题的答题进度")} onStart={() => { setAfterAuth('/puzzles'); route.navigate('/start'); }} onLogin={() => { setAfterAuth('/puzzles'); route.navigate('/auth'); }}/>;
+    if (path === '/history')
+        return user ? wrap(<HistoryPage />) : <RedirectTo to="/auth"/>;
+    // P4：管理控制台。入口只对 ADMIN 显示，页面内部再判一次；真正的门禁在服务端每个接口上。
+    if (path === '/admin')
+        return user ? wrap(<AdminPage user={user}/>) : <RedirectTo to="/auth"/>;
+    if (path.startsWith('/s/'))
+        return wrap(<SharedReplayPage token={path.slice(3)}/>, true);
+    if (path === '/lobby')
+        return !user ? <RedirectTo to="/auth"/> : !user.tutorialCompleted ? <RedirectTo to="/tutorial"/> : wrap(<Lobby />);
+    if (path === '/tutorial')
+        return user ? wrap(<TutorialPage user={user} applyAuth={applyAuth} onDone={() => route.navigate('/lobby')}/>) : <RedirectTo to="/auth"/>;
+    if (path === '/online') {
+        if (!user)
+            return <RedirectTo to="/auth"/>;
+        if (!user.tutorialCompleted && gameLink.phase !== 'game' && gameLink.phase !== 'end')
+            return <RedirectTo to="/tutorial"/>;
+        return wrap(<OnlinePage user={user} onExit={() => route.navigate('/lobby')}/>, gameLink.game?.mode === 'online' && (gameLink.phase === 'game' || gameLink.phase === 'end'));
+    }
+    if (path === '/local' || path === '/vsai' || path === '/tutgame')
+        return wrap(<LocalHost mode={path === '/local' ? 'local' : 'vsai'} user={user} onExit={() => route.navigate(user ? '/lobby' : '/')}/>);
+    return wrap(<Landing />);
 }
 export default Platform;
-function RedirectTo({to}:{to:string}){useEffect(()=>{window.location.hash='#'+to},[to]);return <div className="loading-page">正在打开…</div>}
-function Landing(){
- const route=useRoute();
- return <main className="welcome-layout">
-  <section className="welcome-copy"><h1>三人四子棋</h1>
+function RedirectTo({ to }: {
+    to: string;
+}) { useLocale(); useEffect(() => { window.location.hash = '#' + to; }, [to]); return <div className="loading-page">{tx("正在打开\u2026")}</div>; }
+function Landing() {
+    useLocale();
+    const route = useRoute();
+    return <main className="welcome-layout">
+  <section className="welcome-copy"><h1>{tx("三人四子棋")}</h1>
    <div className="welcome-columns"><div className="welcome-actions">
-    <button className="btn primary" data-testid="cta-quick-start" onClick={()=>route.navigate('/start')}>创建账号并开始 <span>↗</span></button>
-    <button className="btn" data-testid="cta-local" onClick={()=>route.navigate('/local')}>本地对局 <span>↗</span></button>
-    <button className="btn" onClick={()=>route.navigate('/ranking')}>排行榜 <span>↗</span></button>
+    <button className="btn primary" data-testid="cta-quick-start" onClick={() => route.navigate('/start')}>{tx("创建账号并开始 ")}<span>↗</span></button>
+    <button className="btn" data-testid="cta-local" onClick={() => route.navigate('/local')}>{tx("本地对局 ")}<span>↗</span></button>
+    <button className="btn" onClick={() => route.navigate('/ranking')}>{tx("排行榜 ")}<span>↗</span></button>
    </div><ol className="welcome-rules">
-    <li><span>01</span><p>最先连成四颗子的玩家赢得游戏</p></li>
-    <li><span>02</span><p>三人轮流下完一子为一回合</p></li>
-    <li><span>03</span><p>每回合只有一个玩家拥有连成四颗子的资格，称为胜权</p></li>
+    <li><span>01</span><p>{tx("最先连成四颗子的玩家赢得游戏")}</p></li>
+    <li><span>02</span><p>{tx("三人轮流下完一子为一回合")}</p></li>
+    <li><span>03</span><p>{tx("每回合只有一个玩家拥有连成四颗子的资格\uFF0C称为胜权")}</p></li>
    </ol></div>
-   <p className="welcome-more">已有账号？<button className="linklike" data-testid="cta-login" onClick={()=>route.navigate('/auth')}>登录</button></p>
-   <p className="welcome-more">胜权怎么来的？前往 <button className="linklike" onClick={()=>route.navigate('/rules')}>怎么玩</button> 查看详细规则。</p>
+   <p className="welcome-more">{tx("已有账号\uFF1F")}<button className="linklike" data-testid="cta-login" onClick={() => route.navigate('/auth')}>{tx("登录")}</button></p>
+   <p className="welcome-more">{tx("胜权怎么来的\uFF1F前往 ")}<button className="linklike" onClick={() => route.navigate('/rules')}>{tx("怎么玩")}</button>{tx(" 查看详细规则。")}</p>
   </section>
-  <figure className="welcome-board"><Board state={HERO_GAME} disabled decorative showLegal={false} showWinning={false} onCellClick={()=>{}}/></figure>
+  <figure className="welcome-board"><Board state={HERO_GAME} disabled decorative showLegal={false} showWinning={false} onCellClick={() => { }}/></figure>
  </main>;
 }
 function AuthCard({busy,err,onAuth}:{busy:boolean;err:string;onAuth:(m:'login'|'register',e:string,n:string,p:string)=>void}){
+ useLocale();
+
  // 增量 C：注册不再是主路径（首页主 CTA 是一键建号），默认落在“登录”页签；
  // 注册页签保留，老的 /auth 链接与老用户流程不受影响。
  const [mode,setMode]=useState<'login'|'register'>('login'),[email,setEmail]=useState(''),[name,setName]=useState(''),[pwd,setPwd]=useState('');
- return <main className="auth-layout"><div className="auth-ornament"><ColorChip player="A"/><ColorChip player="B"/><ColorChip player="C"/></div><section className="auth-card panel"><h1>{mode==='register'?'初次见面，来下一盘':'欢迎回到棋盘'}</h1>
- <div className="tabs"><button className={mode==='register'?'active':''} onClick={()=>setMode('register')}>注册</button><button className={mode==='login'?'active':''} onClick={()=>setMode('login')}>登录</button></div>
+ return <main className="auth-layout"><div className="auth-ornament"><ColorChip player="A"/><ColorChip player="B"/><ColorChip player="C"/></div><section className="auth-card panel"><h1>{mode==='register'?tx("初次见面，来下一盘"):tx("欢迎回到棋盘")}</h1>
+ <div className="tabs"><button className={mode==='register'?'active':''} onClick={()=>setMode('register')}>{tx("注册")}</button><button className={mode==='login'?'active':''} onClick={()=>setMode('login')}>{tx("登录")}</button></div>
  <form onSubmit={e=>{e.preventDefault();onAuth(mode,email,name,pwd)}}>
- {mode==='register'&&<label className="field"><span>邮箱</span><input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/></label>}
- <label className="field"><span>{mode==='register'?'用户名':'用户名或邮箱'}</span><input required value={name} onChange={e=>setName(e.target.value)} autoComplete="username" placeholder="你的名字"/></label>
- <label className="field"><span>密码</span><input type="password" minLength={6} required value={pwd} onChange={e=>setPwd(e.target.value)} autoComplete={mode==='register'?'new-password':'current-password'} placeholder="至少 6 位"/></label>
- {err&&<p className="error-text" role="alert">{err}</p>}
- <Btn variant="primary" className="wide" loading={busy} feedback={err?'error':'idle'}>{mode==='register'?'注册并开始':'登录'}</Btn>
+ {mode==='register'&&<label className="field"><span>{tx("邮箱")}</span><input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email"/></label>}
+ <label className="field"><span>{mode==='register'?tx("用户名"):tx("用户名或邮箱")}</span><input required value={name} onChange={e=>setName(e.target.value)} autoComplete="username" placeholder={tx("你的名字")}/></label>
+ <label className="field"><span>{tx("密码")}</span><input type="password" minLength={6} required value={pwd} onChange={e=>setPwd(e.target.value)} autoComplete={mode==='register'?'new-password':'current-password'} placeholder={tx("至少 6 位")}/></label>
+ {err&&<p className="error-text" role="alert">{errorText(err)}</p>}
+ <Btn variant="primary" className="wide" loading={busy} feedback={err?'error':'idle'}>{mode==='register'?tx("注册并开始"):tx("登录")}</Btn>
  </form></section></main>;
 }
-const MODES=[{key:'online',title:'在线匹配'},{key:'vsai',title:'人机对战'},{key:'local',title:'离线模式'},{key:'friends',title:'好友对弈'}] as const;
-function Lobby(){const route=useRoute();return <main className="lobby-grid" aria-label="游戏大厅">{MODES.map(m=><button key={m.key} className="mode-card" onClick={()=>route.navigate('/'+m.key)}><ModeArtwork mode={m.key}/><h1>{m.title}</h1></button>)}</main>}
-function Status({value}:{value:string}){const names:Record<string,string>={online:'在线',offline:'离线',playing:'对局中',matching:'匹配中'};return <span className={`status-badge ${value}`}><i/>{names[value]??'离线'}</span>}
-function RankingPage({onBack}:{onBack:()=>void}){
- const [rows,setRows]=useState<Array<PublicUser&{wins:number;games:number;winRate:number}>>([]),[page,setPage]=useState(0),[total,setTotal]=useState(0),[err,setErr]=useState('');
- useEffect(()=>{let alive=true;authApi.ranking(50,page*50).then(({data})=>{if(alive){setRows(data.ranking);setTotal(data.total??data.ranking.length)}}).catch(e=>setErr(String(e)));return()=>{alive=false}},[page]);
- return <main className="data-card panel"><div className="page-heading"><h1>排行榜 <small>仅在线匹配计分</small></h1><button className="text-back" onClick={onBack}>返回</button></div>
- {err&&<p role="alert">{err}</p>}<div className="table-scroll"><table className="ranking-table"><thead><tr><th>排名</th><th>玩家</th><th>积分</th><th>胜 / 场</th><th>胜率</th><th>状态</th></tr></thead>
- <tbody>{rows.map((p,i)=><tr key={p.id}><td><span className={`rank-index rank-${page*50+i+1}`}>{page*50+i+1}</span></td><td><span className="avatar-mark">●</span>{p.username}</td><td><b>{p.rating}</b></td><td>{p.wins} / {p.games}</td><td>{Math.round(p.winRate*100)}%</td><td><Status value={p.onlineStatus}/></td></tr>)}</tbody></table></div>
- {!rows.length&&!err&&<p className="empty-state">还没有比赛记录。</p>}
- <div className="pagination"><span>全部 {total} 位玩家</span><button className="btn" disabled={!page} onClick={()=>setPage(page-1)}>上一页</button><span>{page+1} / {Math.max(1,Math.ceil(total/50))}</span><button className="btn" disabled={(page+1)*50>=total} onClick={()=>setPage(page+1)}>下一页</button></div>
+const MODES = [{ key: 'online', get title() {
+            return tx("在线匹配");
+        } }, { key: 'vsai', get title() {
+            return tx("人机对战");
+        } }, { key: 'local', get title() {
+            return tx("离线模式");
+        } }, { key: 'friends', get title() {
+            return tx("好友对弈");
+        } }] as const;
+function Lobby() { useLocale(); const route = useRoute(); return <main className="lobby-grid" aria-label={tx("游戏大厅")}>{MODES.map(m => <button key={m.key} className="mode-card" onClick={() => route.navigate('/' + m.key)}><ModeArtwork mode={m.key}/><h1>{m.title}</h1></button>)}</main>; }
+function Status({ value }: {
+    value: string;
+}) { useLocale(); const names: Record<string, string> = { online: tx("在线"), offline: tx("离线"), playing: tx("对局中"), matching: tx("匹配中") }; return <span className={`status-badge ${value}`}><i />{names[value] ?? tx("离线")}</span>; }
+function RankingPage({ onBack }: {
+    onBack: () => void;
+}) {
+    useLocale();
+    const [rows, setRows] = useState<Array<PublicUser & {
+        wins: number;
+        games: number;
+        winRate: number;
+    }>>([]), [page, setPage] = useState(0), [total, setTotal] = useState(0), [err, setErr] = useState('');
+    useEffect(() => { let alive = true; authApi.ranking(50, page * 50).then(({ data }) => { if (alive) {
+        setRows(data.ranking);
+        setTotal(data.total ?? data.ranking.length);
+    } }).catch(e => setErr(String(e))); return () => { alive = false; }; }, [page]);
+    return <main className="data-card panel"><div className="page-heading"><h1>{tx("排行榜 ")}<small>{tx("仅在线匹配计分")}</small></h1><button className="text-back" onClick={onBack}>{tx("返回")}</button></div>
+ {err && <p role="alert">{errorText(err)}</p>}<div className="table-scroll"><table className="ranking-table"><thead><tr><th>{tx("排名")}</th><th>{tx("玩家")}</th><th>{tx("积分")}</th><th>{tx("胜 / 场")}</th><th>{tx("胜率")}</th><th>{tx("状态")}</th></tr></thead>
+ <tbody>{rows.map((p, i) => <tr key={p.id}><td><span className={`rank-index rank-${page * 50 + i + 1}`}>{page * 50 + i + 1}</span></td><td><span className="avatar-mark">●</span>{p.username}</td><td><b>{p.rating}</b></td><td>{p.wins} / {p.games}</td><td>{formatPercent(p.winRate)}</td><td><Status value={p.onlineStatus}/></td></tr>)}</tbody></table></div>
+ {!rows.length && !err && <p className="empty-state">{tx("还没有比赛记录。")}</p>}
+ <div className="pagination"><span>{tx("全部 {p0} 位玩家", { p0: total })}</span><button className="btn" disabled={!page} onClick={() => setPage(page - 1)}>{tx("上一页")}</button><span>{page + 1} / {Math.max(1, Math.ceil(total / 50))}</span><button className="btn" disabled={(page + 1) * 50 >= total} onClick={() => setPage(page + 1)}>{tx("下一页")}</button></div>
  </main>;
 }
 function FriendsPage(){
+ useLocale();
+
  const [name,setName]=useState(''),[message,setMessage]=useState(''),[friends,setFriends]=useState<PublicUser[]>([]),[invs,setInvs]=useState<Array<{id:string;senderName:string;status:string}>>([]);
  const inviteOperation=useAsyncFeedback(`friend-invite:${name.trim()}`);
  const load=useCallback(async()=>{try{const [f,i]=await Promise.all([authApi.friends(),authApi.invitations()]);setFriends(f.data.friends);setInvs(i.data.invitations.filter(x=>x.status==='pending'))}catch{}},[]);
  useEffect(()=>{void load();const t=setInterval(()=>void load(),3000);return()=>clearInterval(t)},[load]);
- async function invite(){const target=name.trim();if(!target)return;const outcome=await inviteOperation.run(async()=>{const response=await authApi.invite(target);await load();return response});if(outcome.ok){setMessage('邀请已发送，等待好友接受。');setName('')}else if('error' in outcome){setMessage(outcome.error instanceof Error?outcome.error.message:String(outcome.error))}}
- return <main className="friends-card panel"><div className="page-heading"><h1>好友与邀请</h1><span>{friends.length} 位好友</span></div>
- <form className="invite-form" onSubmit={e=>{e.preventDefault();void invite()}}><input aria-label="受邀好友用户名" placeholder="输入好友用户名" value={name} onChange={e=>setName(e.target.value)}/><Btn variant="primary" disabled={!name.trim()} loading={inviteOperation.pending} feedback={inviteOperation.feedback}>邀请对弈</Btn></form>
- {message&&<p className="notice" role="status">{message}</p>}<h2>待处理邀请</h2>{!invs.length&&<p className="empty-state">暂无新邀请</p>}
+ async function invite(){const target=name.trim();if(!target)return;const outcome=await inviteOperation.run(async()=>{const response=await authApi.invite(target);await load();return response});if(outcome.ok){setMessage(encodeMessage("邀请已发送，等待好友接受。"));setName('')}else if('error' in outcome){setMessage(outcome.error instanceof Error?outcome.error.message:String(outcome.error))}}
+ return <main className="friends-card panel"><div className="page-heading"><h1>{tx("好友与邀请")}</h1><span>{friends.length} {tx(" 位好友")}</span></div>
+ <form className="invite-form" onSubmit={e=>{e.preventDefault();void invite()}}><input aria-label={tx("受邀好友用户名")} placeholder={tx("输入好友用户名")} value={name} onChange={e=>setName(e.target.value)}/><Btn variant="primary" disabled={!name.trim()} loading={inviteOperation.pending} feedback={inviteOperation.feedback}>{tx("邀请对弈")}</Btn></form>
+ {message&&<p className="notice" role="status">{errorText(message)}</p>}<h2>{tx("待处理邀请")}</h2>{!invs.length&&<p className="empty-state">{tx("暂无新邀请")}</p>}
  {invs.map(iv=><InviteDecisionRow key={iv.id} invitation={iv} onReload={load} onMessage={setMessage}/>)}
- <h2>好友</h2>{!friends.length&&<p className="empty-state">邀请朋友，一起落子。</p>}{friends.map(f=><div className="friend-row" key={f.id}><span className="avatar-mark">●</span><strong>{f.username}</strong><Status value={f.onlineStatus}/><button className="btn small" onClick={()=>{setName(f.username)}}>邀请</button></div>)}
+ <h2>{tx("好友")}</h2>{!friends.length&&<p className="empty-state">{tx("邀请朋友，一起落子。")}</p>}{friends.map(f=><div className="friend-row" key={f.id}><span className="avatar-mark">●</span><strong>{f.username}</strong><Status value={f.onlineStatus}/><button className="btn small" onClick={()=>{setName(f.username)}}>{tx("邀请")}</button></div>)}
  </main>;
 }
 function InviteDecisionRow({invitation,onReload,onMessage}:{invitation:{id:string;senderName:string};onReload:()=>Promise<void>;onMessage:(message:string)=>void}){
+ useLocale();
+
  const [decision,setDecision]=useState<'accept'|'reject'|null>(null);
  const operation=useAsyncFeedback(`friend-decision:${invitation.id}`);
- const answer=async(yes:boolean)=>{const selected=yes?'accept':'reject';setDecision(selected);const outcome=await operation.run(async()=>{const response=yes?await authApi.acceptInvite(invitation.id):await authApi.rejectInvite(invitation.id);await onReload();return response});if(outcome.ok){onMessage(yes?'已接受好友邀请。':'已拒绝好友邀请。')}else if('error' in outcome){onMessage(outcome.error instanceof Error?outcome.error.message:String(outcome.error))}};
- return <div className="friend-row"><span className="avatar-mark">●</span><span>{invitation.senderName} 邀请你对弈</span><Btn variant="primary" size="small" onClick={()=>void answer(true)} disabled={operation.pending} loading={operation.pending&&decision==='accept'} feedback={decision==='accept'?operation.feedback:'idle'}>接受</Btn><Btn size="small" onClick={()=>void answer(false)} disabled={operation.pending} loading={operation.pending&&decision==='reject'} feedback={decision==='reject'?operation.feedback:'idle'}>拒绝</Btn></div>;
+ const answer=async(yes:boolean)=>{const selected=yes?'accept':'reject';setDecision(selected);const outcome=await operation.run(async()=>{const response=yes?await authApi.acceptInvite(invitation.id):await authApi.rejectInvite(invitation.id);await onReload();return response});if(outcome.ok){onMessage(yes?encodeMessage("已接受好友邀请。"):encodeMessage("已拒绝好友邀请。"))}else if('error' in outcome){onMessage(outcome.error instanceof Error?outcome.error.message:String(outcome.error))}};
+ return <div className="friend-row"><span className="avatar-mark">●</span><span>{invitation.senderName} {tx(" 邀请你对弈")}</span><Btn variant="primary" size="small" onClick={()=>void answer(true)} disabled={operation.pending} loading={operation.pending&&decision==='accept'} feedback={decision==='accept'?operation.feedback:'idle'}>{tx("接受")}</Btn><Btn size="small" onClick={()=>void answer(false)} disabled={operation.pending} loading={operation.pending&&decision==='reject'} feedback={decision==='reject'?operation.feedback:'idle'}>{tx("拒绝")}</Btn></div>;
 }
 function TutorialPage({user,applyAuth,onDone}:{user:PublicUser;applyAuth:(t:string,u:PublicUser)=>void;onDone:()=>void}){
+ useLocale();
+
  const [assignment]=useState(()=>createTutorialAssignment());const [started,setStarted]=useState(false),[finished,setFinished]=useState(false),[error,setError]=useState('');
  const human=humanSeatOf(assignment);
  async function finish(){try{const {data}=await authApi.completeTutorial();applyAuth(getToken()??'',data.user);setFinished(true)}catch(e){setError(String(e))}}
- if(finished||user.tutorialCompleted)return <main className="simple-state panel"><div className="result-stones"><ColorChip player="A"/><ColorChip player="B"/><ColorChip player="C"/></div><h1>准备好正式对弈了</h1><p>新手教学已完成。</p><button className="btn primary" onClick={onDone}>进入大厅</button></main>;
- if(!started)return <main className="tutorial-intro panel"><div className="page-heading"><h1>新手教学</h1><span>一盘练习</span></div><RulesQuickView/><p className="muted">你执{colorName(human)}棋，与两位 AI 练习。完整下完一局即可完成教学，输赢都不影响积分。</p><button className="btn primary" onClick={()=>setStarted(true)}>开始练习</button></main>;
- return <>{error&&<p role="alert">{error}</p>}<App hostTitle="新手教学" presetSeats={assignment} onGameEnd={()=>void finish()} onExit={()=>setStarted(false)} coach={c=>c.thinking?'对手正在思考…':c.round<=5?'前五回合无人拥有胜权，先布局。':c.eligible===c.current?'你拥有胜权，本手成四即可获胜。':`本回合${colorName(c.eligible)}棋有胜权。`}/></>;
+ if(finished||user.tutorialCompleted)return <main className="simple-state panel"><div className="result-stones"><ColorChip player="A"/><ColorChip player="B"/><ColorChip player="C"/></div><h1>{tx("准备好正式对弈了")}</h1><p>{tx("新手教学已完成。")}</p><button className="btn primary" onClick={onDone}>{tx("进入大厅")}</button></main>;
+ if(!started)return <main className="tutorial-intro panel"><div className="page-heading"><h1>{tx("新手教学")}</h1><span>{tx("一盘练习")}</span></div><RulesQuickView/><p className="muted">{tx("你执")}{colorName(human)}{tx("棋，与两位 AI 练习。完整下完一局即可完成教学，输赢都不影响积分。")}</p><button className="btn primary" onClick={()=>setStarted(true)}>{tx("开始练习")}</button></main>;
+ return <>{error&&<p role="alert">{errorText(error)}</p>}<App hostTitle={tx("新手教学")} presetSeats={assignment} onGameEnd={()=>void finish()} onExit={()=>setStarted(false)} coach={c=>c.thinking?tx("对手正在思考…"):c.round<=5?tx("前五回合无人拥有胜权，先布局。"):c.eligible===c.current?tx("你拥有胜权，本手成四即可获胜。"):tx("本回合{p0}棋有胜权。", {p0: colorName(c.eligible)})}/></>;
 }
-function LocalHost({mode,user,onExit}:{mode:'local'|'vsai';user:PublicUser|null;onExit:()=>void}){
- const route=useRoute();const [config,setConfig]=useState<{seats:SeatConfigs;size:BoardSize}|null>(null);
- if(mode==='vsai'&&user&&!user.tutorialCompleted)return <main className="simple-state panel"><h1>先来一盘新手教学</h1><button className="btn primary" onClick={()=>route.navigate('/tutorial')}>开始教学</button></main>;
- if(!config)return <GameSetup mode={mode} onStart={(seats,size)=>setConfig({seats,size})} onBack={onExit}/>;
- const policy:MatchPolicyContext|undefined=mode==='vsai'&&countHuman(config.seats)===1&&countAI(config.seats)===2?{defenseFastestThreat:true}:undefined;
- return <App key={JSON.stringify(config)} hostTitle={mode==='local'?'离线模式':'人机对战'} initialSize={config.size} presetSeats={config.seats} aiPolicy={policy} onExit={()=>setConfig(null)}/>;
+function LocalHost({ mode, user, onExit }: {
+    mode: 'local' | 'vsai';
+    user: PublicUser | null;
+    onExit: () => void;
+}) {
+    useLocale();
+    const route = useRoute();
+    const [config, setConfig] = useState<{
+        seats: SeatConfigs;
+        size: BoardSize;
+    } | null>(null);
+    if (mode === 'vsai' && user && !user.tutorialCompleted)
+        return <main className="simple-state panel"><h1>{tx("先来一盘新手教学")}</h1><button className="btn primary" onClick={() => route.navigate('/tutorial')}>{tx("开始教学")}</button></main>;
+    if (!config)
+        return <GameSetup mode={mode} onStart={(seats, size) => setConfig({ seats, size })} onBack={onExit}/>;
+    const policy: MatchPolicyContext | undefined = mode === 'vsai' && countHuman(config.seats) === 1 && countAI(config.seats) === 2 ? { defenseFastestThreat: true } : undefined;
+    return <App key={JSON.stringify(config)} hostTitle={mode === 'local' ? tx("离线模式") : tx("人机对战")} initialSize={config.size} presetSeats={config.seats} aiPolicy={policy} onExit={() => setConfig(null)}/>;
 }
-function GameSetup({mode,onStart,onBack}:{mode:'local'|'vsai';onStart:(s:SeatConfigs,n:BoardSize)=>void;onBack:()=>void}){
- const [size,setSize]=useState<BoardSize>(13);const [seats,setSeats]=useState<SeatConfigs>(()=>mode==='local'?{A:{kind:'human'},B:{kind:'human'},C:{kind:'human'}}:{A:{kind:'human'},B:{kind:'ai',level:3},C:{kind:'ai',level:3}});
- const humans=countHuman(seats),ais=countAI(seats);
- return <main className="setup-card panel"><div className="page-heading"><h1>{mode==='local'?'离线模式':'人机对战'}</h1><button className="text-back" onClick={onBack}>返回</button></div>
- <h2>棋盘</h2><div className="size-picker">{([13,17] as BoardSize[]).map(n=><button key={n} className={`size-tile ${n===size?'selected':''}`} onClick={()=>setSize(n)}><b>{n}</b><span>路棋盘</span></button>)}</div>
- <h2>玩家</h2><div className="seat-config-list">{PLAYERS.map(p=><div className="seat-config" key={p}><ColorChip player={p}/><strong>{playerName(p)}</strong>
- <select aria-label={`${colorName(p)}棋玩家类型`} value={seats[p].kind==='human'?'human':String(seats[p].level??3)} onChange={e=>setSeats(s=>({...s,[p]:e.target.value==='human'?{kind:'human'}:{kind:'ai',level:Number(e.target.value) as AILevel}}))}>
- <option value="human">真人</option>{STAR_LEVELS.map(l=><option value={l} key={l}>AI {'★'.repeat(l)}</option>)}</select></div>)}</div>
- <div className="setup-bottom"><span>{humans===0?'至少保留一名真人':mode==='vsai'&&ais===0?'请选择 1–2 位 AI 对手':`${humans} 位真人${ais?' · '+ais+' 位 AI':''}`}</span><button className="btn primary" disabled={humans===0||(mode==='vsai'&&ais===0)} onClick={()=>onStart(seats,size)}>开始对局</button></div>
+function GameSetup({ mode, onStart, onBack }: {
+    mode: 'local' | 'vsai';
+    onStart: (s: SeatConfigs, n: BoardSize) => void;
+    onBack: () => void;
+}) {
+    useLocale();
+    const [size, setSize] = useState<BoardSize>(13);
+    const [seats, setSeats] = useState<SeatConfigs>(() => mode === 'local' ? { A: { kind: 'human' }, B: { kind: 'human' }, C: { kind: 'human' } } : { A: { kind: 'human' }, B: { kind: 'ai', level: 3 }, C: { kind: 'ai', level: 3 } });
+    const humans = countHuman(seats), ais = countAI(seats);
+    return <main className="setup-card panel"><div className="page-heading"><h1>{mode === 'local' ? tx("离线模式") : tx("人机对战")}</h1><button className="text-back" onClick={onBack}>{tx("返回")}</button></div>
+ <h2>{tx("棋盘")}</h2><div className="size-picker">{([13, 17] as BoardSize[]).map(n => <button key={n} className={`size-tile ${n === size ? 'selected' : ''}`} onClick={() => setSize(n)}><b>{n}</b><span>{tx("路棋盘")}</span></button>)}</div>
+ <h2>{tx("玩家")}</h2><div className="seat-config-list">{PLAYERS.map(p => <div className="seat-config" key={p}><ColorChip player={p}/><strong>{playerName(p)}</strong>
+ <select aria-label={tx("{p0}棋玩家类型", { p0: colorName(p) })} value={seats[p].kind === 'human' ? 'human' : String(seats[p].level ?? 3)} onChange={e => setSeats(s => ({ ...s, [p]: e.target.value === 'human' ? { kind: 'human' } : { kind: 'ai', level: Number(e.target.value) as AILevel } }))}>
+ <option value="human">{tx("真人")}</option>{STAR_LEVELS.map(l => <option value={l} key={l}>AI {'★'.repeat(l)}</option>)}</select></div>)}</div>
+ <div className="setup-bottom"><span>{humans === 0 ? tx("至少保留一名真人") : mode === 'vsai' && ais === 0 ? tx("请选择 1\u20132 位 AI 对手") : tx("{p0} 位真人{p1}", { p0: humans, p1: ais ? tx(" \u00B7 {p0} 位 AI", { p0: ais }) : '' })}</span><button className="btn primary" disabled={humans === 0 || (mode === 'vsai' && ais === 0)} onClick={() => onStart(seats, size)}>{tx("开始对局")}</button></div>
  </main>;
 }
 /** 增量 C：一键创建账号并开始。用户不需要输入任何东西。 */
-function QuickStartPage({busy,err,onStart,onLogin}:{busy:boolean;err:string;onStart:()=>void;onLogin:()=>void}){
- const started=useRef(false);
- useEffect(()=>{if(started.current)return;started.current=true;onStart()},[]);
- return <main className="matchmaking-card panel" data-testid="quick-start-page">
-  <h1>{err?'没能创建账号':'正在创建账号…'}</h1>
-  <p className="muted">不需要邮箱和密码。系统会先给你一个随机昵称，之后可以在「账号」里改成你自己的。</p>
-  {err&&<p role="alert" className="rv-alert" data-testid="quick-start-error">{err}</p>}
+function QuickStartPage({ busy, err, onStart, onLogin }: {
+    busy: boolean;
+    err: string;
+    onStart: () => void;
+    onLogin: () => void;
+}) {
+    useLocale();
+    const started = useRef(false);
+    useEffect(() => { if (started.current)
+        return; started.current = true; onStart(); }, []);
+    return <main className="matchmaking-card panel" data-testid="quick-start-page">
+  <h1>{err ? tx("没能创建账号") : tx("正在创建账号\u2026")}</h1>
+  <p className="muted">{tx("不需要邮箱和密码。系统会先给你一个随机昵称\uFF0C之后可以在「账号」里改成你自己的。")}</p>
+  {err && <p role="alert" className="rv-alert" data-testid="quick-start-error">{errorText(err)}</p>}
   <div className="rv-btnrow">
-   {err&&<Btn variant="primary" data-testid="quick-start-retry" onClick={()=>{started.current=false;onStart()}} loading={busy} feedback="error">重试</Btn>}
-   <Btn data-testid="quick-start-login" onClick={onLogin}>已有账号？登录</Btn>
+   {err&&<Btn variant="primary" data-testid="quick-start-retry" onClick={()=>{started.current=false;onStart()}} loading={busy} feedback="error">{tx("重试")}</Btn>}
+   <Btn data-testid="quick-start-login" onClick={onLogin}>{tx("已有账号？登录")}</Btn>
   </div>
  </main>;
 }
-
 /** 需要账号时的提示：只给“创建账号并开始 / 登录”两条路，不弹旧的邮箱密码注册表。 */
-function NeedAccount({what,onStart,onLogin}:{what:string;onStart:()=>void;onLogin:()=>void}){
- return <main className="matchmaking-card panel" data-testid="need-account">
-  <h1>先要一个账号</h1>
-  <p className="muted">{what}需要保存在账号里。</p>
+function NeedAccount({ what, onStart, onLogin }: {
+    what: string;
+    onStart: () => void;
+    onLogin: () => void;
+}) {
+    useLocale();
+    return <main className="matchmaking-card panel" data-testid="need-account"><div className="language-controls-row"><LanguageSwitcher compact /></div>
+  <h1>{tx("先要一个账号")}</h1>
+  <p className="muted">{tx("{p0}需要保存在账号里。", { p0: what })}</p>
   <div className="rv-btnrow">
-   <Btn variant="primary" data-testid="need-account-start" onClick={onStart}>创建账号并开始</Btn>
-   <Btn data-testid="need-account-login" onClick={onLogin}>已有账号？登录</Btn>
+   <Btn variant="primary" data-testid="need-account-start" onClick={onStart}>{tx("创建账号并开始")}</Btn>
+   <Btn data-testid="need-account-login" onClick={onLogin}>{tx("已有账号？登录")}</Btn>
   </div>
  </main>;
 }
-
 /**
  * 增量 C：账号页。临时账号在这里**原地领取**（设置昵称 + 密码），
  * 用的是既有 username 校验器与既有密码 KDF，userId 不变 —— 战绩/积分/好友/历史全部保留。
  */
 function ProfilePage({user,applyAuth,logout}:{user:PublicUser;applyAuth:(t:string,u:PublicUser)=>void;logout:()=>void}){
+ useLocale();
+
  const [name,setName]=useState(user.username);
  const [pwd,setPwd]=useState('');
  const [email,setEmail]=useState(user.email??'');
@@ -230,25 +341,25 @@ function ProfilePage({user,applyAuth,logout}:{user:PublicUser;applyAuth:(t:strin
  const saveOperation=useAsyncFeedback(`claim-account:${user.id}`);
  const submit=async(e:React.FormEvent)=>{e.preventDefault();setErr('');setOk('');
   const outcome=await saveOperation.run(()=>authApi.claimAccount(name,pwd,email.trim()||undefined));
-  if(outcome.ok){applyAuth(getToken()??'',outcome.value.data.user);setOk('已保存。昵称和密码现在归你了，战绩与好友都还在。');setPwd('')}
+  if(outcome.ok){applyAuth(getToken()??'',outcome.value.data.user);setOk(encodeMessage("已保存。昵称和密码现在归你了，战绩与好友都还在。"));setPwd('')}
   else if('error' in outcome){setErr(outcome.error instanceof Error?outcome.error.message:String(outcome.error))}};
  return <main className="rv-page" data-testid="profile-page">
-  <div className="rv-page-head"><h1>账号</h1>
-   <p className="muted">当前昵称 <b data-testid="profile-username">{user.username}</b> · 积分 {user.rating}</p></div>
+  <div className="rv-page-head"><h1>{tx("账号")}</h1>
+   <p className="muted">{tx("当前昵称 ")}<b data-testid="profile-username">{user.username}</b> {tx(" · 积分 ")}{user.rating}</p></div>
   {user.provisional
-   ? <p className="rv-notice" data-testid="profile-provisional">这是系统分配的临时账号。设置昵称和密码后即可长期使用（同一账号，战绩不丢）。</p>
-   : <p className="muted" data-testid="profile-claimed">账号已完善。</p>}
-  <form className="panel" data-testid="claim-form" onSubmit={(e)=>void submit(e)}>
-   <div className="panel-title">完善账号</div>
-   <label className="field"><span>昵称</span><input data-testid="claim-username" value={name} onChange={(e)=>setName(e.target.value)} required minLength={2} maxLength={16}/></label>
-   <label className="field"><span>密码（至少 6 位）</span><input data-testid="claim-password" type="password" value={pwd} onChange={(e)=>setPwd(e.target.value)} required minLength={6}/></label>
-   <label className="field"><span>邮箱（可选，仅用于找回）</span><input data-testid="claim-email" type="email" value={email} onChange={(e)=>setEmail(e.target.value)}/></label>
+            ? <p className="rv-notice" data-testid="profile-provisional">{tx("这是系统分配的临时账号。设置昵称和密码后即可长期使用\uFF08同一账号\uFF0C战绩不丢\uFF09。")}</p>
+            : <p className="muted" data-testid="profile-claimed">{tx("账号已完善。")}</p>}
+  <form className="panel" data-testid="claim-form" onSubmit={(e) => void submit(e)}>
+   <div className="panel-title">{tx("完善账号")}</div>
+   <label className="field"><span>{tx("昵称")}</span><input data-testid="claim-username" value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={16}/></label>
+   <label className="field"><span>{tx("密码\uFF08至少 6 位\uFF09")}</span><input data-testid="claim-password" type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} required minLength={6}/></label>
+   <label className="field"><span>{tx("邮箱\uFF08可选\uFF0C仅用于找回\uFF09")}</span><input data-testid="claim-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}/></label>
    <div className="rv-btnrow">
-    <Btn variant="primary" data-testid="claim-submit" loading={saveOperation.pending} feedback={saveOperation.feedback}>保存</Btn>
-    <Btn type="button" data-testid="profile-logout" onClick={logout}>退出登录</Btn>
+    <Btn variant="primary" data-testid="claim-submit" loading={saveOperation.pending} feedback={saveOperation.feedback}>{tx("保存")}</Btn>
+    <Btn type="button" data-testid="profile-logout" onClick={logout}>{tx("退出登录")}</Btn>
    </div>
-   {err&&<p role="alert" className="rv-alert" data-testid="claim-error">{err}</p>}
-   {ok&&<p className="rv-notice" data-testid="claim-ok">{ok}</p>}
+   {err && <p role="alert" className="rv-alert" data-testid="claim-error">{errorText(err)}</p>}
+   {ok && <p className="rv-notice" data-testid="claim-ok">{messageText(ok)}</p>}
   </form>
  </main>;
 }

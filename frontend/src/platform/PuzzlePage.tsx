@@ -1,3 +1,7 @@
+import { encodeMessage } from "../i18n/core";
+import { errorText } from "../i18n/core";
+import { tx } from "../i18n/core";
+import { useLocale } from "../i18n/react";
 /**
  * 每日训练 Session（Daily Training Session）/ 错题重练。
  *
@@ -26,24 +30,41 @@ import { useAsyncFeedback } from '../interaction/useAsyncFeedback';
 import { isAcceptedPuzzleAttempt } from './puzzleFeedback';
 
 const VERDICT_LABEL: Record<string, string> = {
-  CORRECT: '正确', INCORRECT: '不对', ILLEGAL: '这一手不合法', OPEN: '开放研究题',
+    get CORRECT() {
+        return tx("正确");
+    },
+    get INCORRECT() {
+        return tx("不对");
+    },
+    get ILLEGAL() {
+        return tx("这一手不合法");
+    },
+    get OPEN() {
+        return tx("开放研究题");
+    },
 };
-
 /**
  * 把接口错误翻成用户看得懂的话。只改**显示**：原始错误仍然打到控制台，便于排查。
  */
 function friendlyPuzzleError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/CURRENT_PUZZLE_NOT_SOLVED/.test(msg)) return '先答对当前这道题，才能进入下一题。';
-  if (/STALE_INDEX/.test(msg)) return '进度已经更新过了，已为你同步到最新状态。';
-  if (/not found|HTTP 404/i.test(msg)) return '题目不存在或已更新，请重新加载今日训练。';
-  if (/HTTP 5\d\d|source trajectory missing/i.test(msg)) return '暂时无法判题，请稍后重试。';
-  if (/unauthorized|HTTP 401|HTTP 403/i.test(msg)) return '登录状态已过期，请重新登录后再试。';
-  if (/Failed to fetch|NetworkError|load failed/i.test(msg)) return '提交失败，请检查网络后重试。';
-  return msg;
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/CURRENT_PUZZLE_NOT_SOLVED/.test(msg))
+        return encodeMessage("先答对当前这道题\uFF0C才能进入下一题。");
+    if (/STALE_INDEX/.test(msg))
+        return encodeMessage("进度已经更新过了\uFF0C已为你同步到最新状态。");
+    if (/not found|HTTP 404/i.test(msg))
+        return encodeMessage("题目不存在或已更新\uFF0C请重新加载今日训练。");
+    if (/HTTP 5\d\d|source trajectory missing/i.test(msg))
+        return encodeMessage("暂时无法判题\uFF0C请稍后重试。");
+    if (/unauthorized|HTTP 401|HTTP 403/i.test(msg))
+        return encodeMessage("登录状态已过期\uFF0C请重新登录后再试。");
+    if (/Failed to fetch|NetworkError|load failed/i.test(msg))
+        return encodeMessage("提交失败\uFF0C请检查网络后重试。");
+    return msg;
 }
-
 export function PuzzlePage() {
+ useLocale();
+
   const [session, setSession] = useState<DailySessionView | null>(null);
   const [puzzle, setPuzzle] = useState<PuzzleView | null>(null);
   const [bank, setBank] = useState<{ total: number; byType: Record<string, number>; solverVersion: string } | null>(null);
@@ -186,84 +207,66 @@ export function PuzzlePage() {
       void loadTraining(); // 409 之后把状态拉回服务器真相
     } else {
       // next() 没有领域拒绝器；保留防御分支，避免未来接入拒绝器时误推进。
-      setErr('服务器没有接受下一题请求，请重试。');
+      setErr(encodeMessage("服务器没有接受下一题请求，请重试。"));
     }
   }, [session, complete, loadTraining, nextOperation]);
 
   return (
     <main className="rv-page" data-testid="puzzle-page">
       <div className="rv-page-head">
-        <h1>每日训练</h1>
+        <h1>{tx("每日训练")}</h1>
         <p className="muted" data-testid="puzzle-position">
-          {mode === 'single' ? '错题重练' : session ? '第 ' + session.position + ' / ' + session.total + ' 题' : '正在准备今天的训练…'}
-          {bank && <> · 今日题库 {bank.total} 道</>}
+          {mode === 'single' ? tx("错题重练") : session ? tx("第 {p0} / {p1} 题", { p0: session.position, p1: session.total }) : tx("正在准备今天的训练\u2026")}
+          {bank && <>{tx("\u00B7 今日题库 {p0} 道", { p0: bank.total })}</>}
         </p>
       </div>
-      {err && <p role="alert" className="rv-alert" data-testid="puzzle-error">{err}</p>}
+      {err && <p role="alert" className="rv-alert" data-testid="puzzle-error">{errorText(err)}</p>}
 
-      {complete && (
-        <div className="panel" data-testid="puzzle-complete">
-          <div className="panel-title">今日训练完成</div>
-          <p>今天的 {session?.total ?? 0} 道题已经全部做完（{session?.solvedCount ?? 0} / {session?.total ?? 0}）。明天会有新的训练。</p>
-        </div>
-      )}
+      {complete && (<div className="panel" data-testid="puzzle-complete">
+          <div className="panel-title">{tx("今日训练完成")}</div>
+          <p>{tx("今天的 {p0} 道题已经全部做完\uFF08{p1} / {p2}\uFF09。明天会有新的训练。", { p0: session?.total ?? 0, p1: session?.solvedCount ?? 0, p2: session?.total ?? 0 })}</p>
+        </div>)}
 
-      {!complete && puzzle && displayState && (
-        <div className="rv-puzzle-layout">
+      {!complete && puzzle && displayState && (<div className="rv-puzzle-layout">
           <div className="rv-col-board rv-puzzle-board">
-            <ReviewBoard
-              state={displayState}
-              showNumbers={false}
-              disabled={solved || busy}
-              onCellClick={(r, c) => void submit(r, c)}
-            />
+            <ReviewBoard state={displayState} showNumbers={false} disabled={solved || busy} onCellClick={(r, c) => void submit(r, c)}/>
           </div>
           <aside className="rv-col-aside">
             <div className="panel rv-puzzle-info" data-testid="puzzle-info">
               <div className="rv-row">
                 <span className="rv-tag" data-testid="puzzle-type">{ACCEPTANCE_LABEL[puzzle.acceptanceType] ?? puzzle.acceptanceType}</span>
-                <span className="muted" data-testid="puzzle-round">第 {puzzle.round} 轮 · {playerName(puzzle.actorSeat)}行棋</span>
+                <span className="muted" data-testid="puzzle-round">{tx("第 {p0} 轮 \u00B7 {p1}行棋", { p0: puzzle.round, p1: playerName(puzzle.actorSeat) })}</span>
               </div>
             </div>
 
-            {timeline && copy && (
-              <div className="panel" data-testid="puzzle-timeline" data-round={copy.round} data-eligible={copy.eligible ?? 'none'} data-phase={solved ? 'SOLVED' : 'ANSWERING'}>
-                <div className="panel-title">胜权时间线</div>
+            {timeline && copy && (<div className="panel" data-testid="puzzle-timeline" data-round={copy.round} data-eligible={copy.eligible ?? 'none'} data-phase={solved ? 'SOLVED' : 'ANSWERING'}>
+                <div className="panel-title">{tx("胜权时间线")}</div>
                 <p data-testid="puzzle-timeline-current">{copy.current}</p>
                 <p className="muted" data-testid="puzzle-timeline-next">{copy.next}</p>
-                <VictoryTrack state={displayState} ended={false} thinking={false} />
-              </div>
-            )}
+                <VictoryTrack state={displayState} ended={false} thinking={false}/>
+              </div>)}
 
-            {solved && (
-              <div className="panel rv-verdict" data-testid="puzzle-verdict-panel">
-                <div className="panel-title">判定</div>
-                <p className="rv-verdict rv-verdict-correct" data-testid="puzzle-verdict">正确</p>
-                <p className="muted" data-testid="puzzle-solved-note">你的这一步已经留在棋盘上（{playerName(solvedMove!.seat as 'A' | 'B' | 'C')}）。</p>
-                {result?.explanation && (
-                  <p className="rv-explain" data-testid="puzzle-explanation">
+            {solved && (<div className="panel rv-verdict" data-testid="puzzle-verdict-panel">
+                <div className="panel-title">{tx("判定")}</div>
+                <p className="rv-verdict rv-verdict-correct" role="status" data-testid="puzzle-verdict">{tx("正确")}</p>
+                <p className="muted" data-testid="puzzle-solved-note">{tx("你的这一步已经留在棋盘上\uFF08{p0}\uFF09。", { p0: playerName(solvedMove!.seat as 'A' | 'B' | 'C') })}</p>
+                {result?.explanation && (<p className="rv-explain" data-testid="puzzle-explanation">
                     {explainPuzzle(result.explanation.messageKey, result.explanation.args)}
-                  </p>
-                )}
-              </div>
-            )}
+                  </p>)}
+              </div>)}
 
-            {!solved && wrong && (
-              <div className="panel rv-verdict" data-testid="puzzle-wrong-panel">
-                <p className="rv-verdict rv-verdict-incorrect" data-testid="puzzle-feedback">再想想</p>
-                <p className="muted">这一手不是题目要的答案，题面已经恢复，可以继续试。</p>
-              </div>
-            )}
+            {!solved && wrong && (<div className="panel rv-verdict" data-testid="puzzle-wrong-panel">
+                <p className="rv-verdict rv-verdict-incorrect" data-testid="puzzle-feedback">{tx("再想想")}</p>
+                <p className="muted">{tx("这一手不是题目要的答案\uFF0C题面已经恢复\uFF0C可以继续试。")}</p>
+              </div>)}
 
-            {!solved && !wrong && result && result.verdict !== 'CORRECT' && (
-              <div className="panel rv-verdict" data-testid="puzzle-wrong-panel">
+            {!solved && !wrong && result && result.verdict !== 'CORRECT' && (<div className="panel rv-verdict" data-testid="puzzle-wrong-panel">
                 <p className="rv-verdict rv-verdict-incorrect" data-testid="puzzle-feedback">{VERDICT_LABEL[result.verdict] ?? result.verdict}</p>
-                <p className="muted">再想想。题面没有改变。</p>
-              </div>
-            )}
+                <p className="muted">{tx("再想想。题面没有改变。")}</p>
+              </div>)}
 
             <div className="panel" data-testid="puzzle-today">
-              <div className="panel-title">今日进度</div>
+              <div className="panel-title">{tx("今日进度")}</div>
               <p data-testid="puzzle-today-progress">{session?.solvedCount ?? 0} / {session?.total ?? 0}</p>
               {mode === 'session' ? (
                 <>
@@ -276,35 +279,27 @@ export function PuzzlePage() {
                     feedback={nextOperation.feedback}
                     onClick={() => void nextPuzzle()}
                   >
-                    {complete ? '今日训练完成' : isLastPuzzle ? '完成今日训练' : '下一题'}
+                    {complete ? tx("今日训练完成") : isLastPuzzle ? tx("完成今日训练") : tx("下一题")}
                   </Btn>
-                  {!solved && <p className="muted" data-testid="puzzle-next-hint">答对当前题目后才能进入下一题。</p>}
+                  {!solved && <p className="muted" data-testid="puzzle-next-hint">{tx("答对当前题目后才能进入下一题。")}</p>}
                 </>
               ) : (
-                <Btn className="wide" data-testid="back-to-training" onClick={() => void loadTraining()} disabled={busy} loading={loading}>返回今日训练</Btn>
+                <Btn className="wide" data-testid="back-to-training" onClick={() => void loadTraining()} disabled={busy} loading={loading}>{tx("返回今日训练")}</Btn>
               )}
             </div>
 
             <div className="panel rv-progress" data-testid="puzzle-progress">
-              <div className="panel-title">我的进度</div>
-              <p data-testid="progress-line">
-                已解出 {progress?.solved ?? 0} · 待解 {progress?.failed ?? 0} · 累计尝试 {progress?.totalAttempts ?? 0} / 题库 {progress?.totalPublished ?? 0}
-              </p>
-              {progress && progress.wrong.length > 0 && (
-                <ul className="rv-wrong" data-testid="wrong-list">
-                  {progress.wrong.map((w) => (
-                    <li key={w.puzzleId}>
-                      <span>{ACCEPTANCE_LABEL[w.acceptanceType ?? ''] ?? '题目'}</span>
-                      <span className="muted">{w.attempts} 次未解</span>
-                      <button className="linklike" data-testid="retry-puzzle" onClick={() => void loadSingle(w.puzzleId)} disabled={busy}>重练</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div className="panel-title">{tx("我的进度")}</div>
+              <p data-testid="progress-line">{tx("已解出 {p0} \u00B7 待解 {p1} \u00B7 累计尝试 {p2} / 题库 {p3}", { p0: progress?.solved ?? 0, p1: progress?.failed ?? 0, p2: progress?.totalAttempts ?? 0, p3: progress?.totalPublished ?? 0 })}</p>
+              {progress && progress.wrong.length > 0 && (<ul className="rv-wrong" data-testid="wrong-list">
+                  {progress.wrong.map((w) => (<li key={w.puzzleId}>
+                      <span>{ACCEPTANCE_LABEL[w.acceptanceType ?? ''] ?? tx("题目")}</span>
+                      <span className="muted">{tx("{p0} 次未解", { p0: w.attempts })}</span>
+                      <button className="linklike" data-testid="retry-puzzle" onClick={() => void loadSingle(w.puzzleId)} disabled={busy}>{tx("重练")}</button>
+                    </li>))}
+                </ul>)}
             </div>
           </aside>
-        </div>
-      )}
-    </main>
-  );
+        </div>)}
+    </main>);
 }

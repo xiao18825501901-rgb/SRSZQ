@@ -1,0 +1,59 @@
+/* SRSZQ bilingual presentation only. Existing page / board geometry is preserved. */
+.language-switcher {
+  display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
+  padding: 3px; border-radius: 12px; border: 1px solid rgba(108,78,49,.25);
+  background: rgba(255,251,240,.94); color: #4b3a2c; font-family: inherit;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8),0 2px 6px rgba(58,41,24,.04);
+}
+.language-switcher .language-icon { width: 17px; height: 17px; margin-inline: 7px 4px; flex: none; }
+.language-switcher button {
+  min-width: 46px; min-height: 38px; padding: 6px 10px; margin: 0; border: 0;
+  border-radius: 9px; background: transparent; color: inherit; font-size: 13px;
+  font-weight: 600; line-height: 1.2; white-space: nowrap; box-shadow: none;
+  cursor: pointer; transition: background-color 130ms ease, color 130ms ease, transform 90ms ease;
+}
+.language-switcher button[aria-pressed="true"] { color: #fffaf3; background: #805235; box-shadow: 0 1px 3px #48332024; }
+.language-switcher button:focus-visible { outline: 2px solid #27675e; outline-offset: 3px; }
+.language-switcher button:active { transform: translateY(1px); }
+.language-controls-row { display: flex; justify-content: flex-end; padding: 8px 12px; max-width: 1440px; margin: 0 auto; }
+.site-nav nav { flex-wrap: wrap; }
+.site-nav { gap: 14px; }
+html[lang="en"] .site-nav { align-items: center; }
+html[lang="en"] .site-nav .brand { font-family: inherit; font-size: clamp(21px,2.5vw,27px); letter-spacing: .04em; flex-shrink: 0; }
+html[lang="en"] .site-nav nav { column-gap: clamp(6px,1vw,16px); row-gap: 6px; }
+html[lang="en"] .site-nav nav > button:not(.brand) { font-size: 13px; }
+html[lang="en"] .welcome-copy h1 { white-space: nowrap; font-size: clamp(24px,2.85vw,45px); line-height: 1.25; letter-spacing: -.035em; }
+html[lang="en"] .welcome-actions .btn { white-space: normal; line-height: 1.3; }
+html[lang="en"] .welcome-rules p { line-height: 1.65; }
+html[lang="en"] .mode-card h1 { font-size: clamp(17px,1.6vw,24px); line-height: 1.25; }
+html[lang="en"] :is(.panel-title,.page-heading h1,.track-heading,.track-foot) { letter-spacing: normal; }
+html[lang="en"] :is(.track-heading,.track-foot,.side-title,.setup-bottom,.page-heading,.rv-btnrow) { gap: 8px; flex-wrap: wrap; }
+html[lang="en"] .compact-seat { min-width: 0; }
+html[lang="en"] .compact-seat strong { font-size: 14px; }
+html[lang="en"] .compact-seat small { overflow-wrap: anywhere; }
+html[lang="en"] .position-hints { flex-wrap: wrap; gap: 10px; }
+html[lang="en"] .position-hints label { white-space: normal; }
+html[lang="en"] :is(.game-actions,.replay-buttons,.online-controls) .btn { white-space: normal; line-height: 1.25; }
+html[lang="en"] .rv-table th { white-space: normal; }
+html[lang="en"] .rv-table { min-width: 680px; }
+html[lang="en"] :is(.rv-notice,.rv-alert,.rv-explain,.error-text,.notice) { overflow-wrap: anywhere; }
+html[lang="en"] .turn-clock > span { font-size: 12px; }
+html[lang="en"] .round-track .track-stop > span { font-size: 11px; }
+@media (hover:hover) and (pointer:fine) {
+  .language-switcher button:not([aria-pressed="true"]):hover { background: rgba(128,82,53,.09); }
+}
+@media (max-width:700px) {
+  .language-switcher { padding: 2px; border-radius: 11px; }
+  .language-switcher button { min-height: 40px; padding-inline: 9px; }
+  .language-switcher.compact .language-icon { display: none; }
+  .site-nav { flex-wrap: wrap; }
+  .site-nav nav { min-width: 0; }
+  html[lang="en"] .welcome-copy h1 { font-size: clamp(18px,5.6vw,30px); }
+  html[lang="en"] .welcome-columns { gap: 16px; }
+  html[lang="en"] .welcome-rules p { font-size: 13px; }
+  html[lang="en"] .track-heading { font-size: 14px; }
+  html[lang="en"] .track-foot { font-size: 11px; line-height: 1.45; }
+  html[lang="en"] .seat-config strong { min-width: 45px; }
+  .language-controls-row { padding: 6px 12px 0; }
+}
+@media (prefers-reduced-motion:reduce) { .language-switcher button { transition: none; transform: none !important; } }

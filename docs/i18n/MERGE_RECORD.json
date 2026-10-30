@@ -1,0 +1,177 @@
+[
+  {
+    "path": "frontend/src/App.tsx",
+    "mode": "manual three-way preserving current business logic",
+    "before": "f5ed7033592bd9e686a486c92e6e6582e78ee69e5d2cf3b621a41bbdd26f81ee"
+  },
+  {
+    "path": "frontend/src/components/BacTimelinePanel.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "99d30cff7888dba3f14502b0729dedf21c4054ccd3f618eef578bc705bb6d593"
+  },
+  {
+    "path": "frontend/src/components/Board.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "6c25af5b99baff1ed0502c82532b0e3ce06b4234d5ccdfd991fa3c239a3b20a2"
+  },
+  {
+    "path": "frontend/src/components/Cell.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "a7efbce31632c82e2730bdaac19a5c8fd2fa5bc8bd600f935ccdf9f62e619f60"
+  },
+  {
+    "path": "frontend/src/components/DebugPanel.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "f0b57c8899847343919bbdbda28024a00c03a51240b3ef6a4dcc5a26cd8dd800"
+  },
+  {
+    "path": "frontend/src/components/GameControls.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "531802d5feb77e83e3487a7a678d2c9f745106e203f88b4f80fb0a6b0092cbe6"
+  },
+  {
+    "path": "frontend/src/components/HowToPlay.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "308968149c8594f6c051947bfb4c0afc51e38de8304a0cfaca892eefcfa882ef"
+  },
+  {
+    "path": "frontend/src/components/MatchPanel.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "6393b2e1db1b2355370e10ec9db96d90c0ac1e47b75af0492ab46a3330542deb"
+  },
+  {
+    "path": "frontend/src/components/MobileVictoryTimelineStrip.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "438a1e9f16464214fed1357001c9522e66e7acbe50e89e3ba1c0c851617d6b52"
+  },
+  {
+    "path": "frontend/src/components/Modal.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "fe3d64b72e79e600bfa980f2ff41e20b962701330e1eb5c7c3405a205e25b634"
+  },
+  {
+    "path": "frontend/src/components/ModeArtwork.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "799bcee0d8827d0fab2ba2268edbc45219b140cc7e93172054c70423b849489b"
+  },
+  {
+    "path": "frontend/src/components/MoveHistory.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "0c3e625ce3233640130e5d16315a49642985260a074ede7d6bd7dd869ca8c718"
+  },
+  {
+    "path": "frontend/src/components/PlayerCard.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "d44c85f5e212a25ba65cb45306babd953a93a373511a73ae4d88c7bd8529a7cb"
+  },
+  {
+    "path": "frontend/src/components/RulesModal.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "3e95c5ed03e7324d6b92616e597469527b85a19dd65c97ebbcf1efca2edfabb0"
+  },
+  {
+    "path": "frontend/src/components/SeatSetup.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "2903c1143798f939e5cef9339bac454ae6bf2297fbb169d39569f5ff8eed6249"
+  },
+  {
+    "path": "frontend/src/components/bacTimelineModel.ts",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "7d4407049412ebdf773aaed06212f72b92fe4a073281868d5af1d6670280d2a7"
+  },
+  {
+    "path": "frontend/src/platform/AdminPage.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "8fe93908bedc58f9c77a8f8c51a49697f1faa0daddb96e602f51fff2dfd94b3d"
+  },
+  {
+    "path": "frontend/src/platform/HistoryPage.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "c4ed81e429ca8e474ab7b26810cbe28d9e954a67ec029b81185eb44574167f50"
+  },
+  {
+    "path": "frontend/src/platform/OnlinePage.tsx",
+    "mode": "manual three-way preserving current business logic",
+    "before": "e44307c70ddc8f34526f265382aad31ece8abc51b1e7ea7ff5d381ace5392c52"
+  },
+  {
+    "path": "frontend/src/platform/Platform.tsx",
+    "mode": "manual three-way preserving current business logic",
+    "before": "d917acb664d89f716650e67baa5706887e5e182ec1e7a0fdb0daaf37fd444b68"
+  },
+  {
+    "path": "frontend/src/platform/PuzzlePage.tsx",
+    "mode": "manual three-way preserving current business logic",
+    "before": "6572d6028cfe4fb652b036a61c83d00eab0657fe13422fb82de76aecad7fdab7"
+  },
+  {
+    "path": "frontend/src/platform/ReviewParts.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "bd70b3bf5d01b893e993c11ae75375f7f792f57c30a5e9b666e0a9dc68a52158"
+  },
+  {
+    "path": "frontend/src/platform/SharedReplayPage.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "409ff4abf47d8e14dca44eb7c01bcfc62489000c35aedfc7f92dea3b481bc80c"
+  },
+  {
+    "path": "frontend/src/platform/puzzleTimeline.ts",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "b15e48374dadd5830b54b63eb90c7b36e547e4cbac5ff46a3a1c6722879c205b"
+  },
+  {
+    "path": "frontend/src/platform/ratingNotice.ts",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "990bc0cdd22e6f16638326ecee219df37f57b8f9a1dcdff9b9487b802d062e0f"
+  },
+  {
+    "path": "frontend/src/platform/reviewCopy.ts",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "7a539ea4c16999834dd6cd99664a4760bff27f336ad5a536918ff3427bd80979"
+  },
+  {
+    "path": "frontend/src/playerPresentation.ts",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "72ef980dcf9602d281bc121eb38060c462d3f4b7d5e62a1c94657b0eac0ba1d2"
+  },
+  {
+    "path": "frontend/src/ui.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "96899282837501719d96f65d5f8e8150f91dde95e2a00992221b3664f69551d3"
+  },
+  {
+    "path": "frontend/src/interaction/Icon.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "d36d849cc22aeb87831e05577fcf726486d1b7a7ec33ad55baa81c9d6798de16"
+  },
+  {
+    "path": "frontend/src/interaction/useAsyncFeedback.ts",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "9d00e7da4f55e0380795040db457fb660083b41d3826449855df561dec5c889d"
+  },
+  {
+    "path": "frontend/src/styles/interactions.css",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "157df797b61ae9ffd808552d6b335d389c773b5f1e4b610b091c890728acdd69"
+  },
+  {
+    "path": "frontend/src/styles/i18n.css",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "frontend/src/i18n/core.ts",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "frontend/src/i18n/react.tsx",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "frontend/src/i18n/messages.ts",
+    "mode": "normalized baseline verified / incremental import",
+    "before": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+]
