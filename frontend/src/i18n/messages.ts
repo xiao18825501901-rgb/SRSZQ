@@ -500,5 +500,8 @@ export const EN: Readonly<Record<string, string>> = {
   "你执": "You play ",
   "棋，与两位 AI 练习。完整下完一局即可完成教学，输赢都不影响积分。": ". Practice with two AI opponents. Finish one game to complete the tutorial. The result does not affect your rating.",
   "服务器没有接受下一题请求，请重试。": "The server did not accept the next puzzle request. Please try again.",
+  "这个分享链接已被创建者撤销。": "The creator has revoked this share link.",
+  "这个分享链接已过期。": "This share link has expired.",
+  "默认口径排除 bot 与合成/测试来源（规格 7.1）": "Default counts exclude bots and synthetic/test sources (specification 7.1)",
 };
 

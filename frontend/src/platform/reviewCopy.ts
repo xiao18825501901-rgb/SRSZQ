@@ -102,3 +102,14 @@ export const END_REASON_LABEL: Record<string, string> = {
     },
 };
 export function formatTime(ms: number): string { return formatDateTime(ms); }
+
+/** Translate known mode labels only; keep the stored protocol value untouched. */
+export function modeLabel(mode: string): string {
+    switch (mode) {
+        case 'online': return tx('在线');
+        case 'invite': return tx('好友对弈');
+        case 'local': return tx('离线模式');
+        case 'vsai': return tx('人机对战');
+        default: return mode;
+    }
+}

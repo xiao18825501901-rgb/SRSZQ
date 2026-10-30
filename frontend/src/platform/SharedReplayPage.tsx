@@ -1,5 +1,5 @@
 import { errorText, colorLabel } from "../i18n/core";
-import { tx } from "../i18n/core";
+import { tx, encodeMessage } from "../i18n/core";
 import { useLocale } from "../i18n/react";
 /**
  * 分享链接的只读页面（R06）：按 token 读取**去标识**视图。
@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { BoardSize } from '../../../shared/src/game/types';
 import { API_BASE, type KeyMove } from '../api';
 import { KeyMoveList, MoveTimeline, ReviewBoard, ReviewLayout, buildStateFromMoves } from './ReviewParts';
-import { END_REASON_LABEL, formatTime } from './reviewCopy';
+import { END_REASON_LABEL, OUTCOME_LABEL, formatTime } from './reviewCopy';
 interface SharedView {
     demo: boolean;
     rulesetVersion: string;
@@ -65,7 +65,7 @@ export function SharedReplayPage({ token }: {
                 if (!alive)
                     return;
                 if (!res.ok || !data.shared) {
-                    setErr(res.status === 410 ? tx("这个分享链接已经不可用\uFF08{p0}\uFF09。", { p0: data.error === 'revoked' ? '已被创建者撤销' : '已过期' }) : (data.error ?? `HTTP ${res.status}`));
+                    setErr(res.status === 410 ? encodeMessage(data.error === 'revoked' ? "这个分享链接已被创建者撤销。" : "这个分享链接已过期。") : (data.error ?? `HTTP ${res.status}`));
                     return;
                 }
                 setShared(data.shared);
@@ -102,7 +102,7 @@ export function SharedReplayPage({ token }: {
               <ul className="rv-seats">
                 {shared.seats.map((s) => (<li key={s.seat} data-testid={`shared-seat-${s.seat}`}>
                     <span>{colorLabel(s.seat)}</span>
-                    <span className="muted">{s.outcome} · {s.ratingDelta > 0 ? `+${s.ratingDelta}` : s.ratingDelta} · {s.kind === 'ai' ? 'AI' : tx("玩家")}</span>
+                    <span className="muted">{OUTCOME_LABEL[s.outcome] ?? s.outcome} · {s.ratingDelta > 0 ? `+${s.ratingDelta}` : s.ratingDelta} · {s.kind === 'ai' ? 'AI' : tx("玩家")}</span>
                   </li>))}
               </ul>
               <p className="muted">{tx("重放摘要 {p0} \u00B7 重放校验 {p1}", { p0: shared.finalHash, p1: String(shared.replayOk) })}</p>

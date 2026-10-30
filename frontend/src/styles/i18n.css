@@ -22,7 +22,7 @@ html[lang="en"] .site-nav { align-items: center; }
 html[lang="en"] .site-nav .brand { font-family: inherit; font-size: clamp(21px,2.5vw,27px); letter-spacing: .04em; flex-shrink: 0; }
 html[lang="en"] .site-nav nav { column-gap: clamp(6px,1vw,16px); row-gap: 6px; }
 html[lang="en"] .site-nav nav > button:not(.brand) { font-size: 13px; }
-html[lang="en"] .welcome-copy h1 { white-space: nowrap; font-size: clamp(24px,2.85vw,45px); line-height: 1.25; letter-spacing: -.035em; }
+html[lang="en"] .welcome-copy h1 { white-space: normal; font-size: clamp(24px,2.85vw,45px); line-height: 1.25; letter-spacing: -.035em; }
 html[lang="en"] .welcome-actions .btn { white-space: normal; line-height: 1.3; }
 html[lang="en"] .welcome-rules p { line-height: 1.65; }
 html[lang="en"] .mode-card h1 { font-size: clamp(17px,1.6vw,24px); line-height: 1.25; }
@@ -57,3 +57,14 @@ html[lang="en"] .round-track .track-stop > span { font-size: 11px; }
   .language-controls-row { padding: 6px 12px 0; }
 }
 @media (prefers-reduced-motion:reduce) { .language-switcher button { transition: none; transform: none !important; } }
+
+/* Enlarged text must reflow in either language without widening the page. */
+.welcome-copy { min-width: 0; }
+.welcome-copy h1 { white-space: normal; }
+/* Board-size choices may wrap when the user's text size doubles. */
+.setup-card .size-picker { flex-wrap: wrap; }
+/* Mode titles remain readable at 200% text size on narrow grids. */
+.mode-card { min-width: 0; }
+.mode-card h1 { white-space: normal; overflow-wrap: anywhere; }
+/* Long replay hashes stay legible without forcing the review panel wider. */
+.rv-summary p { overflow-wrap: anywhere; }

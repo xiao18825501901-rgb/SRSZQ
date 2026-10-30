@@ -136,7 +136,7 @@ export function AdminPage({ user }: {
           <div className="panel-title">{tx("队列与活跃房间")}</div>
           <p>{tx("房间 {p0}\uFF08已结束 {p1}\uFF09 \u00B7 WS 连接 {p2} \u00B7 队列中 {p3} \u00B7 进行中记录 {p4}", { p0: ops?.rooms ?? '—', p1: ops?.roomsEnded ?? '—', p2: ops?.wsClients ?? '—', p3: ops?.queuedEntries ?? '—', p4: live?.db.liveGames ?? '—' })}</p>
           <p className="muted">{tx("AI 池 {p0}\uFF08预热 {p1}\uFF09\u00B7 运行中 {p2} \u00B7 排队 {p3} \u00B7 超时 {p4} \u00B7 拒绝 {p5} \u00B7 重建 {p6}", { p0: ops?.worker.poolSize ?? '—', p1: ops?.worker.warm ?? '—', p2: ops?.worker.running ?? '—', p3: ops?.worker.queued ?? '—', p4: ops?.worker.timedOut ?? '—', p5: ops?.worker.rejected ?? '—', p6: ops?.worker.respawns ?? '—' })}</p>
-          <p className="muted">{tx("近 24h\uFF1A结算 {p0} 局 \u00B7 真人开局 {p1} \u00B7 真人终局 {p2}\uFF08{p3}\uFF09", { p0: live?.db.settledToday ?? '—', p1: live?.events.matchStartsHumanOnly.total ?? '—', p2: live?.events.matchFinishesHumanOnly.total ?? '—', p3: live?.events.rule ?? '' })}</p>
+          <p className="muted">{tx("近 24h\uFF1A结算 {p0} 局 \u00B7 真人开局 {p1} \u00B7 真人终局 {p2}\uFF08{p3}\uFF09", { p0: live?.db.settledToday ?? '—', p1: live?.events.matchStartsHumanOnly.total ?? '—', p2: live?.events.matchFinishesHumanOnly.total ?? '—', p3: tx(live?.events.rule ?? '') })}</p>
           <p className="muted">{tx("题库已发布 {p0} 道 \u00B7 数据集运行 {p1} 次", { p0: live?.db.publishedPuzzles ?? '—', p1: live?.db.datasetRuns ?? '—' })}</p>
         </div>
 

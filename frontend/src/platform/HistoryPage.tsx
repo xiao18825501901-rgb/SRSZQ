@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { BoardSize } from '../../../shared/src/game/types';
 import { reviewApi, type HistoryItem, type ReplayView } from '../api';
 import { KeyMoveList, MoveTimeline, ReviewBoard, ReviewLayout, buildStateFromMoves } from './ReviewParts';
-import { END_REASON_LABEL, OUTCOME_LABEL, formatTime } from './reviewCopy';
+import { END_REASON_LABEL, OUTCOME_LABEL, formatTime, modeLabel } from './reviewCopy';
 const PAGE = 10;
 function outcomeClass(o: string): string {
     if (o === 'WIN')
@@ -107,7 +107,7 @@ export function HistoryPage() {
                 <span className={`rv-out ${outcomeClass(it.outcome)}`}>{OUTCOME_LABEL[it.outcome] ?? it.outcome}</span>
                 <span className="muted">{tx("\uFF08{p0} 座\uFF09", { p0: colorLabel(it.seat) })}</span>
               </td>
-              <td>{it.mode === 'online' ? tx("在线") : it.mode}</td>
+              <td>{modeLabel(it.mode)}</td>
               <td>{tx("{p0} 路", { p0: it.boardSize })}</td>
               <td>{END_REASON_LABEL[it.endReason] ?? it.endReason}</td>
               <td>{it.moveCount}</td>
