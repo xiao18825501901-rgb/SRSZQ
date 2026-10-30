@@ -1,0 +1,48 @@
+{
+  "pre": {
+    "scale": 1,
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/api/me"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ws/ticket"
+      }
+    ],
+    "socketConstructions": 1,
+    "workerConstructions": 1,
+    "sentTypes": [],
+    "receivedTypes": [
+      "hello"
+    ],
+    "textSamples": []
+  },
+  "thinkingPre": "三人四子棋\n大厅\n怎么玩\n排行榜\n每日一题\n历史复盘\n好友\n账号\n1190分\n退出\n中文\nEnglish\n‹ 返回\n离线模式\n13 路\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n离线模式\n红棋\n你\n绿棋\nAI ★★★★★\n白棋\nAI ★★★★★\n第 1 回合\nAI 思考中\n当前胜权\n无人\n1\n无\n2\n无\n3\n无\n4\n无\n5\n无\n6\n白\n下一回合 · 无\n你的下次胜权：第 8 回合\n落点／禁手\n0\n胜点\n新游戏\n悔棋\n设置\n棋局日志\n胜权怎么来？",
+  "post": {
+    "scale": 1,
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/api/me"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ws/ticket"
+      }
+    ],
+    "socketConstructions": 1,
+    "workerConstructions": 2,
+    "sentTypes": [],
+    "receivedTypes": [
+      "hello"
+    ],
+    "textSamples": []
+  },
+  "after": {
+    "overflow": -15,
+    "stones": 3,
+    "text": "三人四子棋\n大厅\n怎么玩\n排行榜\n每日一题\n历史复盘\n好友\n账号\n1190分\n退出\n中文\nEnglish\n‹ 返回\n离线模式\n13 路\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n离线模式\n红棋\n你\n绿棋\nAI ★★★★★\n白棋\nAI ★★★★★\n第 2 回合\n轮到红棋\n当前胜权\n无人\n2\n无\n3\n无\n4\n无\n5\n无\n6\n白\n7\n绿\n下一回合 · 无\n你的下次胜权：第 8 回合\n落点／禁手\n0\n胜点\n新游戏\n悔棋\n设置\n棋局日志\n胜权怎么来？"
+  }
+}

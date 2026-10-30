@@ -1,0 +1,343 @@
+[
+  {
+    "move": 1,
+    "tab": "6",
+    "pre": {
+      "clock": "落子剩余11秒",
+      "lang": "zh-CN",
+      "round": "1",
+      "stones": 0
+    },
+    "post": {
+      "round": "1",
+      "stones": 0
+    },
+    "after": {
+      "stones": 1
+    }
+  },
+  {
+    "move": 2,
+    "tab": "5",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "1",
+      "stones": 1
+    },
+    "post": {
+      "round": "1",
+      "stones": 1
+    },
+    "after": {
+      "stones": 2
+    }
+  },
+  {
+    "move": 3,
+    "tab": "4",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "1",
+      "stones": 2
+    },
+    "post": {
+      "round": "1",
+      "stones": 2
+    },
+    "after": {
+      "stones": 3
+    }
+  },
+  {
+    "move": 4,
+    "tab": "6",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "2",
+      "stones": 3
+    },
+    "post": {
+      "round": "2",
+      "stones": 3
+    },
+    "after": {
+      "stones": 4
+    }
+  },
+  {
+    "move": 5,
+    "tab": "5",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "2",
+      "stones": 4
+    },
+    "post": {
+      "round": "2",
+      "stones": 4
+    },
+    "after": {
+      "stones": 5
+    }
+  },
+  {
+    "move": 6,
+    "tab": "4",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "2",
+      "stones": 5
+    },
+    "post": {
+      "round": "2",
+      "stones": 5
+    },
+    "after": {
+      "stones": 6
+    }
+  },
+  {
+    "move": 7,
+    "tab": "6",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "3",
+      "stones": 6
+    },
+    "post": {
+      "round": "3",
+      "stones": 6
+    },
+    "after": {
+      "stones": 7
+    }
+  },
+  {
+    "move": 8,
+    "tab": "5",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "3",
+      "stones": 7
+    },
+    "post": {
+      "round": "3",
+      "stones": 7
+    },
+    "after": {
+      "stones": 8
+    }
+  },
+  {
+    "move": 9,
+    "tab": "4",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "3",
+      "stones": 8
+    },
+    "post": {
+      "round": "3",
+      "stones": 8
+    },
+    "after": {
+      "stones": 9
+    }
+  },
+  {
+    "move": 10,
+    "tab": "6",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "4",
+      "stones": 9
+    },
+    "post": {
+      "round": "4",
+      "stones": 9
+    },
+    "after": {
+      "stones": 10
+    }
+  },
+  {
+    "move": 11,
+    "tab": "5",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "4",
+      "stones": 10
+    },
+    "post": {
+      "round": "4",
+      "stones": 10
+    },
+    "after": {
+      "stones": 11
+    }
+  },
+  {
+    "move": 12,
+    "tab": "4",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "4",
+      "stones": 11
+    },
+    "post": {
+      "round": "4",
+      "stones": 11
+    },
+    "after": {
+      "stones": 12
+    }
+  },
+  {
+    "move": 13,
+    "tab": "6",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "5",
+      "stones": 12
+    },
+    "post": {
+      "round": "5",
+      "stones": 12
+    },
+    "after": {
+      "stones": 13
+    }
+  },
+  {
+    "move": 14,
+    "tab": "5",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "5",
+      "stones": 13
+    },
+    "post": {
+      "round": "5",
+      "stones": 13
+    },
+    "after": {
+      "stones": 14
+    }
+  },
+  {
+    "move": 15,
+    "tab": "4",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "5",
+      "stones": 14
+    },
+    "post": {
+      "round": "5",
+      "stones": 14
+    },
+    "after": {
+      "stones": 15
+    }
+  },
+  {
+    "move": 16,
+    "tab": "6",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "6",
+      "stones": 15
+    },
+    "post": {
+      "round": "6",
+      "stones": 15
+    },
+    "after": {
+      "stones": 16
+    }
+  },
+  {
+    "move": 17,
+    "tab": "5",
+    "pre": {
+      "clock": "Time to move30s",
+      "lang": "en",
+      "round": "6",
+      "stones": 16
+    },
+    "post": {
+      "round": "6",
+      "stones": 16
+    },
+    "after": {
+      "stones": 17
+    }
+  },
+  {
+    "move": 18,
+    "tab": "4",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "6",
+      "stones": 17
+    },
+    "post": {
+      "round": "6",
+      "stones": 17
+    },
+    "after": {
+      "stones": 18
+    }
+  },
+  {
+    "move": 19,
+    "tab": "6",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "7",
+      "stones": 18
+    },
+    "post": {
+      "round": "7",
+      "stones": 18
+    },
+    "after": {
+      "stones": 19
+    }
+  },
+  {
+    "move": 20,
+    "tab": "5",
+    "pre": {
+      "clock": "落子剩余30秒",
+      "lang": "zh-CN",
+      "round": "7",
+      "stones": 19
+    },
+    "post": {
+      "round": "7",
+      "stones": 19
+    },
+    "after": {
+      "stones": 20,
+      "text": "You WinPlay AgainBack to Lobby"
+    }
+  }
+]

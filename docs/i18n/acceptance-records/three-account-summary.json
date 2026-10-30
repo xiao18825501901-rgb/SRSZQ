@@ -1,0 +1,35 @@
+[
+  {
+    "tab": "4",
+    "actionsOrder": "5",
+    "boardOrder": "3",
+    "height": 844,
+    "overflow": -15,
+    "result": "Green winsPlay AgainBack to Lobby",
+    "stones": 20,
+    "timelineOrder": "2",
+    "width": 390
+  },
+  {
+    "tab": "5",
+    "actionsOrder": "5",
+    "boardOrder": "3",
+    "height": 615,
+    "overflow": -15,
+    "result": "You WinPlay AgainBack to Lobby",
+    "stones": 20,
+    "timelineOrder": "2",
+    "width": 714
+  },
+  {
+    "tab": "6",
+    "actionsOrder": "0",
+    "boardOrder": "0",
+    "height": 720,
+    "overflow": -15,
+    "result": "Green winsPlay AgainBack to Lobby",
+    "stones": 20,
+    "timelineOrder": "0",
+    "width": 1280
+  }
+]

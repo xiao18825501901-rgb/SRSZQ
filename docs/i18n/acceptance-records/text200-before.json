@@ -1,0 +1,49 @@
+{
+  "font": "43.7248px",
+  "h": 844,
+  "large": [
+    {
+      "cls": "welcome-copy",
+      "right": 567.9249877929688,
+      "tag": "SECTION"
+    },
+    {
+      "cls": "",
+      "right": 567.9249877929688,
+      "tag": "H1"
+    },
+    {
+      "cls": "welcome-columns",
+      "right": 567.9249877929688,
+      "tag": "DIV"
+    },
+    {
+      "cls": "welcome-rules",
+      "right": 567.9250030517578,
+      "tag": "OL"
+    },
+    {
+      "cls": "",
+      "right": 567.9250030517578,
+      "tag": "LI"
+    },
+    {
+      "cls": "",
+      "right": 567.9250183105469,
+      "tag": "P"
+    },
+    {
+      "cls": "",
+      "right": 567.9250030517578,
+      "tag": "LI"
+    },
+    {
+      "cls": "",
+      "right": 567.9250183105469,
+      "tag": "P"
+    }
+  ],
+  "metrics": "{\"scale\":2,\"requests\":[],\"socketConstructions\":0,\"workerConstructions\":0,\"sentTypes\":[],\"receivedTypes\":[],\"textSamples\":[{\"tag\":\"BUTTON\",\"before\":21,\"after\":42},{\"tag\":\"BUTTON\",\"before\":13,\"after\":26},{\"tag\":\"BUTTON\",\"before\":13,\"after\":26},{\"tag\":\"BUTTON\",\"before\":13,\"after\":26},{\"tag\":\"BUTTON\",\"before\":13,\"after\":26},{\"tag\":\"BUTTON\",\"before\":13,\"after\":26},{\"tag\":\"H1\",\"before\":21.8624,\"after\":43.7248},{\"tag\":\"BUTTON\",\"before\":12,\"after\":24},{\"tag\":\"SPAN\",\"before\":14,\"after\":28},{\"tag\":\"BUTTON\",\"before\":12,\"after\":24},{\"tag\":\"SPAN\",\"before\":14,\"after\":28},{\"tag\":\"BUTTON\",\"before\":12,\"after\":24},{\"tag\":\"SPAN\",\"before\":14,\"after\":28},{\"tag\":\"SPAN\",\"before\":11,\"after\":22},{\"tag\":\"P\",\"before\":13,\"after\":26},{\"tag\":\"SPAN\",\"before\":11,\"after\":22},{\"tag\":\"P\",\"before\":13,\"after\":26},{\"tag\":\"SPAN\",\"before\":11,\"after\":22},{\"tag\":\"P\",\"before\":13,\"after\":26},{\"tag\":\"P\",\"before\":11,\"after\":22},{\"tag\":\"BUTTON\",\"before\":11,\"after\":22},{\"tag\":\"P\",\"before\":11,\"after\":22},{\"tag\":\"BUTTON\",\"before\":11,\"after\":22},{\"tag\":\"SPAN\",\"before\":9,\"after\":18},{\"tag\":\"SPAN\",\"before\":9,\"after\":18},{\"tag\":\"SPAN\",\"before\":9,\"after\":18},{\"tag\":\"SPAN\",\"before\":9,\"after\":18},{\"tag\":\"SPAN\",\"before\":9,\"after\":18},{\"tag\":\"SPAN\",\"before\":9,\"after\":18},{\"tag\":\"SPAN\",\"before\":9,\"after\":18}]}",
+  "overflow": 178,
+  "w": 390
+}

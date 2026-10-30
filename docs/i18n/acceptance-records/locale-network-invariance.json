@@ -1,0 +1,222 @@
+{
+  "before": {
+    "scale": 2,
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/api/me"
+      },
+      {
+        "method": "POST",
+        "path": "/api/login"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ws/ticket"
+      }
+    ],
+    "socketConstructions": 1,
+    "workerConstructions": 0,
+    "sentTypes": [],
+    "receivedTypes": [
+      "hello"
+    ],
+    "textSamples": [
+      {
+        "tag": "BUTTON",
+        "before": 21,
+        "after": 42
+      },
+      {
+        "tag": "BUTTON",
+        "before": 11,
+        "after": 22
+      },
+      {
+        "tag": "BUTTON",
+        "before": 11,
+        "after": 22
+      },
+      {
+        "tag": "BUTTON",
+        "before": 11,
+        "after": 22
+      },
+      {
+        "tag": "BUTTON",
+        "before": 11,
+        "after": 22
+      },
+      {
+        "tag": "BUTTON",
+        "before": 11,
+        "after": 22
+      },
+      {
+        "tag": "BUTTON",
+        "before": 11,
+        "after": 22
+      },
+      {
+        "tag": "BUTTON",
+        "before": 11,
+        "after": 22
+      },
+      {
+        "tag": "SPAN",
+        "before": 16,
+        "after": 32
+      },
+      {
+        "tag": "SMALL",
+        "before": 9,
+        "after": 18
+      },
+      {
+        "tag": "BUTTON",
+        "before": 11,
+        "after": 22
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "H1",
+        "before": 18,
+        "after": 36
+      },
+      {
+        "tag": "H1",
+        "before": 18,
+        "after": 36
+      },
+      {
+        "tag": "H1",
+        "before": 18,
+        "after": 36
+      },
+      {
+        "tag": "H1",
+        "before": 18,
+        "after": 36
+      }
+    ]
+  },
+  "after": {
+    "scale": 2,
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/api/me"
+      },
+      {
+        "method": "POST",
+        "path": "/api/login"
+      },
+      {
+        "method": "POST",
+        "path": "/api/ws/ticket"
+      }
+    ],
+    "socketConstructions": 1,
+    "workerConstructions": 0,
+    "sentTypes": [],
+    "receivedTypes": [
+      "hello"
+    ],
+    "textSamples": [
+      {
+        "tag": "BUTTON",
+        "before": 21,
+        "after": 42
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "SPAN",
+        "before": 16,
+        "after": 32
+      },
+      {
+        "tag": "SMALL",
+        "before": 9,
+        "after": 18
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "BUTTON",
+        "before": 13,
+        "after": 26
+      },
+      {
+        "tag": "H1",
+        "before": 17,
+        "after": 34
+      },
+      {
+        "tag": "H1",
+        "before": 17,
+        "after": 34
+      },
+      {
+        "tag": "H1",
+        "before": 17,
+        "after": 34
+      },
+      {
+        "tag": "H1",
+        "before": 17,
+        "after": 34
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "large": [
+    {
+      "cls": "size-tile ",
+      "right": 402.2375030517578,
+      "tag": "BUTTON",
+      "text": "17× board"
+    },
+    {
+      "cls": "",
+      "right": 384.4375,
+      "tag": "SPAN",
+      "text": "× board"
+    }
+  ],
+  "overflow": 42,
+  "w": 360
+}

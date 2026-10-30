@@ -1,0 +1,31 @@
+{
+  "cards": [
+    {
+      "min": "auto",
+      "titleFont": "34px",
+      "titleWhite": "nowrap",
+      "width": 255.5500030517578
+    },
+    {
+      "min": "auto",
+      "titleFont": "34px",
+      "titleWhite": "nowrap",
+      "width": 356.8125
+    },
+    {
+      "min": "auto",
+      "titleFont": "34px",
+      "titleWhite": "nowrap",
+      "width": 255.5500030517578
+    },
+    {
+      "min": "auto",
+      "titleFont": "34px",
+      "titleWhite": "nowrap",
+      "width": 356.8125
+    }
+  ],
+  "grid": "255.55px 356.812px",
+  "overflow": 284,
+  "w": 360
+}

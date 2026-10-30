@@ -1,0 +1,20 @@
+{
+  "phone13": {
+    "h": 844,
+    "overflow": -15,
+    "points": 169,
+    "w": 390
+  },
+  "phone17": {
+    "h": 844,
+    "overflow": -15,
+    "points": 289,
+    "w": 390
+  },
+  "phone17small": {
+    "h": 800,
+    "overflow": -15,
+    "points": 289,
+    "w": 360
+  }
+}
