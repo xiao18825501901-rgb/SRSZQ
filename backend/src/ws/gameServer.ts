@@ -19,6 +19,7 @@ import { sessionTokenFrom } from '../sessionCookie.js';
 import { WS_CLOSE_REPLACED, WS_TICKET_PROTOCOL_PREFIX, ticketFromProtocolHeader } from '../../../shared/src/product/protocol.js';
 import { MatchmakingQueue, type MatchmakingEntry } from './matchmaking.js';
 import { AiWorkerHost } from '../ai/aiWorkerHost.js';
+import { ChatBanterDeck, validateChatDraft } from '../chat.js';
 import { decideWebSocketOrigin, rejectFrame, SlidingWindowLimiter, WS_MAX_MESSAGE_BYTES, WS_COMMAND_RATE_LIMIT, WS_COMMAND_RATE_WINDOW_MS } from './security.js';
 import {
   buildSettlement,
@@ -159,6 +160,7 @@ interface Room {
   /** P0B：恢复暂停窗口的截止时间（仅 RECOVERY_PAUSED 期间有意义）。 */
   recoveryDeadlineAt?: number;
   recoveryTimer?: ReturnType<typeof setTimeout>;
+  banter: ChatBanterDeck;
 }
 
 /** 可持久化的房间快照（P0B）。只含恢复必需的信息，不含任何连接对象。 */
@@ -542,6 +544,14 @@ export class GameServer {
         await this.handleMoveCommand(client, msg);
         break;
       }
+      case 'chat.send': {
+        await this.handleChatSend(client, msg);
+        break;
+      }
+      case 'chat.sync': {
+        this.handleChatSync(client, msg);
+        break;
+      }
       case 'resume': {
         const gameId = String(msg.gameId ?? '');
         const room = this.rooms.get(gameId);
@@ -690,6 +700,7 @@ export class GameServer {
       revision: 0,
       seq: 0,
       commandQueue: Promise.resolve(),
+      banter: new ChatBanterDeck(),
     };
     this.rooms.set(room.id, room);
     this.db.openLiveGame(room.id, room.members);
@@ -724,6 +735,7 @@ export class GameServer {
           rating: this.ratingPreviewFor(room),
           protocol: { ...PROTOCOL_INFO },
         });
+        this.sendChatHistory(client, room);
         this.logMatchmaking('broadcast_start', {
           queueId, roomId: room.id, userId: h.userId, humanCount: humans.length, aiCount: 3 - humans.length,
         });
@@ -917,6 +929,60 @@ export class GameServer {
     });
   }
 
+  /** Room-chat is persisted by the authoritative server before it is broadcast. */
+  private async handleChatSend(client: Client, msg: Record<string, unknown>): Promise<void> {
+    const room = client.gameId ? this.rooms.get(client.gameId) : undefined;
+    if (!room || room.ended) {
+      this.sendTo(client.ws, { type: 'chat.error', code: 'NO_ACTIVE_GAME', error: 'no active game' });
+      return;
+    }
+    const seat = room.members[client.userId];
+    if (!seat || !room.humanIds.has(client.userId)) {
+      this.sendTo(client.ws, { type: 'chat.error', code: 'NOT_A_PARTICIPANT', error: 'not a participant' });
+      return;
+    }
+    try {
+      const draft = validateChatDraft(msg.draft);
+      const record = this.db.appendChatMessage({
+        roomId: room.id,
+        seat,
+        actorId: client.userId,
+        name: client.username,
+        authorKind: 'human',
+        draft,
+      });
+      if (record.message && record.appended) this.broadcastChat(room, record.message);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : 'CHAT_REJECTED';
+      this.sendTo(client.ws, { type: 'chat.error', code, error: code });
+    }
+  }
+
+  private handleChatSync(client: Client, msg: Record<string, unknown>): void {
+    const room = client.gameId ? this.rooms.get(client.gameId) : undefined;
+    if (!room || !room.members[client.userId] || !room.humanIds.has(client.userId)) {
+      this.sendTo(client.ws, { type: 'chat.error', code: 'NOT_A_PARTICIPANT', error: 'not a participant' });
+      return;
+    }
+    const after = Number(msg.after ?? 0);
+    const limit = Number(msg.limit ?? 100);
+    const messages = this.db.listChatMessages(room.id, Number.isFinite(after) ? after : 0, Number.isFinite(limit) ? limit : 100);
+    this.sendTo(client.ws, { type: 'chat.messages', gameId: room.id, cursor: messages.at(-1)?.seq ?? after, messages });
+  }
+
+  private sendChatHistory(client: Client, room: Room): void {
+    this.sendTo(client.ws, {
+      type: 'chat.messages',
+      gameId: room.id,
+      cursor: this.db.listChatMessages(room.id, 0, 100).at(-1)?.seq ?? 0,
+      messages: this.db.listChatMessages(room.id, 0, 100),
+    });
+  }
+
+  private broadcastChat(room: Room, message: import('../chat.js').ChatMessage): void {
+    this.sendRoomEvent(room, { type: 'chat.messages', gameId: room.id, cursor: message.seq, messages: [message] });
+  }
+
   /**
    * 落子命令入口（P0B）。
    *
@@ -1051,6 +1117,7 @@ export class GameServer {
     const dropped = this.aiHost.cancelUpTo(room.id, room.revision);
     if (dropped > 0) this.logAi({ event: 'ai_queue_cancelled_stale', roomId: room.id, dropped, revision: room.revision });
     this.broadcastRoom(room);
+    this.maybeSendAiBanter(room, seat);
     const c = room.seats[seat].kind === 'human' && room.seats[seat].userId ? this.clients.get(room.seats[seat].userId!) : undefined;
     if (c && c.gameId === room.id) this.sendTo(c.ws, ack);
     if (nextState.status !== 'playing') {
@@ -1058,6 +1125,24 @@ export class GameServer {
       return;
     }
     void this.maybeRunAI(room);
+  }
+
+  private maybeSendAiBanter(room: Room, seat: Seat): void {
+    const info = room.seats[seat];
+    if (room.ended || info.kind !== 'ai' || room.state.status !== 'playing') return;
+    const text = room.banter.next({ roomId: room.id, seat });
+    if (!text) return;
+    try {
+      const record = this.db.appendChatMessage({
+        roomId: room.id,
+        seat,
+        actorId: `ai:${seat}`,
+        name: `${seat} AI`,
+        authorKind: 'ai',
+        draft: { kind: 'text', text, clientMessageId: `banter-${randomUUID()}` },
+      });
+      if (record.message && record.appended) this.broadcastChat(room, record.message);
+    } catch { /* AI banter is cosmetic and must never affect the move. */ }
   }
 
   /**
@@ -1199,6 +1284,7 @@ export class GameServer {
       revision,
       seq,
       commandQueue: Promise.resolve(),
+      banter: new ChatBanterDeck(),
     };
   }
 
@@ -1649,6 +1735,7 @@ export class GameServer {
       rating: this.ratingPreviewFor(room),
       protocol: { ...PROTOCOL_INFO },
     });
+    this.sendChatHistory(client, room);
     this.sendRoomEvent(room, { type: 'player.status', seat, status: 'reconnected' });
     void this.maybeRunAI(room);
   }

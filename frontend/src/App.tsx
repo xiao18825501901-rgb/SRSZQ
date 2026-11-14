@@ -2,7 +2,7 @@ import { errorText } from "./i18n/core";
 import { tx } from "./i18n/core";
 import { useLocale } from "./i18n/react";
 import { Btn } from './ui';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { GameState, Player, BoardSize } from '../../shared/src/game/types';
 import type { MatchPolicyContext, SeatConfigs } from '../../shared/src/ai/types';
@@ -15,6 +15,10 @@ import { MatchPanel, PositionHints, ReplayControls, type MatchSeat } from './com
 import { Modal, ConfirmModal } from './components/Modal';
 import { RulesQuickView } from './components/HowToPlay';
 import { playerName } from './playerPresentation';
+import { SharedMatchLayout } from './matchChat/SharedMatchLayout';
+import { ChatCard } from './matchChat/ChatCard';
+import { BanterDeck, LocalChatService, type AIProfile, type ChatMessage, type ChatTransport, type MatchChatMode, type ChatPlayer } from './matchChat/catalog';
+import { api } from './api';
 export interface CoachContext {
     state: GameState;
     round: number;
@@ -25,6 +29,7 @@ export interface CoachContext {
 }
 export interface PlatformHostProps {
     hostTitle?: string;
+    matchMode?: MatchChatMode;
     presetSeats?: SeatConfigs;
     onExit?: () => void;
     onGameEnd?: (winner: Player | null) => void;
@@ -33,7 +38,7 @@ export interface PlatformHostProps {
     aiPolicy?: MatchPolicyContext;
     initialSize?: BoardSize;
 }
-export default function App({ hostTitle = tx("离线模式"), presetSeats, onExit, onGameEnd, coach, aiPolicy, initialSize = 13 }: PlatformHostProps = {}) {
+export default function App({ hostTitle = tx("离线模式"), matchMode = 'local', presetSeats, onExit, onGameEnd, coach, aiPolicy, initialSize = 13 }: PlatformHostProps = {}) {
     useLocale();
     const game = useGame(initialSize), state = game.state;
     const [seats] = useState(presetSeats ?? allHumanSeats());
@@ -42,8 +47,45 @@ export default function App({ hostTitle = tx("离线模式"), presetSeats, onExi
     const [confirmNew, setConfirmNew] = useState(false), [settings, setSettings] = useState(false), [rules, setRules] = useState(false);
     const [pendingSize, setPendingSize] = useState<BoardSize>(initialSize);
     const [dismissEnd, setDismissEnd] = useState(false), [error, setError] = useState('');
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [banterEnabled, setBanterEnabled] = useState(true);
+    const humanSeats = (['A', 'B', 'C'] as Player[]).filter(p => seats[p].kind === 'human');
+    const [localSeat, setLocalSeat] = useState<Player>(() => humanSeats[0] ?? 'A');
+    const localChat = useRef(new LocalChatService()).current;
+    const banter = useRef(new BanterDeck()).current;
+    const localTransport = useMemo<ChatTransport>(() => ({
+      async send(draft) {
+        const message = localChat.send(matchMode === 'local' ? `local-${state.boardSize}` : 'vsai', localSeat, seats[localSeat].kind === 'human' ? playerName(localSeat) : 'AI', draft);
+        setChatMessages(current => [...current, message]);
+        return { message };
+      },
+      async rewrite(input) {
+        const { data } = await api<{ text: string; mode: string }>('POST', '/api/match-chat/rewrite', { ...input, consent: true });
+        return data;
+      },
+    }), [localChat, localSeat, seats, state.boardSize, matchMode]);
     const ended = useRef(false);
-    const ai = useAIController({ state, seats, placeStone: game.placeStone, passTurn: game.passTurn, enabled: !review && !settings && !confirmNew, policy: aiPolicy });
+    const banterEnabledRef = useRef(true);
+    useEffect(() => { banterEnabledRef.current = banterEnabled; }, [banterEnabled]);
+    const addAiBanter = useCallback((seat: Player) => {
+      const line = banter.next({ roomId: matchMode === 'local' ? `local-${state.boardSize}` : 'vsai', seat, enabled: banterEnabledRef.current });
+      if (!line) return;
+      const message: ChatMessage = {
+        id: `banter-${seat}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        roomId: matchMode === 'local' ? `local-${state.boardSize}` : 'vsai',
+        seq: chatMessages.length + 1,
+        at: Date.now(),
+        seat,
+        name: seats[seat].level === 5 ? 'Sol' : seats[seat].level === 4 ? 'Terra' : `AI ${seats[seat].level}`,
+        authorKind: 'ai',
+        kind: 'text',
+        text: line,
+        rewritten: false,
+        clientMessageId: `banter-${seat}-${Date.now()}`,
+      };
+      setChatMessages(current => [...current, message]);
+    }, [banter, chatMessages.length, matchMode, seats, state.boardSize]);
+    const ai = useAIController({ state, seats, placeStone: game.placeStone, passTurn: game.passTurn, enabled: !review && !settings && !confirmNew, policy: aiPolicy, onAIMove: ({ player }) => addAiBanter(player) });
     useEffect(() => { if (state.status === 'playing') {
         ended.current = false;
         setDismissEnd(false);
@@ -56,7 +98,6 @@ export default function App({ hostTitle = tx("离线模式"), presetSeats, onExi
     const seatViews = useMemo(() => Object.fromEntries((['A', 'B', 'C'] as Player[]).map(p => [p, { kind: seats[p].kind, stars: seats[p].level }])) as Record<Player, MatchSeat>, [seats]);
     useEffect(() => { if (!review && !settings && !confirmNew && state.status === 'playing' && !game.hasLegalMove && !isAISeat(seats, game.current))
         game.passTurn(); }, [state, review, settings, confirmNew, game.hasLegalMove, game.current, game.passTurn, seats]);
-    const humanSeats = (['A', 'B', 'C'] as Player[]).filter(p => seats[p].kind === 'human');
     const mySeat = humanSeats.length === 1 ? humanSeats[0] : undefined;
     function startNew() { ai.cancelAll(); setReview(false); game.newGame(pendingSize); setConfirmNew(false); setSettings(false); setError(''); }
     function undo() {
@@ -74,28 +115,60 @@ export default function App({ hostTitle = tx("离线模式"), presetSeats, onExi
     }
     function toggleReview() { ai.cancelAll(); if (!review)
         setCursor(state.moves.length); setReview(!review); }
-    return <main className="game-shell local-game" data-testid="local-game">
-   <div className="game-topline"><button className="text-back" onClick={onExit}>{tx("\u2039 返回")}</button><span>{hostTitle}</span><span>{tx("{p0} 路", { p0: state.boardSize })}</span></div>
-   <div className="match-layout">
-     <div className="match-board-column"><Board state={view} showLegal={!review && showLegal} showWinning={!review && showWinning} showNumbers={review} disabled={review || !!ai.thinking || ai.currentIsAI || settings || confirmNew} onCellClick={(r, c) => { if (!review && !ai.thinking && !ai.currentIsAI)
-        game.placeStone(r, c); }}/>
-       {review && <div className="board-note">{tx("复盘视图 \u00B7 棋子上的数字为落子手数")}</div>}
-     </div>
-     <aside className="match-sidebar"><div className="side-title"><h1>{hostTitle}</h1>{review && <span className="badge">{tx("复盘")}</span>}</div>
-       <MatchPanel state={view} seats={seatViews} mySeat={mySeat} thinking={!review && !!ai.thinking} ended={view.status !== 'playing'}/>
+    const matchModel = {
+      roomId: matchMode === 'local' ? `local-${state.boardSize}` : 'vsai',
+      mode: matchMode,
+      round: game.round,
+      turn: game.current,
+      boardSize: state.boardSize,
+      mySeat,
+      localSeat,
+      environment: 'website' as const,
+      ended: state.status !== 'playing',
+      players: Object.fromEntries((['A', 'B', 'C'] as Player[]).map(p => {
+        const seat = seats[p];
+        const profile: AIProfile | undefined = seat.level === 5 ? 'sol' : seat.level === 4 ? 'terra' : undefined;
+        const player: ChatPlayer = {
+          name: seat.kind === 'human' ? playerName(p) : seat.level === 5 ? 'Sol' : seat.level === 4 ? 'Terra' : `AI ${seat.level}`,
+          kind: seat.kind,
+          profile,
+        };
+        return [p, player];
+      })) as Record<Player, ChatPlayer>,
+    };
+    return <SharedMatchLayout
+      model={matchModel}
+      timeline={<MatchPanel state={view} seats={seatViews} mySeat={mySeat} thinking={!review && !!ai.thinking} ended={view.status !== 'playing'}/>}
+      board={<>
+        <Board state={view} showLegal={!review && showLegal} showWinning={!review && showWinning} showNumbers={review} disabled={review || !!ai.thinking || ai.currentIsAI || settings || confirmNew} onCellClick={(r, c) => { if (!review && !ai.thinking && !ai.currentIsAI)
+          game.placeStone(r, c); }}/>
+        {review && <div className="board-note">{tx("复盘视图 \u00B7 棋子上的数字为落子手数")}</div>}
+      </>}
+      chat={<ChatCard
+        model={matchModel}
+        messages={chatMessages}
+        transport={localTransport}
+        localSeat={localSeat}
+        onLocalSeatChange={setLocalSeat}
+        banterEnabled={banterEnabled}
+        onBanterChange={setBanterEnabled}
+      />}
+      toolbar={<>
        <PositionHints state={view} showLegal={showLegal} showWinning={showWinning} onLegal={setShowLegal} onWinning={setShowWinning}/>
        <div className="game-actions"><Btn type="button" variant="primary" icon="plus" onClick={() => { setPendingSize(state.boardSize); setConfirmNew(true); }}>{tx("新游戏")}</Btn><Btn type="button" icon="undo" onClick={undo} disabled={!state.moves.length}>{tx("悔棋")}</Btn><Btn type="button" icon="settings" onClick={() => { setPendingSize(state.boardSize); setSettings(true); }}>{tx("设置")}</Btn></div>
        <ReplayControls active={review} index={cursor} total={state.moves.length} onToggle={toggleReview} onIndex={setCursor} onReturn={() => setReview(false)}/>
        {coach && <div className="coach-note">{coach({ state, round: game.round, current: game.current, eligible: game.eligible, currentIsAI: ai.currentIsAI, thinking: !!ai.thinking })}</div>}
        {error && <p role="alert">{errorText(error)}</p>}
        <button className="linklike subtle" onClick={() => setRules(true)}>{tx("胜权怎么来\uFF1F")}</button>
-     </aside>
-   </div>
-   <ConfirmModal open={confirmNew} title={tx("开始新游戏？")} message={tx("当前棋局将清空，棋盘与对手设置保持不变。")} onConfirm={startNew} onCancel={()=>setConfirmNew(false)}/>
+      </>}
+      overlays={<>
+       <div className="game-topline"><button className="text-back" onClick={onExit}>{tx("\u2039 返回")}</button><span>{hostTitle}</span><span>{tx("{p0} 路", { p0: state.boardSize })}</span></div>
+       <ConfirmModal open={confirmNew} title={tx("开始新游戏？")} message={tx("当前棋局将清空，棋盘与对手设置保持不变。")} onConfirm={startNew} onCancel={()=>setConfirmNew(false)}/>
     <Modal open={settings} title={tx("棋盘设置")} onClose={()=>setSettings(false)} footer={<><Btn data-dialog-cancel onClick={()=>setSettings(false)}>{tx("取消")}</Btn><Btn variant="primary" icon="plus" onClick={startNew}>{tx("开始新局")}</Btn></>}>
       <div className="size-picker">{([13,17] as BoardSize[]).map(n=><Btn className={pendingSize===n?'selected':''} aria-pressed={pendingSize===n} key={n} onClick={()=>setPendingSize(n)}>{tx("{p0} 路", {p0:n})}</Btn>)}</div><p className="muted">{tx("更换棋盘会开始一盘新对局。")}</p>
    </Modal>
    <Modal open={rules} title={tx("胜权规则")} onClose={()=>setRules(false)}><RulesQuickView/></Modal>
     <Modal open={state.status!=='playing'&&!dismissEnd&&!review} title={state.winner?tx("{p0}获胜", {p0: playerName(state.winner)}):tx("和棋")} onClose={()=>setDismissEnd(true)} footer={<><Btn data-dialog-cancel icon="history" onClick={()=>{setDismissEnd(true);setReview(true);setCursor(state.moves.length)}}>{tx("查看棋局")}</Btn><Btn variant="primary" icon="replay" onClick={startNew}>{tx("再来一局")}</Btn></>}><p>{state.winner?tx("本次落子连成四子，对局结束。"):tx("棋盘已满，对局结束。")}</p></Modal>
- </main>;
+      </>}
+    />;
 }

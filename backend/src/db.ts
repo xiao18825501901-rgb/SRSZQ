@@ -5,6 +5,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import type { User } from './models.js';
+import type { ChatAppendInput, ChatMessage } from './chat.js';
+import { chatPayloadDigest } from './chat.js';
 import { settlementDigest, type SettlementPlan, type ParticipantOutcome } from '../../shared/src/product/resultModel.js';
 import { type ConsentKind, type ConsentRecord } from '../../shared/src/product/consent.js';
 import { type DatasetCandidate } from '../../shared/src/product/dataset.js';
@@ -341,6 +343,15 @@ export interface Db {
   setInvitationStatus(id: string, status: 'accepted' | 'rejected'): void;
   addFriends(a: string, b: string): void;
   listFriends(userId: string): string[];
+  /** 局内聊天：先持久化再广播。房间成员和座位由 GameServer 在调用前验证。 */
+  appendChatMessage(input: ChatAppendInput): {
+    appended: boolean;
+    duplicate: boolean;
+    conflict: boolean;
+    message: ChatMessage | null;
+  };
+  listChatMessages(roomId: string, afterSeq?: number, limit?: number): ChatMessage[];
+  createChatReport(input: { roomId: string; messageId: string; reporterId: string; reason: string }): { reportId: string; createdAt: number };
   close(): void;
 }
 
@@ -685,6 +696,37 @@ export function openDb(path: string): Db {
     CREATE TABLE IF NOT EXISTS live_games (
       game_id TEXT PRIMARY KEY,
       seats_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      seat TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      author_kind TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      text TEXT,
+      sticker_id TEXT,
+      rewritten INTEGER NOT NULL DEFAULT 0,
+      client_message_id TEXT NOT NULL,
+      payload_digest TEXT NOT NULL,
+      UNIQUE (room_id, actor_id, client_message_id),
+      UNIQUE (room_id, seq)
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_room_seq ON chat_messages (room_id, seq);
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_expires ON chat_messages (expires_at);
+    CREATE TABLE IF NOT EXISTS chat_reports (
+      id TEXT PRIMARY KEY,
+      room_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      reporter_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'OPEN',
       created_at INTEGER NOT NULL
     );
   `);
@@ -1783,6 +1825,112 @@ export function openDb(path: string): Db {
         try { raw.exec('ROLLBACK'); } catch { /* 事务已不在：原始错误更重要 */ }
         throw err;
       }
+    },
+    appendChatMessage(input) {
+      const now = input.now ?? Date.now();
+      const ttlMs = input.ttlMs ?? 24 * 60 * 60 * 1000;
+      const digest = chatPayloadDigest(input.draft);
+      const existing = raw
+        .prepare('SELECT id, room_id, seq, at, expires_at, seat, actor_id, name, author_kind, kind, text, sticker_id, rewritten, client_message_id FROM chat_messages WHERE room_id = ? AND actor_id = ? AND client_message_id = ?')
+        .get(input.roomId, input.actorId, input.draft.clientMessageId) as Record<string, unknown> | undefined;
+      if (existing) {
+        const message = {
+          id: String(existing.id), roomId: String(existing.room_id), seq: Number(existing.seq),
+          at: Number(existing.at), seat: String(existing.seat) as ChatMessage['seat'],
+          actorId: String(existing.actor_id), name: String(existing.name),
+          authorKind: String(existing.author_kind) as ChatMessage['authorKind'],
+          kind: String(existing.kind) as ChatMessage['kind'],
+          text: existing.text == null ? undefined : String(existing.text),
+          stickerId: existing.sticker_id == null ? undefined : String(existing.sticker_id),
+          rewritten: Number(existing.rewritten) === 1,
+          clientMessageId: String(existing.client_message_id),
+        };
+        const appendedDigest = raw
+          .prepare('SELECT payload_digest FROM chat_messages WHERE id = ?')
+          .get(String(existing.id)) as { payload_digest?: string } | undefined;
+        const same = appendedDigest?.payload_digest === digest;
+        return { appended: false, duplicate: same, conflict: !same, message: same ? message : message };
+      }
+      const last = raw
+        .prepare('SELECT MAX(at) AS last FROM chat_messages WHERE room_id = ? AND actor_id = ?')
+        .get(input.roomId, input.actorId) as { last?: number | null } | undefined;
+      if (now - Number(last?.last ?? -Infinity) < 1500) {
+        throw new Error('RATE_LIMIT');
+      }
+      const recent = raw
+        .prepare('SELECT COUNT(*) AS n FROM chat_messages WHERE room_id = ? AND actor_id = ? AND at > ?')
+        .get(input.roomId, input.actorId, now - 60_000) as { n?: number } | undefined;
+      if (Number(recent?.n ?? 0) >= 20) throw new Error('RATE_LIMIT');
+      const seq = Number((raw.prepare('SELECT COALESCE(MAX(seq),0) AS seq FROM chat_messages WHERE room_id = ?')
+        .get(input.roomId) as { seq?: number }).seq ?? 0) + 1;
+      const id = input.messageId ?? randomUUID();
+      raw.exec('BEGIN IMMEDIATE');
+      try {
+        raw.prepare(
+          `INSERT INTO chat_messages
+            (id,room_id,seq,at,expires_at,seat,actor_id,name,author_kind,kind,text,sticker_id,rewritten,client_message_id,payload_digest)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        ).run(
+          id, input.roomId, seq, now, now + ttlMs,
+          input.seat, input.actorId, String(input.name || input.seat).slice(0, 60),
+          input.authorKind, input.draft.kind,
+          input.draft.text ?? null, input.draft.stickerId ?? null,
+          input.draft.rewritten === true ? 1 : 0,
+          input.draft.clientMessageId, digest,
+        );
+        raw.exec('COMMIT');
+      } catch (error) {
+        try { raw.exec('ROLLBACK'); } catch { /* transaction may already be gone */ }
+        throw error;
+      }
+      return {
+        appended: true,
+        duplicate: false,
+        conflict: false,
+        message: {
+          id,
+          roomId: input.roomId,
+          seq,
+          at: now,
+          seat: input.seat,
+          actorId: input.actorId,
+          name: String(input.name || input.seat).slice(0, 60),
+          authorKind: input.authorKind,
+          kind: input.draft.kind,
+          text: input.draft.text,
+          stickerId: input.draft.stickerId,
+          rewritten: input.draft.rewritten === true,
+          clientMessageId: input.draft.clientMessageId,
+        },
+      };
+    },
+    listChatMessages(roomId, afterSeq = 0, limit = 100) {
+      const safeLimit = Math.max(1, Math.min(limit, 100));
+      const rows = raw
+        .prepare('SELECT id, room_id, seq, at, seat, actor_id, name, author_kind, kind, text, sticker_id, rewritten, client_message_id FROM chat_messages WHERE room_id = ? AND seq > ? AND expires_at > ? ORDER BY seq ASC LIMIT ?')
+        .all(roomId, afterSeq, Date.now(), safeLimit) as Array<Record<string, unknown>>;
+      return rows.map((r) => ({
+        id: String(r.id),
+        roomId: String(r.room_id),
+        seq: Number(r.seq),
+        at: Number(r.at),
+        seat: String(r.seat) as ChatMessage['seat'],
+        actorId: String(r.actor_id),
+        name: String(r.name),
+        authorKind: String(r.author_kind) as ChatMessage['authorKind'],
+        kind: String(r.kind) as ChatMessage['kind'],
+        text: r.text == null ? undefined : String(r.text),
+        stickerId: r.sticker_id == null ? undefined : String(r.sticker_id),
+        rewritten: Number(r.rewritten) === 1,
+        clientMessageId: String(r.client_message_id),
+      }));
+    },
+    createChatReport(input) {
+      const reportId = randomUUID();
+      const createdAt = Date.now();
+      raw.prepare('INSERT INTO chat_reports (id,room_id,message_id,reporter_id,reason,status,created_at) VALUES (?,?,?,?,?,?,?)')
+        .run(reportId, input.roomId, input.messageId, input.reporterId, String(input.reason).slice(0, 80), 'OPEN', createdAt);
+      return { reportId, createdAt };
     },
     close() {
       raw.close();

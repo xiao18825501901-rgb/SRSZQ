@@ -22,6 +22,7 @@ import {
   type PersistedEvent, type GameState, type Player, type Puzzle, type ReplayOutcome, type ReviewMove, type ThreatWindow,
 } from '../../shared/src/index.js';
 import { PUZZLE_BANK, PUZZLE_BANK_META, PUZZLE_TRAJECTORIES_PACKED } from '../../shared/src/product/puzzleBank.generated.js';
+import { rewriteText } from './rewrite.js';
 
 export interface ApiContext {
   db: Db;
@@ -405,6 +406,7 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
   const publicShareLimiter = new SlidingWindowLimiter(PUBLIC_SHARE_RATE_LIMIT, PUBLIC_SHARE_RATE_WINDOW_MS);
   // 增量 C：一键建号的限流。多人共用出口 IP 只会被限速，不会被永久封禁（窗口滚动）。
   const quickStartLimiter = new SlidingWindowLimiter(resolveQuickStartRateLimit(process.env.SRSZQ_QUICK_START_RATE_LIMIT), QUICK_START_RATE_WINDOW_MS);
+  const rewriteLimiter = new SlidingWindowLimiter(20, 60_000);
   /** 取客户端来源标记：优先反代头，其次 socket 地址。 */
   const clientSource = (req: IncomingMessage): string => {
     const forwarded = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
@@ -703,6 +705,25 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
         if (!okReviewed) return send(res, 404, { error: 'not found' });
         db.appendAudit({ actorId: gate.user.id, actorRole: 'ADMIN', action: 'REPORT_REVIEW', targetKind: 'REPORT', targetId: seg[3], detail: { status } });
         return send(res, 200, { reviewed: true, status });
+      }
+      if (isApi && seg[1] === 'match-chat' && seg[2] === 'rewrite' && seg.length === 3 && req.method === 'POST') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const source = clientSource(req);
+        if (!rewriteLimiter.tryTake(source, Date.now())) {
+          return send(res, 429, { error: 'RATE_LIMIT' });
+        }
+        const body = await readJson(req);
+        try {
+          const result = await rewriteText({
+            text: String(body.text ?? ''),
+            style: String(body.style ?? 'meme'),
+            consent: body.consent === true,
+          });
+          return send(res, 200, result);
+        } catch (error) {
+          return send(res, 400, { error: error instanceof Error ? error.message : 'INVALID_REQUEST' });
+        }
       }
       if (isApi && seg[1] === 'admin' && seg[2] === 'reports' && seg.length === 3 && req.method === 'GET') {
         const gate = adminUser();

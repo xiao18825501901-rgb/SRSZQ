@@ -8,15 +8,21 @@ import { Board } from '../components/Board';
 import { MatchPanel, PositionHints, ReplayControls, ColorChip } from '../components/MatchPanel';
 import { Modal } from '../components/Modal';
 import { gameLink } from '../ws';
-import { colorName } from '../playerPresentation';
+import { colorName, playerName } from '../playerPresentation';
 import { ratingNoticeOf } from './ratingNotice';
 import { Btn } from '../ui';
+import { SharedMatchLayout } from '../matchChat/SharedMatchLayout';
+import { ChatCard } from '../matchChat/ChatCard';
+import { websiteTransport } from '../matchChat/websiteTransport';
+import type { ChatPlayer } from '../matchChat/catalog';
+import { api } from '../api';
 
 export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void}){
  useLocale();
 
  const [,force]=useState(0),[now,setNow]=useState(Date.now()),[confirm,setConfirm]=useState(false);
  const [review,setReview]=useState(false),[cursor,setCursor]=useState(0),[showLegal,setShowLegal]=useState(true),[showWinning,setShowWinning]=useState(false);
+ const transport=useRef(websiteTransport()).current;
  const joined=useRef(false),syncAt=useRef(0);
  useEffect(()=>gameLink.subscribe(()=>force(x=>x+1)),[]);
  useEffect(()=>{const id=setInterval(()=>setNow(Date.now()),200);return()=>clearInterval(id)},[]);
@@ -59,14 +65,41 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
  const lostConnection=gameLink.seatStatus?.status==='disconnected'&&now-gameLink.seatStatus.ts<10000;
  // 开局前就告诉玩家这一局计不计分（规格 4.2：不许赛后静默改政策）。
  const ratingNotice=ratingNoticeOf(g.rating);
- return <main className="game-shell online-game" data-testid="online-game">
-   <div className="match-layout">
-     <div className="match-board-column"><Board state={view} showLegal={!review && showLegal} showWinning={!review && showWinning} showNumbers={review} disabled={!myTurn || review} onCellClick={(r, c) => { if (myTurn && !review)
-        gameLink.move(r, c); }}/>
-       {review && <div className="board-note">{tx("复盘视图 \u00B7 在线对局仍在继续")}</div>}
-     </div>
-     <aside className="match-sidebar"><div className="side-title"><h1>{isOnline ? tx("在线匹配") : tx("好友对弈")}</h1><span>{tx("{p0} 路", { p0: g.state.boardSize })}</span></div>
-       <MatchPanel state={view} qualification={review ? null : g.qualification} seats={g.seats} mySeat={g.mySeat} ended={ended} thinking={!ended && g.seats[current].kind === 'ai'}/>
+ const chatPlayers = (['A', 'B', 'C'] as const).reduce((acc, p) => {
+   const seat = g.seats[p];
+   const player: ChatPlayer = {
+     name: seat.kind === 'human' ? (seat.username ?? playerName(p)) : (seat.stars === 5 ? 'Sol' : seat.stars === 4 ? 'Terra' : `AI ${seat.stars ?? ''}`),
+     kind: seat.kind,
+   };
+   return { ...acc, [p]: player };
+ }, {} as Record<'A' | 'B' | 'C', ChatPlayer>);
+ const matchModel = {
+   roomId: g.gameId,
+   mode: isOnline ? 'online' as const : 'invite' as const,
+   round: Math.floor(g.state.turnIndex / 3) + 1,
+   turn: current,
+   boardSize: g.state.boardSize,
+   mySeat: g.mySeat,
+   environment: 'website' as const,
+   ended,
+   players: chatPlayers,
+ };
+ return <SharedMatchLayout
+   model={matchModel}
+   timeline={<MatchPanel state={view} qualification={review ? null : g.qualification} seats={g.seats} mySeat={g.mySeat} ended={ended} thinking={!ended && g.seats[current].kind === 'ai'}/>}
+   board={<>
+     <Board state={view} showLegal={!review && showLegal} showWinning={!review && showWinning} showNumbers={review} disabled={!myTurn || review} onCellClick={(r, c) => { if (myTurn && !review)
+       gameLink.move(r, c); }}/>
+     {review && <div className="board-note">{tx("复盘视图 \u00B7 在线对局仍在继续")}</div>}
+   </>}
+   chat={<ChatCard
+     model={matchModel}
+     messages={gameLink.chatMessages}
+     transport={transport}
+     banterEnabled={true}
+     onReport={async (messageId) => { await api('POST', `/api/match-chat/${encodeURIComponent(g.gameId)}/reports`, { messageId, reason: 'inappropriate' }); }}
+   />}
+   toolbar={<>
        <PositionHints state={view} showLegal={showLegal} showWinning={showWinning} onLegal={setShowLegal} onWinning={setShowWinning}/>
        {lostConnection&&!ended&&<div className="notice">{tx("对手正在重连…")}</div>}
        {!ended&&ratingNotice&&<div className="notice" data-testid="rating-notice">{ratingNotice}</div>}
@@ -74,10 +107,11 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
        <div className="online-controls"><Btn variant="danger" icon="exit" onClick={()=>setConfirm(true)}>{tx("退出对局")}</Btn>{isOnline&&<div className={`turn-clock ${seconds!==null&&seconds<=10?'urgent':''}`} role="timer" aria-label={tx("落子倒计时")}><span>{seconds===null?tx("对手思考"):tx("落子剩余")}</span><b>{seconds===null?'—':seconds}<small>{seconds===null?'':tx("秒")}</small></b></div>}</div>}
        <ReplayControls active={review} index={cursor} total={g.state.moves.length} onToggle={()=>{if(!review)setCursor(g.state.moves.length);setReview(!review)}} onIndex={setCursor} onReturn={()=>setReview(false)} live={isOnline&&!ended}/>
        {gameLink.error&&<p className="error-text" role="alert">{errorText(gameLink.error)}</p>}
-     </aside>
-   </div>
+   </>}
+   overlays={<>
    <Modal open={confirm} title={tx("退出对局？")} onClose={()=>setConfirm(false)} footer={<><Btn data-dialog-cancel onClick={()=>setConfirm(false)}>{tx("继续对局")}</Btn><Btn variant="danger" icon="exit" onClick={()=>{setConfirm(false);if(isOnline)gameLink.resign();else{gameLink.leaveInvite();exit()}}}>{tx("确认退出")}</Btn></>}>
      <p>{isOnline?tx("主动退出将判负并结束本局。"):tx("退出将结束这盘好友对弈，不影响积分。")}</p>
    </Modal>
- </main>;
+   </>}
+ />;
 }

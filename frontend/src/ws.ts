@@ -5,6 +5,7 @@ import type { GameState, Player } from '../../shared/src/game/types';
 import type { QualificationView } from '../../shared/src/game/qualification';
 import { PROTOCOL_VERSION, RULESET_VERSION, WS_CLOSE_REPLACED, WS_TICKET_PROTOCOL_PREFIX } from '../../shared/src/product/protocol';
 import { DEFAULT_QUEUE_TIMEOUT_MS } from '../../shared/src/product/queuePolicy';
+import type { ChatDraft, ChatMessage } from './matchChat/catalog';
 
 export type WSHandler = (msg: Record<string, any>) => void;
 
@@ -198,6 +199,9 @@ class GameLink {
   result = '';
   endInfo: EndInfo | null = null;
   seatStatus: SeatStatusEvent | null = null;
+  chatMessages: ChatMessage[] = [];
+  chatCursor = 0;
+  chatError = '';
   /**
    * P0B：服务器权威 revision。每次提交落子都必须带上“我看到的那个 revision”，
    * 服务器据此拒绝基于旧状态的命令；ACK / game.state 都会把它推进。
@@ -244,6 +248,9 @@ class GameLink {
     this.result = '';
     this.endInfo = null;
     this.seatStatus = null;
+    this.chatMessages = [];
+    this.chatCursor = 0;
+    this.chatError = '';
     this.queueId = '';
     this.enqueuedAt = 0;
     this.deadlineAt = 0;
@@ -377,6 +384,10 @@ class GameLink {
         this.result = '';
         this.error = '';
         this.endInfo = null;
+        this.chatMessages = [];
+        this.chatCursor = 0;
+        this.chatError = '';
+        getSocket().send({ type: 'chat.sync', after: 0, limit: 100 });
         break;
       }
       case 'game.state':
@@ -424,6 +435,17 @@ class GameLink {
         break;
       case 'player.status':
         this.seatStatus = { seat: msg.seat as Player, status: msg.status as 'disconnected' | 'reconnected', graceMs: msg.graceMs, ts: Date.now() };
+        break;
+      case 'chat.messages': {
+        if (this.game?.gameId !== msg.gameId) return;
+        const incoming = (Array.isArray(msg.messages) ? msg.messages : []) as ChatMessage[];
+        const known = new Set(this.chatMessages.map((m) => m.id));
+        this.chatMessages = [...this.chatMessages, ...incoming.filter((m) => m.id && !known.has(m.id))];
+        this.chatCursor = Math.max(this.chatCursor, Number(msg.cursor ?? 0));
+        break;
+      }
+      case 'chat.error':
+        this.chatError = String(msg.error ?? msg.code ?? 'CHAT_ERROR');
         break;
       default:
         return;
@@ -473,6 +495,14 @@ class GameLink {
       row,
       col,
     });
+  }
+
+  sendChat(draft: ChatDraft): void {
+    getSocket().send({ type: 'chat.send', draft });
+  }
+
+  syncChat(after: number): void {
+    getSocket().send({ type: 'chat.sync', after, limit: 100 });
   }
 
   turnRemainingMs(): number | null {
