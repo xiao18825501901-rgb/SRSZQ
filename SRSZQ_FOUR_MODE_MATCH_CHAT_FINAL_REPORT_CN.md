@@ -6,7 +6,7 @@
 - 功能分支：`feature/four-mode-match-chat-20261114`
 - 原始基线：`fa6a15c5baca8472fd2f096049c9829a32fc3251`
 - 首次实现提交：`5cc0c17ab447a1e842cff1029e2c10cd5381dd75`
-- 本轮最终自动化验证的源码 HEAD：`2f017dc6f27eba066b20b5c2fdc8902391db2348`
+- 本轮最终自动化验证的源码 HEAD：`dddd2751dc1374d2e4c990c2c2423fc5c81b703a`
 - 最终交付提交：以交付包根目录 `COMMIT.txt` 和 Git 分支 HEAD 为准
 - WebSocket 协议版本：`2`
 - 共享比赛布局：`SharedMatchLayout v1`，四种模式均通过同一个组件接入原 Board
@@ -68,18 +68,18 @@
 
 ## 真实验收
 
-最终浏览器重跑时间：`2026-11-15T09:40:30.563Z`（Asia/Shanghai 为 `2026-11-15 17:40:30`）
+最终浏览器重跑时间：`2026-11-15T10:04:07.354Z`（Asia/Shanghai 为 `2026-11-15 18:04:07`）
 
 最终完整结果：
-`results/fourmode-current-acceptance-20261115/browser-final/BROWSER_ACCEPTANCE.json`
+`results/fourmode-final-delivery-20261115-175739/browser-final/BROWSER_ACCEPTANCE.json`
 
 最终汇总：
-`results/fourmode-current-acceptance-20261115/ACCEPTANCE_SUMMARY.json`
+`results/fourmode-final-delivery-20261115-175739/ACCEPTANCE_SUMMARY.json`
 
-最终截图与执行日志：`results/fourmode-current-acceptance-20261115/`
+最终截图与执行日志：`results/fourmode-final-delivery-20261115-175739/`
 
 更早的浏览器与测试记录继续保留，用于追踪失败和修复过程；本报告以
-`results/fourmode-current-acceptance-20261115/ACCEPTANCE_SUMMARY.json` 为最终证据索引。
+`results/fourmode-final-delivery-20261115-175739/ACCEPTANCE_SUMMARY.json` 为最终证据索引。
 
 ### 四模式 × 布局
 
@@ -104,7 +104,7 @@
 - textarea 成功聚焦
 - composer top `233.15625`
 - composer bottom `279.15625`
-- composer 完整位于 `844/420` 模拟安全视口内
+- composer 完整位于 `390×420` 模拟安全视口内
 
 该结果证明响应式布局和软键盘压缩后的可用高度处理正确，但仍是 Chromium 设备指标模拟，不冒充实体手机上的物理软键盘实机验证。
 
@@ -123,7 +123,7 @@
 
 ## 自动化验证
 
-本次最终自动化日志位于 `results/fourmode-current-acceptance-20261115/`；更早的完整验收记录
+本次最终自动化日志位于 `results/fourmode-final-delivery-20261115-175739/`；更早的完整验收记录
 继续保留在 `results/fourmode-20261115/`。
 
 | 检查 | 结果 |
@@ -153,7 +153,7 @@
 
 ## Astra 真实轨迹
 
-证据：`results/fourmode-current-acceptance-20261115/ASTRA_ENGINE_TRACE.json`
+证据：`results/fourmode-final-delivery-20261115-175739/ASTRA_ENGINE_TRACE.json`
 
 | 棋盘 | 选择 | 落点 | 深度 | 节点 | 引擎耗时 |
 |---|---|---|---:|---:|---:|
@@ -174,13 +174,13 @@
 | `shared/src/ai/seats.ts` | `6c899b0cdd10355bc21f1d74c1d5af9b0b562fe42c9dd017d90515f0af94dc4d` |
 | `backend/src/chat.ts` | `20c89c8444a32f2fef9ee345cc962f28fbf4730da3ef53e80693d2221e81a7f6` |
 | `backend/src/ws/gameServer.ts` | `2adab04c38f17d0cb316f8cd8cd1c7417cb2e92a8c4f8c49e1bf010012441895` |
-| `results/fourmode-current-acceptance-20261115/browser-final/BROWSER_ACCEPTANCE.json` | `961317033c82f89d2665536f7095c535f168ee0ab7f864b0c56c7b8556f78af3` |
-| `results/fourmode-current-acceptance-20261115/ASTRA_ENGINE_TRACE.json` | `458c21b5fd78feda0dcf3f31168ff401b37e0ea78dade14848ce2e86d5d64251` |
-| `results/fourmode-current-acceptance-20261115/DEEPSEEK_STATUS.json` | `89807241148dd4315af9383de8a8607575d4dd601d5e2ed905bebf1717c6bbf3` |
+| `results/fourmode-final-delivery-20261115-175739/browser-final/BROWSER_ACCEPTANCE.json` | `5a6b42bc8443011fd08bac552b391aeee0fcd19d6c1c528a5b430abf29e28a06` |
+| `results/fourmode-final-delivery-20261115-175739/ASTRA_ENGINE_TRACE.json` | `458c21b5fd78feda0dcf3f31168ff401b37e0ea78dade14848ce2e86d5d64251` |
+| `results/fourmode-final-delivery-20261115-175739/DEEPSEEK_STATUS.json` | `89807241148dd4315af9383de8a8607575d4dd601d5e2ed905bebf1717c6bbf3` |
 
 ## 截图
 
-最终目录：`results/fourmode-current-acceptance-20261115/browser-final/`
+最终目录：`results/fourmode-final-delivery-20261115-175739/browser-final/`
 
 - 桌面：`01`, `02`, `06`, `07`, `10`, `11`
 - 390px 全高：`03`, `12`, `14`, `16`

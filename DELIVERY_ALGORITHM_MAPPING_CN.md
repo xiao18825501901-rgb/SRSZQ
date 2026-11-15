@@ -9,7 +9,7 @@
 | Astra | `level=5, strategy='astra'` | 直接调用原 `maxnSearch()`，跳过 `selectTactic`、防守策略改写及 Random/Tactical/Selfish/3-Ply 覆盖 |
 
 Astra 的真实调用证据位于
-`results/fourmode-current-acceptance-20261115/ASTRA_ENGINE_TRACE.json`。
+`results/fourmode-final-delivery-20261115-175739/ASTRA_ENGINE_TRACE.json`。
 该证据证明 13×13 和 17×17 均进入真实 MaxN 实现，并记录 depth、nodes 和耗时；
 不用于宣称胜率、穷举终局树或必胜能力。
 
@@ -20,7 +20,7 @@ Astra 的真实调用证据位于
 - 模型输入仅包含当前一句话与所选风格；迟到响应在继续编辑、切换风格、座位或房间时失效。
 - 模型不可用时返回原文，不影响聊天和棋局。
 - 当前本地验收未配置 DeepSeek 服务端凭据，证据为
-  `results/fourmode-current-acceptance-20261115/DEEPSEEK_STATUS.json`，
+  `results/fourmode-final-delivery-20261115-175739/DEEPSEEK_STATUS.json`，
   状态是 `NOT_CONFIGURED_SERVER_SIDE`。
 - 网站 DeepSeek 可用性不能作为 Reddit 外部 AI 可用性证据；Reddit 协作仍按 OpenAI/Gemini 白名单单独处理。
 
