@@ -1,6 +1,10 @@
 /** Server-side style rewrite. Credentials never reach the browser or Git. */
 
 const STYLES = new Set(['meme', 'wuxia', 'english']);
+// The configured DeepSeek reasoning models can consume most of a small
+// completion budget before emitting the final short sentence. Keep a bounded
+// reserve for reasoning plus the 280-character user-visible rewrite.
+const MAX_COMPLETION_TOKENS = 700;
 
 export function buildRewriteMessages(text: string, style: string): Array<{ role: 'system' | 'user'; content: string }> {
   if (typeof text !== 'string' || !text.trim() || [...text].length > 280) throw new Error('INVALID_INPUT');
@@ -59,7 +63,7 @@ export async function rewriteText({
       method: 'POST',
       signal: abort.signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages, temperature: 0.5, max_tokens: 180, stream: false }),
+      body: JSON.stringify({ model, messages, temperature: 0.5, max_tokens: MAX_COMPLETION_TOKENS, stream: false }),
     });
     if (!response.ok) return { text, mode: 'ORIGINAL_PROVIDER_ERROR' };
     const body = await response.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
