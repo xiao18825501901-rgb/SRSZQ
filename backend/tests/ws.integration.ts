@@ -490,7 +490,15 @@ async function main(): Promise<void> {
       assert.equal(firstMessage.actorId, chatAlice.id, '服务端必须用认证账号绑定 sender');
       assert.equal(firstMessage.authorKind, 'human', '客户端不能伪造 AI 身份');
       assert.notEqual(firstMessage.name, 'Mallory');
-      assert.equal(firstMessage.seq, 1, '新房间首个持久消息游标应为 1');
+      const persistedFirst = db.raw.prepare(
+        'SELECT seq FROM chat_messages WHERE room_id = ? AND client_message_id = ?',
+      ).get(gameId, firstId) as { seq: number };
+      assert.ok(firstMessage.seq > 0, '持久消息游标必须为正整数');
+      assert.equal(
+        firstMessage.seq,
+        persistedFirst.seq,
+        '广播游标必须与数据库持久消息一致；AI 自动发言可以先占用更早游标',
+      );
 
       send(c1, {
         type: 'chat.send',
