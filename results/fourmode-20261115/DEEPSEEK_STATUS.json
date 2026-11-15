@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-11-15T07:41:55.898Z",
+  "capturedAt": "2026-11-15T09:42:04.461Z",
   "provider": "DeepSeek",
   "endpoint": "POST /api/match-chat/rewrite",
   "httpStatus": 200,

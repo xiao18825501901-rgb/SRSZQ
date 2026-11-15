@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "runner": "scripts/product/run-tests.mjs",
+  "startedAt": "2026-11-15T09:31:02.947Z",
+  "cwd": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030",
+  "node": "v24.19.0",
+  "selected": [
+    "daily20",
+    "multitab",
+    "wsticket",
+    "quickaccount",
+    "matchmaking",
+    "results",
+    "baseline",
+    "recovery",
+    "security",
+    "replay",
+    "puzzles",
+    "privacy",
+    "provider",
+    "ops",
+    "features"
+  ],
+  "suites": [
+    {
+      "suite": "daily20",
+      "phase": "DAILY20",
+      "title": "每日训练 Session（<=20 题 / 正解落子持久化 / 服务器权威下一题 / 幂等）",
+      "covers": [
+        "R08_DAILY_TRAINING"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/daily.session.ts",
+          "exitCode": 0,
+          "ms": 5898,
+          "log": "daily20.log"
+        }
+      ]
+    },
+    {
+      "suite": "multitab",
+      "phase": "G16",
+      "title": "G16 多标签新连接替换旧连接（旧连接必须被关闭且不再生效）",
+      "covers": [
+        "G16"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/ws.multitab.ts",
+          "exitCode": 0,
+          "ms": 4323,
+          "log": "multitab.log"
+        }
+      ]
+    },
+    {
+      "suite": "wsticket",
+      "phase": "S04",
+      "title": "S04 WebSocket 一次性认证票据（30 秒 / 单次 / 重复消费拒绝 / 凭据不进 URL 与日志）",
+      "covers": [
+        "S04"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/ws.ticket.ts",
+          "exitCode": 0,
+          "ms": 4129,
+          "log": "wsticket.log"
+        }
+      ]
+    },
+    {
+      "suite": "quickaccount",
+      "phase": "INCREMENT_C",
+      "title": "增量 C 一键创建账号并开始（临时账号 / 原地领取 / 迁移幂等 / 不进正式排位）",
+      "covers": [
+        "C_QUICK_ACCOUNT",
+        "C_CLAIM",
+        "D_SECURITY",
+        "E_MIGRATION",
+        "REGRESSION(legacy login/register)"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/quickAccount.flow.ts",
+          "exitCode": 0,
+          "ms": 4703,
+          "log": "quickaccount.log"
+        }
+      ]
+    },
+    {
+      "suite": "matchmaking",
+      "phase": "INCREMENT_B",
+      "title": "增量 B Online 排队 20 秒（真实默认值 + 真实 20 秒冒烟 + 取消排队不算弃权）",
+      "covers": [
+        "B_QUEUE_20S",
+        "REGRESSION(30s turn clock / 10s reconnect grace)"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/matchmaking.timeout.ts",
+          "exitCode": 0,
+          "ms": 26605,
+          "log": "matchmaking.log"
+        }
+      ]
+    },
+    {
+      "suite": "results",
+      "phase": "P0A",
+      "title": "P0A 可信结果与事务结算（原子/幂等/回滚/宽限/开关）",
+      "covers": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "G10(结算部分)"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/results.settlement.ts",
+          "exitCode": 0,
+          "ms": 7512,
+          "log": "results.log"
+        }
+      ]
+    },
+    {
+      "suite": "baseline",
+      "phase": "BASELINE",
+      "title": "基线回归（147+ 单测 / 后端 API / WS / build），与产品化新增分开记录",
+      "covers": [
+        "REGRESSION"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "typecheck",
+          "exitCode": 0,
+          "ms": 3608,
+          "log": "baseline-typecheck.log"
+        },
+        {
+          "name": "unit",
+          "exitCode": 0,
+          "ms": 22147,
+          "log": "baseline-unit.log"
+        },
+        {
+          "name": "backend-api",
+          "exitCode": 0,
+          "ms": 2187,
+          "log": "baseline-backend-api.log"
+        },
+        {
+          "name": "ws-integration",
+          "exitCode": 0,
+          "ms": 24671,
+          "log": "baseline-ws-integration.log"
+        },
+        {
+          "name": "build",
+          "exitCode": 0,
+          "ms": 3605,
+          "log": "baseline-build.log"
+        }
+      ]
+    },
+    {
+      "suite": "recovery",
+      "phase": "P0B",
+      "title": "P0B 命令幂等 / revision / 持久事件 / ACK / 快照 / 60 秒恢复",
+      "covers": [
+        "G10",
+        "G11",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "G16",
+        "O06"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/commands.protocol.ts",
+          "exitCode": 0,
+          "ms": 7234,
+          "log": "recovery.log"
+        }
+      ]
+    },
+    {
+      "suite": "security",
+      "phase": "P0C",
+      "title": "P0C 有界 AI Worker / 硬超时 / 合法降级 / Origin / 体积 / 限流 / 会话撤销",
+      "covers": [
+        "S01",
+        "S02",
+        "S03",
+        "S05",
+        "S06",
+        "S07"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/security.worker.ts",
+          "exitCode": 0,
+          "ms": 9780,
+          "log": "security.log"
+        }
+      ]
+    },
+    {
+      "suite": "replay",
+      "phase": "P2",
+      "title": "P2 棋谱历史 / 全谱重放 / 关键三手 / 跨轮防守 / 去标识分享撤销",
+      "covers": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/history.replay.ts",
+          "exitCode": 0,
+          "ms": 14205,
+          "log": "replay.log"
+        }
+      ]
+    },
+    {
+      "suite": "puzzles",
+      "phase": "P2",
+      "title": "P2 题库 V1 / 每日题 / attempt 幂等 / 进度与错题本",
+      "covers": [
+        "R07",
+        "R08"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/puzzles.bank.ts",
+          "exitCode": 0,
+          "ms": 6493,
+          "log": "puzzles.log"
+        }
+      ]
+    },
+    {
+      "suite": "privacy",
+      "phase": "P3A",
+      "title": "P3A 训练许可 / 数据集切分与对称去重 / 事件表 / 导出删除 / 举报屏蔽审计",
+      "covers": [
+        "D01",
+        "D02",
+        "D03",
+        "D04",
+        "D06(分层计数)",
+        "O01",
+        "O03",
+        "O04"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/privacy.dataset.ts",
+          "exitCode": 0,
+          "ms": 4177,
+          "log": "privacy.log"
+        }
+      ]
+    },
+    {
+      "suite": "provider",
+      "phase": "P3B",
+      "title": "P3B provider 接口 / 续训声明校验 / 评测矩阵聚合",
+      "covers": [
+        "D06",
+        "D07",
+        "D08(失败指标)"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/ai.provider.ts",
+          "exitCode": 0,
+          "ms": 7589,
+          "log": "provider.log"
+        }
+      ]
+    },
+    {
+      "suite": "ops",
+      "phase": "P4",
+      "title": "P4 备份恢复演练 / 就绪探针 / 迁移向后兼容",
+      "covers": [
+        "O05",
+        "O10(预生产门禁)",
+        "O06(version source sha)"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/ops.readiness.ts",
+          "exitCode": 0,
+          "ms": 3727,
+          "log": "ops.log"
+        }
+      ]
+    },
+    {
+      "suite": "features",
+      "phase": "P1",
+      "title": "P1 排位资格 / V1 评分算法 / 重复对手保护 / 排行榜过滤",
+      "covers": [
+        "U05",
+        "U06",
+        "U12",
+        "G09(ledger)"
+      ],
+      "status": "PASS",
+      "steps": [
+        {
+          "name": "backend/tests/rating.policy.ts",
+          "exitCode": 0,
+          "ms": 5037,
+          "log": "features.log"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-11-15T09:33:50.616Z",
+  "summary": {
+    "pass": [
+      "daily20",
+      "multitab",
+      "wsticket",
+      "quickaccount",
+      "matchmaking",
+      "results",
+      "baseline",
+      "recovery",
+      "security",
+      "replay",
+      "puzzles",
+      "privacy",
+      "provider",
+      "ops",
+      "features"
+    ],
+    "fail": [],
+    "notImplemented": [],
+    "overall": "PASS"
+  }
+}
