@@ -1,0 +1,13 @@
+
+> srszq@0.2.0 test
+> vitest run
+
+
+ RUN  v5.0.0 E:/SRSZQ/01_CurrentProject/srszq-fourmode-matchchat-20261114-2236/srszq-bilingual-product-20261030
+
+
+ Test Files  25 passed (25)
+      Tests  203 passed (203)
+   Start at  15:34:15
+   Duration  23.33s (tests 76%, transform 19%, import 5%, worker 1%)
+

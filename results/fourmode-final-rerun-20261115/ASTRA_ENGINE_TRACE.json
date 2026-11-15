@@ -1,0 +1,43 @@
+{
+  "capturedAt": "2026-11-15T07:41:55.611Z",
+  "classification": "REAL_ENGINE_CALL_TRACE_PERFORMANCE_ONLY",
+  "strengthClaim": "NONE",
+  "note": "Pure MaxN engine call from the real shared implementation. This is not a win-rate or exhaustive-tree guarantee.",
+  "calls": [
+    {
+      "boardSize": 13,
+      "selectedTactic": "astra",
+      "reason": "Astra pure MaxN depth 3",
+      "fallbackUsed": false,
+      "move": {
+        "row": 6,
+        "col": 6
+      },
+      "depth": 3,
+      "nodes": 1230,
+      "candidates": null,
+      "engineThinkTimeMs": 138.14029999999997,
+      "wallMs": 138.3559
+    },
+    {
+      "boardSize": 17,
+      "selectedTactic": "astra",
+      "reason": "Astra pure MaxN depth 3",
+      "fallbackUsed": false,
+      "move": {
+        "row": 8,
+        "col": 8
+      },
+      "depth": 3,
+      "nodes": 1230,
+      "candidates": null,
+      "engineThinkTimeMs": 171.87670000000003,
+      "wallMs": 171.894
+    }
+  ],
+  "sourceHashes": {
+    "shared/src/ai/chooseAIMove.ts": "5ffce87942719aa6ddb81583bfdcbb60a6ee97ae0afa174752e25c491d35b78b",
+    "shared/src/ai/searchAgents.ts": "ad0e184a94df208ea719c5be9e8997ea46d8d6d87609195922466676251f96b9",
+    "shared/src/ai/search.ts": "e0c09a7bce67c2d919f3c51e9e0da0515901fd3b45e6117d9d0bdc9ef9902f9d"
+  }
+}

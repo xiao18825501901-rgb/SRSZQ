@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-11-15T06:38:23.465Z",
+  "capturedAt": "2026-11-15T07:41:55.611Z",
   "classification": "REAL_ENGINE_CALL_TRACE_PERFORMANCE_ONLY",
   "strengthClaim": "NONE",
   "note": "Pure MaxN engine call from the real shared implementation. This is not a win-rate or exhaustive-tree guarantee.",
@@ -16,8 +16,8 @@
       "depth": 3,
       "nodes": 1230,
       "candidates": null,
-      "engineThinkTimeMs": 134.83440000000002,
-      "wallMs": 135.05770000000007
+      "engineThinkTimeMs": 138.14029999999997,
+      "wallMs": 138.3559
     },
     {
       "boardSize": 17,
@@ -31,8 +31,8 @@
       "depth": 3,
       "nodes": 1230,
       "candidates": null,
-      "engineThinkTimeMs": 168.7355,
-      "wallMs": 168.75670000000002
+      "engineThinkTimeMs": 171.87670000000003,
+      "wallMs": 171.894
     }
   ],
   "sourceHashes": {

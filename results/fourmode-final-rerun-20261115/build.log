@@ -1,0 +1,19 @@
+
+> srszq@0.2.0 build
+> npm run build -w frontend
+
+
+> @srszq/frontend@0.2.0 build
+> tsc --noEmit && vite build
+
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 82 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                      0.84 kB │ gzip:   0.56 kB
+dist/assets/ai.worker-BZWtTXR5.js   17.97 kB
+dist/assets/index-k3QKLgjz.css      54.51 kB │ gzip:  12.84 kB
+dist/assets/index-YayvDy4E.js      369.15 kB │ gzip: 121.18 kB
+
+✓ built in 360ms

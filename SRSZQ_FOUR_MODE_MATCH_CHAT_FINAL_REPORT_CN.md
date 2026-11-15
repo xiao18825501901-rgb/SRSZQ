@@ -67,15 +67,18 @@
 
 ## 真实验收
 
-最终浏览器重跑时间：`2026-11-15T07:11:20.880Z`（Asia/Shanghai 为 `2026-11-15 15:11:20`）
+最终浏览器重跑时间：`2026-11-15T07:40:07.393Z`（Asia/Shanghai 为 `2026-11-15 15:40:07`）
 
-最终完整结果：`results/fourmode-browser-rerun-20261115-v2/BROWSER_ACCEPTANCE.json`
+最终完整结果：
+`results/fourmode-final-rerun-20261115/browser/BROWSER_ACCEPTANCE.json`
 
-最终截图与执行日志：`results/fourmode-browser-rerun-20261115-v2/`
+最终汇总：
+`results/fourmode-final-rerun-20261115/ACCEPTANCE_SUMMARY.json`
 
-最初一轮重跑曾从仓库根目录启动 Vite，页面返回 404，未进入产品验收；失败日志单独保留在
-`results/fourmode-browser-rerun-20261115/browser-acceptance.log`。修正为从 `frontend/`
-启动后，上述最终重跑完成并通过。早期验收记录 `results/fourmode-20261115/` 也继续保留。
+最终截图与执行日志：`results/fourmode-final-rerun-20261115/`
+
+更早的浏览器与测试记录继续保留，用于追踪失败和修复过程；本报告以
+`results/fourmode-final-rerun-20261115/ACCEPTANCE_SUMMARY.json` 为最终证据索引。
 
 ### 四模式 × 布局
 
@@ -119,7 +122,7 @@
 
 ## 自动化验证
 
-本次最终自动化日志位于 `results/fourmode-final-20261115-150403/logs/`；更早的完整验收记录
+本次最终自动化日志位于 `results/fourmode-final-rerun-20261115/`；更早的完整验收记录
 继续保留在 `results/fourmode-20261115/`。
 
 | 检查 | 结果 |
@@ -149,12 +152,12 @@
 
 ## Astra 真实轨迹
 
-证据：`results/fourmode-20261115/ASTRA_ENGINE_TRACE.json`
+证据：`results/fourmode-final-rerun-20261115/ASTRA_ENGINE_TRACE.json`
 
 | 棋盘 | 选择 | 落点 | 深度 | 节点 | 引擎耗时 |
 |---|---|---|---:|---:|---:|
-| 13×13 | Astra pure MaxN | (6,6) | 3 | 1,230 | 134.83 ms |
-| 17×17 | Astra pure MaxN | (8,8) | 3 | 1,230 | 168.74 ms |
+| 13×13 | Astra pure MaxN | (6,6) | 3 | 1,230 | 138.14 ms |
+| 17×17 | Astra pure MaxN | (8,8) | 3 | 1,230 | 171.88 ms |
 
 分类为 `REAL_ENGINE_CALL_TRACE_PERFORMANCE_ONLY`，不构成棋力或胜率结论。
 
@@ -169,13 +172,13 @@
 | `shared/src/ai/chooseAIMove.ts` | `5ffce87942719aa6ddb81583bfdcbb60a6ee97ae0afa174752e25c491d35b78b` |
 | `backend/src/chat.ts` | `20c89c8444a32f2fef9ee345cc962f28fbf4730da3ef53e80693d2221e81a7f6` |
 | `backend/src/ws/gameServer.ts` | `2adab04c38f17d0cb316f8cd8cd1c7417cb2e92a8c4f8c49e1bf010012441895` |
-| `results/fourmode-20261115/BROWSER_ACCEPTANCE.json` | `9740642f7a86a51d3c4c9fb478458960f241d988542236c26f9ac82be336ae0e` |
-| `results/fourmode-20261115/ASTRA_ENGINE_TRACE.json` | `508d8be62bb2da72429cc2a5d6474fe7d775d9c573a14e703406bba1434e9958` |
-| `results/fourmode-20261115/DEEPSEEK_STATUS.json` | `2e5f2e540c39091e205fa79f59d04aa46b9d2ee4b0c7d5445d8f47e5f8f79a9f` |
+| `results/fourmode-final-rerun-20261115/browser/BROWSER_ACCEPTANCE.json` | `fb450b27c0473f834f56b1cc95a06b1753b54a7d71549e8fd0ea7ba5424a06f5` |
+| `results/fourmode-final-rerun-20261115/ASTRA_ENGINE_TRACE.json` | `40fae0bbfa4533272d853ffe706a7809dd4c945fa93f9fc8eba8a68a6bda7bc7` |
+| `results/fourmode-final-rerun-20261115/DEEPSEEK_STATUS.json` | `4abcb33b4f8cf55661ea85ed076ea77c7b9224dcd303db03cf9edef45ce31942` |
 
 ## 截图
 
-最终目录：`results/fourmode-browser-rerun-20261115-v2/`
+最终目录：`results/fourmode-final-rerun-20261115/browser/`
 
 - 桌面：`01`, `02`, `06`, `07`, `10`, `11`
 - 390px 全高：`03`, `12`, `14`, `16`

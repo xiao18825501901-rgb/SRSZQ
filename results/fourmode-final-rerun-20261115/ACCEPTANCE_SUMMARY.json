@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-11-15T07:41:55.898Z",
+  "sourceHead": "b431befc50f20194502e05eea94156dd76ecf32c",
+  "branch": "feature/four-mode-match-chat-20261114",
+  "overall": "PASS_WITH_DISCLOSED_LIMITATIONS",
+  "checks": {
+    "typecheck": {
+      "status": "PASS",
+      "log": "results/fourmode-final-rerun-20261115/typecheck.log"
+    },
+    "unit": {
+      "status": "PASS",
+      "testFiles": 25,
+      "tests": 203,
+      "log": "results/fourmode-final-rerun-20261115/vitest.log"
+    },
+    "integrations": {
+      "status": "PASS",
+      "log": "results/fourmode-final-rerun-20261115/integrations.log",
+      "productReport": "evidence/product/2026-11-15T07-36-01-546Z/product-report.json",
+      "productSuitesPassed": 15,
+      "productSuitesTotal": 15
+    },
+    "build": {
+      "status": "PASS",
+      "log": "results/fourmode-final-rerun-20261115/build.log",
+      "artifacts": {
+        "frontend/dist/index.html": "02F8169131ECF0F02C12DB7207EFCDEF397D977256C782BF2FEB24D0D6355925",
+        "frontend/dist/assets/ai.worker-BZWtTXR5.js": "8D89B8EBAB090A6BD87BB8353C1183DB4C24C165C797C25EA687EE2BF967F94D",
+        "frontend/dist/assets/index-k3QKLgjz.css": "8E392A3048005CF77B805D141F824BB86C71E5D0DEE52D7A164CE0BA8E9B2070",
+        "frontend/dist/assets/index-YayvDy4E.js": "ACD098593E525D93A2617E8E2DC6501905F32E4B7DCFB602C070D6F63C0FBD35"
+      }
+    },
+    "browserAcceptance": {
+      "status": "PASS",
+      "evidence": "results/fourmode-final-rerun-20261115/browser/BROWSER_ACCEPTANCE.json",
+      "screenshots": 19,
+      "desktopAndMobileModes": [
+        "local",
+        "vsai_astra",
+        "online",
+        "invite"
+      ],
+      "twoAccountChat": true,
+      "emojiCount": 12,
+      "stickerCount": 8,
+      "shortViewportKeyboardSimulation": {
+        "width": 390,
+        "height": 420,
+        "composerVisible": true
+      }
+    },
+    "astra": {
+      "status": "REAL_ENGINE_CALL_TRACE_PERFORMANCE_ONLY",
+      "evidence": "results/fourmode-final-rerun-20261115/ASTRA_ENGINE_TRACE.json",
+      "winRateClaim": "NONE"
+    },
+    "deepSeek": {
+      "status": "NOT_CONFIGURED_SERVER_SIDE",
+      "evidence": "results/fourmode-final-rerun-20261115/DEEPSEEK_STATUS.json",
+      "fallback": "ORIGINAL_NO_CREDENTIAL",
+      "credentialSerialized": false
+    }
+  },
+  "limitations": [
+    "The short-viewport check is a Chromium soft-keyboard simulation, not a physical-phone keyboard test.",
+    "DeepSeek is not configured server-side, so no successful model rewrite is claimed.",
+    "Online random-fill AI does not yet support the Astra strategy.",
+    "The Astra trace proves real MaxN engine invocation and records performance; it is not a win-rate or exhaustive-tree claim.",
+    "No production deployment was performed."
+  ]
+}

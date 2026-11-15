@@ -1,0 +1,13 @@
+{
+  "capturedAt": "2026-11-15T07:41:55.898Z",
+  "provider": "DeepSeek",
+  "endpoint": "POST /api/match-chat/rewrite",
+  "httpStatus": 200,
+  "mode": "ORIGINAL_NO_CREDENTIAL",
+  "status": "NOT_CONFIGURED_SERVER_SIDE",
+  "originalTextLength": 10,
+  "returnedTextLength": 10,
+  "returnedOriginal": true,
+  "credentialSource": "SERVER_ENVIRONMENT_ONLY",
+  "credentialOrTokenSerialized": false
+}
