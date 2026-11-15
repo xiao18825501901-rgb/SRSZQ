@@ -120,19 +120,26 @@ class EdgeSession {
     return this;
   }
   async authenticate(account) {
-    await this.cdp.eval(`(() => {
-      localStorage.setItem('srszq_token', ${JSON.stringify(account.token)});
-      localStorage.setItem('srszq_user', ${JSON.stringify(JSON.stringify(account.user))});
-      location.hash = '#/lobby';
-      location.reload();
-      return true;
-    })()`);
-    await sleep(1_000);
-    try {
-      await this.cdp.waitFor(`document.body.innerText.includes('大厅')`, 30_000);
-    } catch (error) {
-      const state = await this.cdp.eval(`({ hash: location.hash, body: document.body.innerText, token: !!localStorage.getItem('srszq_token'), user: localStorage.getItem('srszq_user') })`);
-      throw new Error(`Authentication page did not reach lobby: ${JSON.stringify(state)}`, { cause: error });
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await this.cdp.eval(`(() => {
+        localStorage.setItem('srszq_token', ${JSON.stringify(account.token)});
+        localStorage.setItem('srszq_user', ${JSON.stringify(JSON.stringify(account.user))});
+        return true;
+      })()`);
+      const lobbyUrl = new URL(FRONT);
+      lobbyUrl.searchParams.set('authAttempt', `${Date.now()}-${attempt}`);
+      lobbyUrl.hash = '/lobby';
+      await this.cdp.send('Page.navigate', { url: lobbyUrl });
+      await sleep(800);
+      try {
+        await this.cdp.waitFor(`document.body.innerText.includes('大厅')`, 12_000);
+        return;
+      } catch (error) {
+        if (attempt === 2) {
+          const state = await this.cdp.eval(`({ hash: location.hash, body: document.body.innerText, token: !!localStorage.getItem('srszq_token'), user: localStorage.getItem('srszq_user') })`);
+          throw new Error(`Authentication page did not reach lobby: ${JSON.stringify(state)}`, { cause: error });
+        }
+      }
     }
   }
   async route(hash) {
@@ -439,7 +446,9 @@ async function main() {
   console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error.stack || error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error.stack || error);
+    process.exit(1);
+  });
