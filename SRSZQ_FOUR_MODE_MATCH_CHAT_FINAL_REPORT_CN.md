@@ -5,7 +5,8 @@
 - 工作区：`E:\SRSZQ\01_CurrentProject\srszq-fourmode-matchchat-20261114-2236\srszq-bilingual-product-20261030`
 - 功能分支：`feature/four-mode-match-chat-20261114`
 - 原始基线：`fa6a15c5baca8472fd2f096049c9829a32fc3251`
-- 本轮起始实现提交：`5cc0c17ab447a1e842cff1029e2c10cd5381dd75`
+- 首次实现提交：`5cc0c17ab447a1e842cff1029e2c10cd5381dd75`
+- 本轮最终自动化验证的源码 HEAD：`2f017dc6f27eba066b20b5c2fdc8902391db2348`
 - 最终交付提交：以交付包根目录 `COMMIT.txt` 和 Git 分支 HEAD 为准
 - WebSocket 协议版本：`2`
 - 共享比赛布局：`SharedMatchLayout v1`，四种模式均通过同一个组件接入原 Board
@@ -67,18 +68,18 @@
 
 ## 真实验收
 
-最终浏览器重跑时间：`2026-11-15T07:40:07.393Z`（Asia/Shanghai 为 `2026-11-15 15:40:07`）
+最终浏览器重跑时间：`2026-11-15T09:40:30.563Z`（Asia/Shanghai 为 `2026-11-15 17:40:30`）
 
 最终完整结果：
-`results/fourmode-final-rerun-20261115/browser/BROWSER_ACCEPTANCE.json`
+`results/fourmode-current-acceptance-20261115/browser-final/BROWSER_ACCEPTANCE.json`
 
 最终汇总：
-`results/fourmode-final-rerun-20261115/ACCEPTANCE_SUMMARY.json`
+`results/fourmode-current-acceptance-20261115/ACCEPTANCE_SUMMARY.json`
 
-最终截图与执行日志：`results/fourmode-final-rerun-20261115/`
+最终截图与执行日志：`results/fourmode-current-acceptance-20261115/`
 
 更早的浏览器与测试记录继续保留，用于追踪失败和修复过程；本报告以
-`results/fourmode-final-rerun-20261115/ACCEPTANCE_SUMMARY.json` 为最终证据索引。
+`results/fourmode-current-acceptance-20261115/ACCEPTANCE_SUMMARY.json` 为最终证据索引。
 
 ### 四模式 × 布局
 
@@ -122,13 +123,13 @@
 
 ## 自动化验证
 
-本次最终自动化日志位于 `results/fourmode-final-rerun-20261115/`；更早的完整验收记录
+本次最终自动化日志位于 `results/fourmode-current-acceptance-20261115/`；更早的完整验收记录
 继续保留在 `results/fourmode-20261115/`。
 
 | 检查 | 结果 |
 |---|---|
 | 根/前端/后端 TypeScript | PASS |
-| Vitest | 25 files / 203 tests PASS |
+| Vitest | 25 files / 204 tests PASS |
 | WebSocket 集成 | ALL PASS |
 | Backend API integration | ALL PASS |
 | Results settlement | ALL PASS |
@@ -152,12 +153,12 @@
 
 ## Astra 真实轨迹
 
-证据：`results/fourmode-final-rerun-20261115/ASTRA_ENGINE_TRACE.json`
+证据：`results/fourmode-current-acceptance-20261115/ASTRA_ENGINE_TRACE.json`
 
 | 棋盘 | 选择 | 落点 | 深度 | 节点 | 引擎耗时 |
 |---|---|---|---:|---:|---:|
-| 13×13 | Astra pure MaxN | (6,6) | 3 | 1,230 | 138.14 ms |
-| 17×17 | Astra pure MaxN | (8,8) | 3 | 1,230 | 171.88 ms |
+| 13×13 | Astra pure MaxN | (6,6) | 3 | 1,230 | 129.29 ms |
+| 17×17 | Astra pure MaxN | (8,8) | 3 | 1,230 | 163.32 ms |
 
 分类为 `REAL_ENGINE_CALL_TRACE_PERFORMANCE_ONLY`，不构成棋力或胜率结论。
 
@@ -170,15 +171,16 @@
 | `frontend/src/styles/matchChat.css` | `81ce6c97770862c5c1a1cf4d9e702b46f236e46fe41aa55d46e83aabad8c6782` |
 | `shared/src/product/protocol.ts` | `f82376c488c2aad2f03ae84044cea5735269f4e4d4d4ea39308f5ae11511b1b6` |
 | `shared/src/ai/chooseAIMove.ts` | `5ffce87942719aa6ddb81583bfdcbb60a6ee97ae0afa174752e25c491d35b78b` |
+| `shared/src/ai/seats.ts` | `6c899b0cdd10355bc21f1d74c1d5af9b0b562fe42c9dd017d90515f0af94dc4d` |
 | `backend/src/chat.ts` | `20c89c8444a32f2fef9ee345cc962f28fbf4730da3ef53e80693d2221e81a7f6` |
 | `backend/src/ws/gameServer.ts` | `2adab04c38f17d0cb316f8cd8cd1c7417cb2e92a8c4f8c49e1bf010012441895` |
-| `results/fourmode-final-rerun-20261115/browser/BROWSER_ACCEPTANCE.json` | `fb450b27c0473f834f56b1cc95a06b1753b54a7d71549e8fd0ea7ba5424a06f5` |
-| `results/fourmode-final-rerun-20261115/ASTRA_ENGINE_TRACE.json` | `40fae0bbfa4533272d853ffe706a7809dd4c945fa93f9fc8eba8a68a6bda7bc7` |
-| `results/fourmode-final-rerun-20261115/DEEPSEEK_STATUS.json` | `4abcb33b4f8cf55661ea85ed076ea77c7b9224dcd303db03cf9edef45ce31942` |
+| `results/fourmode-current-acceptance-20261115/browser-final/BROWSER_ACCEPTANCE.json` | `961317033c82f89d2665536f7095c535f168ee0ab7f864b0c56c7b8556f78af3` |
+| `results/fourmode-current-acceptance-20261115/ASTRA_ENGINE_TRACE.json` | `458c21b5fd78feda0dcf3f31168ff401b37e0ea78dade14848ce2e86d5d64251` |
+| `results/fourmode-current-acceptance-20261115/DEEPSEEK_STATUS.json` | `89807241148dd4315af9383de8a8607575d4dd601d5e2ed905bebf1717c6bbf3` |
 
 ## 截图
 
-最终目录：`results/fourmode-final-rerun-20261115/browser/`
+最终目录：`results/fourmode-current-acceptance-20261115/browser-final/`
 
 - 桌面：`01`, `02`, `06`, `07`, `10`, `11`
 - 390px 全高：`03`, `12`, `14`, `16`

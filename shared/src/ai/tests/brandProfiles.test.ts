@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createInitialState } from '../../game/rules';
 import { chooseTacticMove } from '../chooseAIMove';
+import { allHumanSeats, parseSeatConfigs, seatsEqual, serializeSeats } from '../seats';
 import { AI_LEVEL_BRANDS, aiLevelBrand } from '../types';
 
 describe('AI brand aliases', () => {
@@ -31,5 +32,16 @@ describe('AI brand aliases', () => {
     expect(decision.reason).toContain('Astra pure MaxN');
     expect(decision.depth).toBe(1);
     expect(decision.fallbackUsed).toBeFalsy();
+  });
+
+  it('round-trips Astra seat strategy and treats mixed versus Astra as a change', () => {
+    const seats = allHumanSeats();
+    seats.B = { kind: 'ai', level: 5, strategy: 'astra' };
+
+    expect(parseSeatConfigs(serializeSeats(seats))).toEqual(seats);
+    expect(seatsEqual(seats, {
+      ...seats,
+      B: { kind: 'ai', level: 5 },
+    })).toBe(false);
   });
 });

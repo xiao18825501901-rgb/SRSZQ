@@ -234,7 +234,17 @@ async function startAstra(session, screenshot) {
 }
 
 async function waitForGame(session) {
-  await session.cdp.waitFor(`document.querySelector('[data-testid="four-mode-online"]') !== null || document.querySelector('[data-testid="four-mode-invite"]') !== null`, 35_000);
+  try {
+    await session.cdp.waitFor(`document.querySelector('[data-testid="four-mode-online"]') !== null || document.querySelector('[data-testid="four-mode-invite"]') !== null`, 45_000);
+  } catch (error) {
+    const state = await session.cdp.eval(`({
+      hash: location.hash,
+      body: document.body.innerText,
+      tokenPresent: Boolean(localStorage.getItem('srszq_token')),
+      userPresent: Boolean(localStorage.getItem('srszq_user'))
+    })`);
+    throw new Error(`Match did not start for ${session.label}: ${JSON.stringify(state)}`, { cause: error });
+  }
   await sleep(500);
 }
 

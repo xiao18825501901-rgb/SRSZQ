@@ -1,0 +1,109 @@
+{
+  "capturedAt": "2026-11-15T09:40:30.563Z",
+  "frontend": "http://127.0.0.1:5173",
+  "api": "http://127.0.0.1:8080",
+  "screenshots": {
+    "localDesktop": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\01-local-desktop-1440.png",
+    "vsaiAstraDesktop": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\02-vsai-astra-desktop-1440.png",
+    "vsaiAstraMobile390": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\12-vsai-astra-mobile-390x844.png",
+    "vsaiAstraMobile360": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\13-vsai-astra-mobile-360x800.png",
+    "localMobile390": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\03-local-mobile-390x844.png",
+    "localKeyboard390x420": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\04-local-keyboard-sim-390x420.png",
+    "localMobile360": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\05-local-mobile-360x800.png",
+    "onlineAlice": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\06-online-alice-1440.png",
+    "onlineBob": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\07-online-bob-1440.png",
+    "emojiStickerPanel": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\18-emoji-sticker-panel.png",
+    "rewritePreview": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\19-rewrite-preview-fallback.png",
+    "onlineChatAlice": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\08-online-chat-alice.png",
+    "onlineChatBob": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\09-online-chat-bob.png",
+    "onlineChatMobile390": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\14-online-chat-mobile-390x844.png",
+    "onlineChatMobile360": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\15-online-chat-mobile-360x800.png",
+    "inviteHost": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\10-invite-host-1440.png",
+    "inviteGuest": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\11-invite-guest-1440.png",
+    "inviteMobile390": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\16-invite-mobile-390x844.png",
+    "inviteMobile360": "E:\\SRSZQ\\01_CurrentProject\\srszq-fourmode-matchchat-20261114-2236\\srszq-bilingual-product-20261030\\results\\fourmode-current-acceptance-20261115\\browser-final\\17-invite-mobile-360x800.png"
+  },
+  "checks": {
+    "localDesktop": true,
+    "astraVisible": true,
+    "vsaiAstraMobile390": {
+      "width": 390,
+      "height": 844,
+      "sharedLayout": true,
+      "seatColumns": "104.656px 104.672px 104.656px",
+      "boardBeforeChat": true,
+      "hasChat": true
+    },
+    "vsaiAstraMobile360": {
+      "width": 360,
+      "height": 800,
+      "sharedLayout": true,
+      "seatColumns": "94.6562px 94.6719px 94.6562px",
+      "boardBeforeChat": true,
+      "hasChat": true
+    },
+    "mobile390": {
+      "width": 390,
+      "height": 844,
+      "seatColumns": "104.656px 104.672px 104.656px",
+      "boardBeforeChat": true
+    },
+    "mobileKeyboard": {
+      "width": 390,
+      "height": 420,
+      "focused": true,
+      "composerTop": 233.15625,
+      "composerBottom": 279.15625,
+      "visible": true
+    },
+    "onlineChatBothAccounts": true,
+    "emojiStickerCatalog": {
+      "emojiCount": 12,
+      "stickerCount": 8
+    },
+    "emojiInserted": true,
+    "stickerDeliveredBothAccounts": true,
+    "rewritePreview": {
+      "original": true,
+      "fallbackLabel": true,
+      "hasConfirm": true,
+      "hasOriginal": true,
+      "hasCancel": true
+    },
+    "rewriteFallbackDeliveredBothAccounts": true,
+    "onlineChatMobile390": {
+      "width": 390,
+      "height": 844,
+      "sharedLayout": true,
+      "seatColumns": "108.656px 108.672px 108.656px",
+      "boardBeforeChat": true,
+      "hasChat": true
+    },
+    "onlineChatMobile360": {
+      "width": 360,
+      "height": 800,
+      "sharedLayout": true,
+      "seatColumns": "98.6562px 98.6719px 98.6562px",
+      "boardBeforeChat": true,
+      "hasChat": true
+    },
+    "inviteUsesSharedLayout": true,
+    "inviteMobile390": {
+      "width": 390,
+      "height": 844,
+      "sharedLayout": true,
+      "seatColumns": "104.656px 104.672px 104.656px",
+      "boardBeforeChat": true,
+      "hasChat": true
+    },
+    "inviteMobile360": {
+      "width": 360,
+      "height": 800,
+      "sharedLayout": true,
+      "seatColumns": "94.6562px 94.6719px 94.6562px",
+      "boardBeforeChat": true,
+      "hasChat": true
+    }
+  },
+  "notes": []
+}
