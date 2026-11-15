@@ -14,12 +14,12 @@ import { createInitialState, applyMove, skipCurrentPlayer } from '../shared/src/
 import { currentPlayerOf, getLegalMoves } from '../shared/src/game/legalMoves';
 import type { BoardSize, Player } from '../shared/src/game/types';
 import { chooseTacticMove } from '../shared/src/ai/chooseAIMove';
-import type { AIDecision, TacticId } from '../shared/src/ai/types';
+import type { AIDecision, MixedTacticId } from '../shared/src/ai/types';
 import { TACTIC_IDS } from '../shared/src/ai/types';
 import { OFFLINE_TACTIC_CONFIG } from '../shared/src/ai/config/defaultWeights';
 import { mulberry32 } from '../shared/src/ai/rng';
 
-type SeatTactics = Record<Player, TacticId>;
+type SeatTactics = Record<Player, MixedTacticId>;
 
 /** 对阵表（座位 A/B/C → 计策），覆盖相邻强度与跳档。 */
 const DEFAULT_COMBOS: SeatTactics[] = [
@@ -82,8 +82,8 @@ function parseArgs(argv: string[]): { games: number; sizes: BoardSize[]; combos:
           const firstIdx = argv.indexOf('--combo');
           if (i - 1 === firstIdx) combos = [];
         }
-        if (levels.every((level) => TACTIC_IDS.includes(level as TacticId))) {
-          combos.push({ A: levels[0] as TacticId, B: levels[1] as TacticId, C: levels[2] as TacticId });
+        if (levels.every((level) => TACTIC_IDS.includes(level as MixedTacticId))) {
+          combos.push({ A: levels[0] as MixedTacticId, B: levels[1] as MixedTacticId, C: levels[2] as MixedTacticId });
         }
       }
     } else if (argv[i] === '--rotate') {
@@ -94,7 +94,7 @@ function parseArgs(argv: string[]): { games: number; sizes: BoardSize[]; combos:
     // 座位轮转：抵消行动顺序与 BAC 胜权窗口的座次优势，测真实计策强度。
     const rotated: SeatTactics[] = [];
     for (const c of combos) {
-      const lv: TacticId[] = [c.A, c.B, c.C];
+      const lv: MixedTacticId[] = [c.A, c.B, c.C];
       rotated.push({ A: lv[0], B: lv[1], C: lv[2] });
       rotated.push({ A: lv[1], B: lv[2], C: lv[0] });
       rotated.push({ A: lv[2], B: lv[0], C: lv[1] });

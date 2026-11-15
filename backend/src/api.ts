@@ -725,6 +725,24 @@ export function createApi(db: Db, hooks: ApiHooks = {}): { server: Server; ctx: 
           return send(res, 400, { error: error instanceof Error ? error.message : 'INVALID_REQUEST' });
         }
       }
+      if (isApi && seg[1] === 'match-chat' && seg[3] === 'reports' && seg.length === 4 && req.method === 'POST') {
+        const user = ctx.authUser(req);
+        if (!user) return send(res, 401, { error: 'unauthorized' });
+        const roomId = seg[2];
+        if (!db.seatInLiveGame(user.id, roomId)) return send(res, 404, { error: 'not found' });
+        const body = await readJson(req);
+        const messageId = String(body.messageId ?? '').trim();
+        const reason = String(body.reason ?? '').trim();
+        if (!messageId || !reason) return send(res, 400, { error: 'messageId 与 reason 必填' });
+        const message = db.raw
+          .prepare('SELECT id FROM chat_messages WHERE id = ? AND room_id = ? AND expires_at > ?')
+          .get(messageId, roomId, Date.now()) as { id?: string } | undefined;
+        if (!message) return send(res, 404, { error: 'not found' });
+        const report = db.createChatReport({
+          roomId, messageId, reporterId: user.id, reason: reason.slice(0, 80),
+        });
+        return send(res, 201, { reportId: report.reportId, createdAt: report.createdAt });
+      }
       if (isApi && seg[1] === 'admin' && seg[2] === 'reports' && seg.length === 3 && req.method === 'GET') {
         const gate = adminUser();
         if (!gate.ok) return;

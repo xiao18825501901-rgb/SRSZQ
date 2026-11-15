@@ -1,21 +1,26 @@
 import { tx } from "../i18n/core";
 import { useLocale } from "../i18n/react";
 import type { Player } from '../../../shared/src/game/types';
-import { AI_LEVELS, AI_LEVEL_STARS, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
+import { AI_LEVELS, AI_LEVEL_STARS, aiLevelBrand, type AILevel, type SeatConfigs } from '../../../shared/src/ai/types';
 import { canSetAISeat, countAI, isAISeat, seatLevel } from '../../../shared/src/ai/seats';
 import { PLAYER_COLOR_NAMES } from '../playerPresentation';
 /** 每座位可选值：人类 + 五档 AI = 每座位六种选择 */
-export type SeatChoice = 'human' | AILevel;
+export type SeatChoice = 'human' | AILevel | 'astra';
 interface Props {
     seats: SeatConfigs;
     disabled?: boolean;
     onChange: (player: Player, choice: SeatChoice) => void;
 }
-const CHOICES: SeatChoice[] = ['human', ...AI_LEVELS];
+const CHOICES: SeatChoice[] = ['human', ...AI_LEVELS, 'astra'];
 /** 平台规范：AI 只以星级呈现，绝不向用户显示真实档位名 */
 function choiceLabel(c: SeatChoice): string {
     if (c === 'human')
         return tx("人类 HUMAN");
+    if (c === 'astra')
+        return tx("AI Astra");
+    const brand = aiLevelBrand(c);
+    if (brand)
+        return tx("AI ")+brand;
     return `AI ${AI_LEVEL_STARS[c]}`;
 }
 /**
@@ -31,7 +36,7 @@ export function SeatSetup({ seats, disabled, onChange }: Props) {
       <div className="seat-rows">
         {(['A', 'B', 'C'] as Player[]).map((p) => {
             const isAI = isAISeat(seats, p);
-            const value: SeatChoice = isAI ? seatLevel(seats, p) : 'human';
+            const value: SeatChoice = !isAI ? 'human' : seats[p].strategy === 'astra' ? 'astra' : seatLevel(seats, p);
             return (<div key={p} className={`seat-row seat-${p.toLowerCase()} ${isAI ? 'is-ai' : ''}`}>
               <span className="seat-badge">
                 {p}
@@ -39,7 +44,12 @@ export function SeatSetup({ seats, disabled, onChange }: Props) {
               <span className="seat-name">{tx("玩家 ")}{p}
                 <span className="muted"> · {PLAYER_COLOR_NAMES[p]}</span>
               </span>
-              <select className="seat-select" aria-label={tx("玩家 {p0} 的座位类型与 AI 难度", { p0: p })} disabled={disabled} value={value} onChange={(e) => onChange(p, e.target.value === 'human' ? 'human' : Number(e.target.value) as AILevel)}>
+              <select className="seat-select" aria-label={tx("玩家 {p0} 的座位类型与 AI 难度", { p0: p })} disabled={disabled} value={value} onChange={(e) => {
+                const next = e.target.value;
+                if (next === 'astra') onChange(p, 'astra');
+                else if (next === 'human') onChange(p, 'human');
+                else onChange(p, Number(next) as AILevel);
+              }}>
                 {CHOICES.map((c) => {
                     // 当前已是 AI 的座位可自由换档；人类座位想变 AI 需 <2 AI
                     const blocked = c !== 'human' && !isAI && !canSetAISeat(seats, p);

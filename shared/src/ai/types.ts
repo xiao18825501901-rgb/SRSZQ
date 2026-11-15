@@ -4,17 +4,18 @@ import type { RNG } from './rng';
 export type AiDifficulty = 1 | 2 | 3 | 4 | 5;
 /** Compatibility name for existing seat/UI call sites; values are numeric stars. */
 export type AILevel = AiDifficulty;
-export type TacticId = 'random' | 'tactical' | 'selfish' | '3ply' | 'maxn';
+export type TacticId = 'random' | 'tactical' | 'selfish' | '3ply' | 'maxn' | 'astra';
+export type MixedTacticId = Exclude<TacticId, 'astra'>;
 
 export const AI_DIFFICULTIES: readonly AiDifficulty[] = [1, 2, 3, 4, 5];
 export const AI_LEVELS = AI_DIFFICULTIES;
-export const TACTIC_IDS: readonly TacticId[] = ['random', 'tactical', 'selfish', '3ply', 'maxn'];
+export const TACTIC_IDS: readonly MixedTacticId[] = ['random', 'tactical', 'selfish', '3ply', 'maxn'];
 
 export const AI_LEVEL_LABELS: Record<AiDifficulty, string> = {
   1: '1-Star', 2: '2-Star', 3: '3-Star', 4: '4-Star', 5: '5-Star',
 };
 export const TACTIC_LABELS: Record<TacticId, string> = {
-  random: 'Random', tactical: 'Tactical', selfish: 'Selfish', '3ply': '3-Ply', maxn: 'MaxN',
+  random: 'Random', tactical: 'Tactical', selfish: 'Selfish', '3ply': '3-Ply', maxn: 'MaxN', astra: 'Astra',
 };
 export const AI_LEVEL_STARS: Record<AiDifficulty, string> = {
   1: '★☆☆☆☆', 2: '★★☆☆☆', 3: '★★★☆☆', 4: '★★★★☆', 5: '★★★★★',
@@ -27,8 +28,19 @@ export const AI_LEVEL_DESCRIPTIONS: Record<AiDifficulty, string> = {
   5: '最偏向深层搜索，但仍会偶尔采用其他计策。',
 };
 
+/** User-facing brand aliases for the existing mixed profiles. */
+export const AI_LEVEL_BRANDS: Record<4 | 5, string> = {
+  4: 'Terra',
+  5: 'Sol',
+};
+
+export function aiLevelBrand(level: AiDifficulty): string | undefined {
+  return AI_LEVEL_BRANDS[level as 4 | 5];
+}
+
 export type SeatKind = 'human' | 'ai';
-export interface SeatConfig { kind: SeatKind; level?: AiDifficulty; }
+export type AISeatStrategy = 'mixed' | 'astra';
+export interface SeatConfig { kind: SeatKind; level?: AiDifficulty; strategy?: AISeatStrategy; }
 export type SeatConfigs = Record<Player, SeatConfig>;
 
 export interface AIDecision {
@@ -59,6 +71,7 @@ export interface TacticRunOptions {
   seed?: number;
   candidateK?: number;
   policy?: MatchPolicyContext;
+  strategy?: AISeatStrategy;
 }
 export type TacticRunner = (
   tactic: TacticId,

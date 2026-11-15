@@ -1,7 +1,7 @@
 import type { RNG } from './rng';
-import { TACTIC_IDS, type AiDifficulty, type TacticId } from './types';
+import { TACTIC_IDS, type AiDifficulty, type MixedTacticId } from './types';
 
-export type TacticProfile = Readonly<Record<TacticId, number>>;
+export type TacticProfile = Readonly<Record<MixedTacticId, number>>;
 export const TACTIC_PROFILES: Readonly<Record<AiDifficulty, TacticProfile>> = {
   1: { random: 0.45, tactical: 0.22, selfish: 0.15, '3ply': 0.10, maxn: 0.08 },
   2: { random: 0.31, tactical: 0.22, selfish: 0.19, '3ply': 0.15, maxn: 0.13 },
@@ -11,7 +11,7 @@ export const TACTIC_PROFILES: Readonly<Record<AiDifficulty, TacticProfile>> = {
 };
 
 /** Selection depends only on difficulty and exactly one RNG draw. */
-export function selectTactic(difficulty: AiDifficulty, rng: RNG): TacticId {
+export function selectTactic(difficulty: AiDifficulty, rng: RNG): MixedTacticId {
   const profile = TACTIC_PROFILES[difficulty];
   const draw = Math.max(0, Math.min(1 - Number.EPSILON, rng.next()));
   let cumulative = 0;

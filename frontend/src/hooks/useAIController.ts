@@ -2,7 +2,7 @@ import { colorName } from '../playerPresentation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameState, Player } from '../../../shared/src/game/types';
 import { currentPlayerOf, getLegalMoves } from '../../../shared/src/game/legalMoves';
-import { AI_LEVEL_STARS, type AIDecision, type AILevel, type MatchPolicyContext, type SeatConfigs } from '../../../shared/src/ai/types';
+import { AI_LEVEL_STARS, type AIDecision, type AILevel, type AISeatStrategy, type MatchPolicyContext, type SeatConfigs } from '../../../shared/src/ai/types';
 import { TACTIC_CONFIG } from '../../../shared/src/ai/config/defaultWeights';
 import { isAISeat, seatLevel, seatsEqual } from '../../../shared/src/ai/seats';
 import { makeSeed } from '../../../shared/src/ai/rng';
@@ -30,6 +30,7 @@ interface PendingTurn {
   minDisplayMs: number;
   startedAt: number;
   seed: number;
+  strategy: AISeatStrategy;
 }
 
 interface UseAIControllerArgs {
@@ -185,6 +186,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
     }
 
     const level = seatLevel(seats, player);
+    const strategy = seats[player].strategy ?? 'mixed';
     // Every difficulty may draw MaxN, so all browser turns receive the same
     // safe worker budget. Difficulty changes probabilities, not tactic power.
     const cfg = TACTIC_CONFIG.maxn;
@@ -201,6 +203,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
       minDisplayMs: 220 + (level - 1) * 70,
       startedAt: Date.now(),
       seed: seedForMove(makeSeed(), state.turnIndex, state.moves.length),
+      strategy,
     };
     setThinking({ player, level, startedAt: p.startedAt });
 
@@ -218,6 +221,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
             candidateK: Math.min(6, cfg.candidateK ?? 6),
             maxDepth: Math.min(4, cfg.maxDepth ?? 4),
             policy,
+            strategy: p.strategy,
           });
         } catch {
           fallback = null;
@@ -246,7 +250,7 @@ export function useAIController(args: UseAIControllerArgs): UseAIControllerResul
       }
     };
 
-    p.worker = requestAIMove(state, player, level, { seed: p.seed, timeBudgetMs: cfg.timeBudgetMs, maxDepth: cfg.maxDepth, candidateK: cfg.candidateK, policy }, handleResult);
+    p.worker = requestAIMove(state, player, level, { seed: p.seed, timeBudgetMs: cfg.timeBudgetMs, maxDepth: cfg.maxDepth, candidateK: cfg.candidateK, policy, strategy }, handleResult);
     pendingRef.current = p;
 
     return () => {

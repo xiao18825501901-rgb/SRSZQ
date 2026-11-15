@@ -22,6 +22,7 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
 
  const [,force]=useState(0),[now,setNow]=useState(Date.now()),[confirm,setConfirm]=useState(false);
  const [review,setReview]=useState(false),[cursor,setCursor]=useState(0),[showLegal,setShowLegal]=useState(true),[showWinning,setShowWinning]=useState(false);
+ const [banterEnabled,setBanterEnabled]=useState(true);
  const transport=useRef(websiteTransport()).current;
  const joined=useRef(false),syncAt=useRef(0);
  useEffect(()=>gameLink.subscribe(()=>force(x=>x+1)),[]);
@@ -96,7 +97,8 @@ export function OnlinePage({user,onExit}:{user:{username:string};onExit:()=>void
      model={matchModel}
      messages={gameLink.chatMessages}
      transport={transport}
-     banterEnabled={true}
+     banterEnabled={banterEnabled}
+     onBanterChange={setBanterEnabled}
      onReport={async (messageId) => { await api('POST', `/api/match-chat/${encodeURIComponent(g.gameId)}/reports`, { messageId, reason: 'inappropriate' }); }}
    />}
    toolbar={<>

@@ -38,7 +38,7 @@ export function seatLevel(seats: SeatConfigs, player: Player): AiDifficulty {
 }
 
 const LEGACY_DIFFICULTY: Record<TacticId, AiDifficulty> = {
-  random: 1, tactical: 2, selfish: 3, '3ply': 4, maxn: 5,
+  random: 1, tactical: 2, selfish: 3, '3ply': 4, maxn: 5, astra: 5,
 };
 
 export function parseAiDifficulty(raw: unknown): AiDifficulty {
@@ -73,11 +73,15 @@ export function parseSeatConfigs(raw: unknown): SeatConfigs {
   if (!raw || typeof raw !== 'object') return out;
   const obj = raw as Record<string, unknown>;
   for (const p of PLAYERS) {
-    const seat = obj[p] as { kind?: unknown; level?: unknown } | undefined;
+    const seat = obj[p] as { kind?: unknown; level?: unknown; strategy?: unknown } | undefined;
     if (!seat || typeof seat !== 'object') continue;
     const kind = seat.kind;
     if (kind === 'ai') {
-      out[p] = { kind: 'ai', level: parseAiDifficulty(seat.level) };
+      out[p] = {
+        kind: 'ai',
+        level: parseAiDifficulty(seat.level),
+        ...(seat.strategy === 'astra' ? { strategy: 'astra' as const } : {}),
+      };
     }
   }
   // 用户约束：至少 1 真人
@@ -93,7 +97,9 @@ export function serializeSeats(seats: SeatConfigs): Record<Player, SeatConfig> {
   const out = {} as Record<Player, SeatConfig>;
   for (const p of PLAYERS) {
     const s = seats[p];
-    out[p] = s?.kind === 'ai' ? { kind: 'ai', level: s.level ?? 1 } : { kind: 'human' };
+    out[p] = s?.kind === 'ai'
+      ? { kind: 'ai', level: s.level ?? 1, ...(s.strategy === 'astra' ? { strategy: 'astra' as const } : {}) }
+      : { kind: 'human' };
   }
   return out;
 }
@@ -104,7 +110,7 @@ export function seatsEqual(a: SeatConfigs, b: SeatConfigs): boolean {
     const sa = a[p];
     const sb = b[p];
     if (sa?.kind !== sb?.kind) return false;
-    if (sa?.kind === 'ai' && sb?.kind === 'ai') return (sa.level ?? 1) === (sb.level ?? 1);
+    if (sa?.kind === 'ai' && sb?.kind === 'ai') return (sa.level ?? 1) === (sb.level ?? 1) && (sa.strategy ?? 'mixed') === (sb.strategy ?? 'mixed');
     return true;
   });
 }

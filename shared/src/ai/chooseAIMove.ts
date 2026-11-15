@@ -36,19 +36,20 @@ const defaultTacticRunner: TacticRunner = (
       };
       break;
     }
-    case 'maxn': {
+    case 'maxn':
+    case 'astra': {
       const result = maxnSearch(state, options);
       decision = {
         row: result.row, col: result.col, pass: false, score: result.utility,
         depth: result.depth, nodes: result.nodes, ttHits: result.ttHits,
-        candidates: result.candidates, reason: `MaxN depth ${result.depth} best utility`,
+        candidates: result.candidates, reason: tactic === 'astra' ? `Astra pure MaxN depth ${result.depth}` : `MaxN depth ${result.depth} best utility`,
       };
       break;
     }
   }
 
   // This runs after selection and never changes the tactic probability.
-  if (options.policy) {
+  if (options.policy && tactic !== 'astra') {
     const protectOk = options.policy.protectSingleHuman === true && ['selfish', '3ply', 'maxn'].includes(tactic);
     const fastestOk = options.policy.defenseFastestThreat === true && tactic !== 'random';
     if (protectOk || fastestOk) decision = applyDefensePolicy(state, player, decision, options.policy, rng);
@@ -115,6 +116,9 @@ export function chooseAIMove(
   options: AIOptions = {},
 ): AIDecision {
   const rng = options.rng ?? makeRng(options.seed);
+  if (options.strategy === 'astra') {
+    return chooseTacticMove(state, player, 'astra', { ...options, rng });
+  }
   const tactic = selectTactic(difficulty, rng);
   return chooseTacticMove(state, player, tactic, { ...options, rng });
 }

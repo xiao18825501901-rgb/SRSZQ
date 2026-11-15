@@ -1781,7 +1781,8 @@ button.linklike:hover { color: var(--ds-text); }
   .four-mode-chat-column { order: 3; min-height: 480px; }
   .match-chat-card {
     position: static;
-    height: min(76vh, 560px);
+    height: min(76dvh, 560px);
+    max-height: calc(100dvh - 16px);
     min-height: 480px;
     padding: 11px;
     border-radius: 17px;
@@ -1790,5 +1791,13 @@ button.linklike:hover { color: var(--ds-text); }
   .chat-history { padding: 9px; }
   .chat-settings { font-size: 10px; }
   .sticker-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .chat-composer {
+    position: sticky;
+    bottom: max(0px, env(safe-area-inset-bottom));
+    z-index: 2;
+    padding-top: 4px;
+    background: rgba(22, 29, 41, .96);
+    scroll-margin-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
   .chat-send { min-width: 60px; padding: 0 8px; }
 }

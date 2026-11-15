@@ -1849,11 +1849,12 @@ export function openDb(path: string): Db {
           .prepare('SELECT payload_digest FROM chat_messages WHERE id = ?')
           .get(String(existing.id)) as { payload_digest?: string } | undefined;
         const same = appendedDigest?.payload_digest === digest;
-        return { appended: false, duplicate: same, conflict: !same, message: same ? message : message };
+        if (!same) throw new Error('IDEMPOTENCY_CONFLICT');
+        return { appended: false, duplicate: true, conflict: false, message };
       }
       const last = raw
-        .prepare('SELECT MAX(at) AS last FROM chat_messages WHERE room_id = ? AND actor_id = ?')
-        .get(input.roomId, input.actorId) as { last?: number | null } | undefined;
+        .prepare('SELECT MAX(at) AS last FROM chat_messages WHERE room_id = ? AND actor_id = ? AND expires_at > ?')
+        .get(input.roomId, input.actorId, now) as { last?: number | null } | undefined;
       if (now - Number(last?.last ?? -Infinity) < 1500) {
         throw new Error('RATE_LIMIT');
       }

@@ -76,7 +76,7 @@ export default function App({ hostTitle = tx("离线模式"), matchMode = 'local
         seq: chatMessages.length + 1,
         at: Date.now(),
         seat,
-        name: seats[seat].level === 5 ? 'Sol' : seats[seat].level === 4 ? 'Terra' : `AI ${seats[seat].level}`,
+        name: seats[seat].strategy === 'astra' ? 'Astra' : seats[seat].level === 5 ? 'Sol' : seats[seat].level === 4 ? 'Terra' : `AI ${seats[seat].level}`,
         authorKind: 'ai',
         kind: 'text',
         text: line,
@@ -127,9 +127,9 @@ export default function App({ hostTitle = tx("离线模式"), matchMode = 'local
       ended: state.status !== 'playing',
       players: Object.fromEntries((['A', 'B', 'C'] as Player[]).map(p => {
         const seat = seats[p];
-        const profile: AIProfile | undefined = seat.level === 5 ? 'sol' : seat.level === 4 ? 'terra' : undefined;
+        const profile: AIProfile | undefined = seat.strategy === 'astra' ? 'astra' : seat.level === 5 ? 'sol' : seat.level === 4 ? 'terra' : undefined;
         const player: ChatPlayer = {
-          name: seat.kind === 'human' ? playerName(p) : seat.level === 5 ? 'Sol' : seat.level === 4 ? 'Terra' : `AI ${seat.level}`,
+          name: seat.kind === 'human' ? playerName(p) : seat.strategy === 'astra' ? 'Astra' : seat.level === 5 ? 'Sol' : seat.level === 4 ? 'Terra' : `AI ${seat.level}`,
           kind: seat.kind,
           profile,
         };

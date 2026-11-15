@@ -936,6 +936,11 @@ export class GameServer {
       this.sendTo(client.ws, { type: 'chat.error', code: 'NO_ACTIVE_GAME', error: 'no active game' });
       return;
     }
+    const claimedRoomId = [msg.gameId, msg.roomId].find((value) => typeof value === 'string' && value.trim());
+    if (typeof claimedRoomId === 'string' && claimedRoomId.trim() !== room.id) {
+      this.sendTo(client.ws, { type: 'chat.error', code: 'CROSS_ROOM', error: 'room mismatch' });
+      return;
+    }
     const seat = room.members[client.userId];
     if (!seat || !room.humanIds.has(client.userId)) {
       this.sendTo(client.ws, { type: 'chat.error', code: 'NOT_A_PARTICIPANT', error: 'not a participant' });
@@ -962,6 +967,10 @@ export class GameServer {
     const room = client.gameId ? this.rooms.get(client.gameId) : undefined;
     if (!room || !room.members[client.userId] || !room.humanIds.has(client.userId)) {
       this.sendTo(client.ws, { type: 'chat.error', code: 'NOT_A_PARTICIPANT', error: 'not a participant' });
+      return;
+    }
+    if (typeof msg.gameId === 'string' && msg.gameId.trim() && msg.gameId.trim() !== room.id) {
+      this.sendTo(client.ws, { type: 'chat.error', code: 'CROSS_ROOM', error: 'room mismatch' });
       return;
     }
     const after = Number(msg.after ?? 0);

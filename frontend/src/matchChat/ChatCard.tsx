@@ -12,7 +12,7 @@ interface ChatCardProps {
   onLocalSeatChange?: (seat: Player) => void;
   banterEnabled?: boolean;
   onBanterChange?: (enabled: boolean) => void;
-  onReport?: (messageId: string) => void;
+  onReport?: (messageId: string) => void | Promise<void>;
 }
 
 interface RewritePreview {
@@ -43,17 +43,34 @@ export function ChatCard({
   const [preview, setPreview] = useState<RewritePreview | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  const [reportedIds, setReportedIds] = useState<ReadonlySet<string>>(() => new Set());
   const historyRef = useRef<HTMLDivElement | null>(null);
+  const rewriteEpoch = useRef(0);
+  const visibleMessages = banterEnabled ? messages : messages.filter((message) => message.authorKind !== 'ai');
 
   useEffect(() => {
+    rewriteEpoch.current += 1;
     setPreview(null);
     setText('');
     setPickerOpen(false);
+    setNotice('');
+    setReportedIds(new Set());
   }, [model.roomId]);
 
   useEffect(() => {
     historyRef.current?.scrollTo({ top: historyRef.current.scrollHeight });
-  }, [messages.length]);
+  }, [visibleMessages.length]);
+
+  useEffect(() => {
+    rewriteEpoch.current += 1;
+    setPreview(null);
+  }, [activeSeat]);
+
+  function invalidateRewritePreview() {
+    rewriteEpoch.current += 1;
+    setPreview(null);
+  }
 
   async function sendText(rawText: string, rewritten = false) {
     if (!rawText.trim() || busy) return;
@@ -101,14 +118,34 @@ export function ChatCard({
       return;
     }
     setBusy(true);
+    const requestEpoch = rewriteEpoch.current;
+    const requestRoom = model.roomId;
     try {
       const result = await transport.rewrite({ text: raw, style });
-      setPreview({ original: raw, text: result.text, mode: result.mode });
+      if (rewriteEpoch.current === requestEpoch && model.roomId === requestRoom) {
+        setPreview({ original: raw, text: result.text, mode: result.mode });
+      }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : '改写失败，可发送原文');
-      setPreview({ original: raw, text: raw, mode: 'ORIGINAL_FALLBACK' });
+      if (rewriteEpoch.current === requestEpoch && model.roomId === requestRoom) {
+        setNotice(error instanceof Error ? error.message : '改写失败，可发送原文');
+        setPreview({ original: raw, text: raw, mode: 'ORIGINAL_FALLBACK' });
+      }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function reportMessage(messageId: string) {
+    if (!onReport || reportingId || reportedIds.has(messageId)) return;
+    setReportingId(messageId);
+    try {
+      await onReport(messageId);
+      setReportedIds((current) => new Set(current).add(messageId));
+      setNotice('举报已提交，等待人工复核');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '举报提交失败');
+    } finally {
+      setReportingId(null);
     }
   }
 
@@ -138,8 +175,8 @@ export function ChatCard({
           <small>{model.ended ? '本局已结束 · 记录保留' : '仅本局三席可见'}</small>
         </header>
         <div className="chat-history" role="log" aria-live="polite" ref={historyRef}>
-          {messages.length === 0 && <p className="chat-empty">本局还没有消息。</p>}
-          {messages.map((message) => (
+          {visibleMessages.length === 0 && <p className="chat-empty">本局还没有消息。</p>}
+          {visibleMessages.map((message) => (
             <article key={message.id} className={`chat-message ${message.seat}`}>
               <span className={`seat-stone small seat-${message.seat.toLowerCase()}`}>{message.seat}</span>
               <div>
@@ -158,7 +195,14 @@ export function ChatCard({
                     )
                   : <p>{message.text}</p>}
                 {message.authorKind === 'human' && onReport && (
-                  <button type="button" className="report" onClick={() => onReport(message.id)}>举报</button>
+                  <button
+                    type="button"
+                    className="report"
+                    disabled={reportingId === message.id || reportedIds.has(message.id)}
+                    onClick={() => void reportMessage(message.id)}
+                  >
+                    {reportedIds.has(message.id) ? '已举报' : reportingId === message.id ? '提交中…' : '举报'}
+                  </button>
                 )}
               </div>
             </article>
@@ -178,12 +222,15 @@ export function ChatCard({
         <label>
           <input type="checkbox" checked={rewriteEnabled} onChange={(event) => {
             setRewriteEnabled(event.target.checked);
-            setPreview(null);
+            invalidateRewritePreview();
           }}/>
           趣味改写
         </label>
         {rewriteEnabled && (
-          <select value={style} onChange={(event) => setStyle(event.target.value)} aria-label="表达风格">
+          <select value={style} onChange={(event) => {
+            setStyle(event.target.value);
+            invalidateRewritePreview();
+          }} aria-label="表达风格">
             <option value="meme">网络趣味</option>
             <option value="wuxia">武侠切磋</option>
             <option value="english">English banter</option>
@@ -246,8 +293,11 @@ export function ChatCard({
           rows={1}
           maxLength={280}
           value={text}
-          placeholder="输入消息… Enter 发送，Shift+Enter 换行"
-          onChange={(event) => setText(event.target.value)}
+          placeholder="输入消息…"
+          onChange={(event) => {
+            setText(event.target.value);
+            invalidateRewritePreview();
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();

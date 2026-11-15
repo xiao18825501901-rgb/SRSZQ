@@ -66,7 +66,7 @@ export function validateChatDraft(draft: unknown): ChatAppendInput['draft'] {
     clientMessageId: value.clientMessageId,
     kind: 'text',
     text,
-    rewritten: value.rewritten === true,
+    ...(value.rewritten === true ? { rewritten: true } : {}),
   };
 }
 

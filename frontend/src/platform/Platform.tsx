@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import type { BoardSize } from '../../../shared/src/game/types';
 import { PLAYERS } from '../../../shared/src/game/types';
 import type { AILevel, SeatConfigs, MatchPolicyContext } from '../../../shared/src/ai/types';
+import { aiLevelBrand } from '../../../shared/src/ai/types';
 import { countAI, countHuman } from '../../../shared/src/ai/seats';
 import { createTutorialAssignment, humanSeatOf } from './tutorialModel';
 import { authApi, clearAuth, getCachedUser, getToken, setAuth, type PublicUser } from '../api';
@@ -271,7 +272,7 @@ function LocalHost({ mode, user, onExit }: {
     if (!config)
         return <GameSetup mode={mode} onStart={(seats, size) => setConfig({ seats, size })} onBack={onExit}/>;
     const policy: MatchPolicyContext | undefined = mode === 'vsai' && countHuman(config.seats) === 1 && countAI(config.seats) === 2 ? { defenseFastestThreat: true } : undefined;
-    return <App key={JSON.stringify(config)} hostTitle={mode === 'local' ? tx("离线模式") : tx("人机对战")} initialSize={config.size} presetSeats={config.seats} aiPolicy={policy} onExit={() => setConfig(null)}/>;
+    return <App key={JSON.stringify(config)} hostTitle={mode === 'local' ? tx("本地对局") : tx("人机对战")} matchMode={mode} initialSize={config.size} presetSeats={config.seats} aiPolicy={policy} onExit={() => setConfig(null)}/>;
 }
 function GameSetup({ mode, onStart, onBack }: {
     mode: 'local' | 'vsai';
@@ -285,8 +286,15 @@ function GameSetup({ mode, onStart, onBack }: {
     return <main className="setup-card panel"><div className="page-heading"><h1>{mode === 'local' ? tx("离线模式") : tx("人机对战")}</h1><button className="text-back" onClick={onBack}>{tx("返回")}</button></div>
  <h2>{tx("棋盘")}</h2><div className="size-picker">{([13, 17] as BoardSize[]).map(n => <button key={n} className={`size-tile ${n === size ? 'selected' : ''}`} onClick={() => setSize(n)}><b>{n}</b><span>{tx("路棋盘")}</span></button>)}</div>
  <h2>{tx("玩家")}</h2><div className="seat-config-list">{PLAYERS.map(p => <div className="seat-config" key={p}><ColorChip player={p}/><strong>{playerName(p)}</strong>
- <select aria-label={tx("{p0}棋玩家类型", { p0: colorName(p) })} value={seats[p].kind === 'human' ? 'human' : String(seats[p].level ?? 3)} onChange={e => setSeats(s => ({ ...s, [p]: e.target.value === 'human' ? { kind: 'human' } : { kind: 'ai', level: Number(e.target.value) as AILevel } }))}>
- <option value="human">{tx("真人")}</option>{STAR_LEVELS.map(l => <option value={l} key={l}>AI {'★'.repeat(l)}</option>)}</select></div>)}</div>
+  <select aria-label={tx("{p0}棋玩家类型", { p0: colorName(p) })} value={seats[p].kind === 'human' ? 'human' : seats[p].strategy === 'astra' ? 'astra' : String(seats[p].level ?? 3)} onChange={e => setSeats(s => ({
+    ...s,
+    [p]: e.target.value === 'human'
+      ? { kind: 'human' }
+      : e.target.value === 'astra'
+        ? { kind: 'ai', level: 5, strategy: 'astra' }
+        : { kind: 'ai', level: Number(e.target.value) as AILevel },
+  }))}>
+  <option value="human">{tx("真人")}</option>{STAR_LEVELS.map(l => <option value={l} key={l}>{aiLevelBrand(l) ? `${tx("AI ")}${aiLevelBrand(l)}` : `AI ${'★'.repeat(l)}`}</option>)}<option value="astra">AI Astra</option></select></div>)}</div>
  <div className="setup-bottom"><span>{humans === 0 ? tx("至少保留一名真人") : mode === 'vsai' && ais === 0 ? tx("请选择 1\u20132 位 AI 对手") : tx("{p0} 位真人{p1}", { p0: humans, p1: ais ? tx(" \u00B7 {p0} 位 AI", { p0: ais }) : '' })}</span><button className="btn primary" disabled={humans === 0 || (mode === 'vsai' && ais === 0)} onClick={() => onStart(seats, size)}>{tx("开始对局")}</button></div>
  </main>;
 }

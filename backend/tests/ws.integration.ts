@@ -444,6 +444,123 @@ async function main(): Promise<void> {
     }
   });
 
+  await check('W11 两真实账号局内聊天：身份绑定、幂等、限速、补历史和跨房间拒绝', async () => {
+    const chatAlice = await registerUser('ChatAlice');
+    const chatBob = await registerUser('ChatBob');
+    await Promise.all([
+      api('POST', '/api/tutorial/complete', {}, chatAlice.token),
+      api('POST', '/api/tutorial/complete', {}, chatBob.token),
+    ]);
+    const c1 = await connect(chatAlice.token);
+    const c2 = await connect(chatBob.token);
+    let gameId = '';
+    try {
+      send(c1, { type: 'queue.join' });
+      send(c2, { type: 'queue.join' });
+      const [s1, s2] = await Promise.all([
+        waitFor(c1, 'game.start', 5000),
+        waitFor(c2, 'game.start', 5000),
+      ]);
+      assert.equal(s1.gameId, s2.gameId);
+      assert.notEqual(s1.yourSeat, s2.yourSeat);
+      gameId = String(s1.gameId);
+      const firstId = `ws-chat-${randomUUID()}`;
+      send(c1, {
+        type: 'chat.send',
+        gameId: 'forged-other-room',
+        draft: { kind: 'text', text: '伪造跨房间消息', clientMessageId: `${firstId}-cross` },
+      });
+      const crossWrite = await waitFor(c1, 'chat.error', 3000);
+      assert.equal(crossWrite.code, 'CROSS_ROOM');
+
+      send(c1, {
+        type: 'chat.send',
+        seat: 'B',
+        sender: 'Mallory',
+        authorKind: 'ai',
+        draft: { kind: 'text', text: '真实两账号消息一', clientMessageId: firstId },
+      });
+      const firstA = await drainUntil(c1, 'chat.messages', (message) =>
+        message.messages?.some((item: any) => item.clientMessageId === firstId), 5000);
+      const firstB = await drainUntil(c2, 'chat.messages', (message) =>
+        message.messages?.some((item: any) => item.clientMessageId === firstId), 5000);
+      assert.ok(firstA && firstB, '两个真实账号都应收到同一首发消息');
+      const firstMessage = firstA.messages.find((item: any) => item.clientMessageId === firstId);
+      assert.equal(firstMessage.seat, s1.yourSeat, '服务端必须用认证账号绑定座位');
+      assert.equal(firstMessage.actorId, chatAlice.id, '服务端必须用认证账号绑定 sender');
+      assert.equal(firstMessage.authorKind, 'human', '客户端不能伪造 AI 身份');
+      assert.notEqual(firstMessage.name, 'Mallory');
+      assert.equal(firstMessage.seq, 1, '新房间首个持久消息游标应为 1');
+
+      send(c1, {
+        type: 'chat.send',
+        draft: { kind: 'text', text: '真实两账号消息一', clientMessageId: firstId },
+      });
+      const duplicate = await drainUntil(c1, 'chat.messages', (message) =>
+        message.messages?.some((item: any) => item.clientMessageId === firstId), 500);
+      assert.equal(duplicate, null, '同一 clientMessageId 重发不得再次广播');
+      const persistedCount = db.raw.prepare(
+        'SELECT COUNT(*) AS n FROM chat_messages WHERE room_id = ? AND client_message_id = ?',
+      ).get(gameId, firstId) as { n: number };
+      assert.equal(persistedCount.n, 1, '幂等消息只能持久化一次');
+
+      send(c1, {
+        type: 'chat.send',
+        draft: { kind: 'text', text: '同一 ID 的不同内容', clientMessageId: firstId },
+      });
+      const conflict = await waitFor(c1, 'chat.error', 3000);
+      assert.equal(conflict.code, 'IDEMPOTENCY_CONFLICT');
+
+      send(c1, {
+        type: 'chat.send',
+        draft: { kind: 'text', text: '过快消息', clientMessageId: `ws-chat-${randomUUID()}` },
+      });
+      const limited = await waitFor(c1, 'chat.error', 3000);
+      assert.equal(limited.code, 'RATE_LIMIT');
+
+      await sleep(1600);
+      const secondId = `ws-chat-${randomUUID()}`;
+      send(c2, {
+        type: 'chat.send',
+        draft: { kind: 'sticker', stickerId: 'gg', clientMessageId: secondId },
+      });
+      const secondA = await drainUntil(c1, 'chat.messages', (message) =>
+        message.messages?.some((item: any) => item.clientMessageId === secondId), 5000);
+      assert.ok(secondA);
+      const secondMessage = secondA.messages.find((item: any) => item.clientMessageId === secondId);
+      assert.ok(secondMessage.seq > firstMessage.seq, '消息游标必须单调递增');
+
+      send(c1, { type: 'chat.sync', gameId, after: firstMessage.seq, limit: 20 });
+      const sync = await waitFor(c1, 'chat.messages', 3000);
+      assert.equal(sync.gameId, gameId);
+      assert.ok(sync.messages.some((item: any) => item.clientMessageId === secondId));
+      assert.ok(sync.messages.every((item: any) => item.seq > firstMessage.seq), '补历史必须从顺序游标之后开始');
+
+      send(c1, { type: 'chat.sync', gameId: 'forged-other-room', after: 0 });
+      const crossRead = await waitFor(c1, 'chat.error', 3000);
+      assert.equal(crossRead.code, 'CROSS_ROOM');
+
+      const report = await api('POST', `/api/match-chat/${gameId}/reports`, {
+        messageId: firstMessage.id,
+        reason: 'integration report',
+      }, chatAlice.token);
+      assert.equal(report.status, 201);
+      assert.ok(report.json.reportId);
+      const reportRow = db.raw.prepare(
+        'SELECT room_id, message_id, reporter_id FROM chat_reports WHERE id = ?',
+      ).get(report.json.reportId) as any;
+      assert.deepEqual({ ...reportRow }, {
+        room_id: gameId,
+        message_id: firstMessage.id,
+        reporter_id: chatAlice.id,
+      });
+    } finally {
+      close(c1);
+      close(c2);
+      if (gameId) await waitUntilRoomReleased(gameId);
+    }
+  });
+
   // 1) 教学门禁
   await check('未完成教学不能匹配（tutorial required）', async () => {
     const c1 = await connect(cTut.token);

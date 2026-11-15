@@ -55,7 +55,7 @@ function rotations<T extends Entity>(items: [T, T, T]): Seats<T>[] {
 function fresh(): EntityStats {
   return {
     appearances: 0, wins: 0, decisions: 0, seatWins: { A: 0, B: 0, C: 0 }, latencyMs: [],
-    selectedTactics: { random: 0, tactical: 0, selfish: 0, '3ply': 0, maxn: 0 },
+    selectedTactics: { random: 0, tactical: 0, selfish: 0, '3ply': 0, maxn: 0, astra: 0 },
     blocks: 0, bacWins: 0, fallbacks: 0,
   };
 }
