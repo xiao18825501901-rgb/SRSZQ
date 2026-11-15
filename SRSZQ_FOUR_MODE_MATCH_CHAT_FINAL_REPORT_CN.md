@@ -53,7 +53,15 @@
 - 用户先看到预览，可确认、发送原文或取消。
 - 继续编辑、切换风格、座位或房间会使迟到结果失效。
 - 模型不可用或超时始终回原文，正常聊天和棋局不依赖模型。
-- 当前服务端未配置合法 DeepSeek 凭据。真实探针返回 `ORIGINAL_NO_CREDENTIAL`，分类为 `NOT_CONFIGURED_SERVER_SIDE`；没有伪造成功调用。
+- 已在本机 DSH 受控凭据文件 `C:\Users\Hp\.dsh\.credentials.yaml` 的
+  `refs.DEEPSEEK_API_KEY` 中找到合法服务端凭据；密钥未写入前端、Vite、Git、
+  日志、截图或本报告。
+- DeepSeek 模型列表接口返回 HTTP 200，可用模型为 `deepseek-flash` 和
+  `deepseek-v4-pro`。最终通过真实本地后端 `POST /api/match-chat/rewrite`
+  使用 `deepseek-flash` 完成成功改写：原文“这一手我要认真应对，放马过来！”
+  返回“这一招我可得凝神接住，朋友尽管出招吧！”，模式为 `MODEL_REWRITE`。
+- 首次探针遇到供应商有效响应但 `message.content` 不可用，后端正确回退原文并记录
+  `ORIGINAL_INVALID_OUTPUT`；失败证据单独保留，未伪造成功。
 - 网站 DeepSeek 的可用性与 Reddit 外部 AI 规则无关；Reddit 协作仍只按 OpenAI/Gemini 白名单处理。
 
 ### Astra
@@ -178,6 +186,8 @@
 | `results/fourmode-astra-reacceptance-20261115-184416/BROWSER_ACCEPTANCE.json` | `4f29495e8b66e7e2be4d8a215ad8872ee671b0e05ce0dd1260eb082e7226c760` |
 | `evidence/fourmode-chat/ASTRA_ENGINE_EVIDENCE.json` | `993ed4a9c6dfb48e38754b397c1c47835a65551b095224489250713dd6706bd2` |
 | `evidence/product/2026-11-15T10-47-55-069Z/product-report.json` | `9ee411166b3fefd7c71e824e8fb6c014ca26fde439c6b3905be114b1d36974ec` |
+| `evidence/fourmode-chat/DEEPSEEK_REAL_CALL.json` | `f642585768e4795c60636c14341ef9ff0ad04a5a42df40ce82b2cc4aeb380afc` |
+| `evidence/fourmode-chat/DEEPSEEK_REAL_CALL_ATTEMPT1.json` | `47e0995c09c923fba7d498c7725fc2c5e01c70a0d2bd67012e213d9b16f52c99` |
 
 ## 截图
 
@@ -209,7 +219,7 @@
 
 ## 已知限制与未完成项
 
-- DeepSeek 未配置服务端凭据，因此没有成功模型改写样本；已验证原文回退和预览确认，不虚构模型成功。
+- DeepSeek 已使用本机受控服务端凭据和 `deepseek-flash` 完成真实改写调用；尚未把该凭据部署到生产服务器。
 - 手机键盘是 Chromium 设备指标和短视口模拟，需要发布前在目标手机浏览器再做一次实体软键盘验收。
 - Astra 已做真实引擎调用轨迹，但没有新的独立棋力评估，不能据此宣称达到某星级或战胜强基线。
 - 在线 Astra 服务端补位仍沿用现有联网 AI 兼容路径；本轮 Astra 产品入口主要覆盖人机对战。

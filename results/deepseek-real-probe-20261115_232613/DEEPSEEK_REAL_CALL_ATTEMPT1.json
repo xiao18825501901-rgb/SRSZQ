@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-11-15T15:26:55.443Z",
+  "provider": "DeepSeek",
+  "model": "deepseek-flash",
+  "endpoint": "POST /api/match-chat/rewrite",
+  "httpStatus": 200,
+  "mode": "ORIGINAL_INVALID_OUTPUT",
+  "status": "FALLBACK_OR_ORIGINAL",
+  "style": "wuxia",
+  "originalText": "这一步我要认真下一手，放马过来！",
+  "returnedText": "这一步我要认真下一手，放马过来！",
+  "returnedOriginal": true,
+  "credentialSource": "C:/Users/Hp/.dsh/.credentials.yaml://refs/DEEPSEEK_API_KEY",
+  "credentialSerialized": false,
+  "accountOrTokenSerialized": false
+}

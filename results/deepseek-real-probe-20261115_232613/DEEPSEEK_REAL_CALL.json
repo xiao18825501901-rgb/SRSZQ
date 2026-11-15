@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-11-15T15:27:29.573Z",
+  "provider": "DeepSeek",
+  "model": "deepseek-flash",
+  "endpoint": "POST /api/match-chat/rewrite",
+  "httpStatus": 200,
+  "mode": "MODEL_REWRITE",
+  "status": "REAL_MODEL_REWRITE",
+  "style": "wuxia",
+  "originalText": "这一手我要认真应对，放马过来！",
+  "returnedText": "这一招我可得凝神接住，朋友尽管出招吧！",
+  "returnedOriginal": false,
+  "credentialSource": "C:/Users/Hp/.dsh/.credentials.yaml://refs/DEEPSEEK_API_KEY",
+  "credentialPresent": true,
+  "credentialSerialized": false,
+  "accountOrTokenSerialized": false
+}

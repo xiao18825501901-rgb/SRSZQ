@@ -20,9 +20,13 @@ Astra 的真实调用证据位于
 - 趣味改写的接口是 `POST /api/match-chat/rewrite`，只允许服务端读取环境变量中的模型配置。
 - 模型输入仅包含当前一句话与所选风格；迟到响应在继续编辑、切换风格、座位或房间时失效。
 - 模型不可用时返回原文，不影响聊天和棋局。
-- 当前本地验收未配置 DeepSeek 服务端凭据，证据为
-  `results/fourmode-20261115/DEEPSEEK_STATUS.json`，
-  状态是 `NOT_CONFIGURED_SERVER_SIDE`。
+- 本机 DSH 受控凭据文件中的 `refs.DEEPSEEK_API_KEY` 已验证有效；模型列表
+  返回 `deepseek-flash` 和 `deepseek-v4-pro`。
+- 最终真实调用使用 `deepseek-flash`，经
+  `POST /api/match-chat/rewrite` 返回 `MODEL_REWRITE`。脱敏证据位于
+  `evidence/fourmode-chat/DEEPSEEK_REAL_CALL.json`；密钥本身未保存或分发。
+- 首次调用因供应商响应没有可用的 `message.content` 而安全回退原文，
+  `ORIGINAL_INVALID_OUTPUT` 证据单独保存。
 - 网站 DeepSeek 可用性不能作为 Reddit 外部 AI 可用性证据；Reddit 协作仍按 OpenAI/Gemini 白名单单独处理。
 
 ## 权威边界
