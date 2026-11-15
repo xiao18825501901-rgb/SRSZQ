@@ -6,7 +6,7 @@
 - 功能分支：`feature/four-mode-match-chat-20261114`
 - 原始基线：`fa6a15c5baca8472fd2f096049c9829a32fc3251`
 - 首次实现提交：`5cc0c17ab447a1e842cff1029e2c10cd5381dd75`
-- 本轮最终自动化验证的源码 HEAD：`dddd2751dc1374d2e4c990c2c2423fc5c81b703a`
+- 本轮最终自动化验证的已提交基线：`5a2f5e852296f5e517d2062beabbc85cd14f2bae`
 - 最终交付提交：以交付包根目录 `COMMIT.txt` 和 Git 分支 HEAD 为准
 - WebSocket 协议版本：`2`
 - 共享比赛布局：`SharedMatchLayout v1`，四种模式均通过同一个组件接入原 Board
@@ -64,22 +64,20 @@
 - Astra 是单独入口：`level=5, strategy='astra'`。
 - Astra 直接调用原 `maxnSearch`，绕过 `selectTactic`、Tactical、Random、Selfish 和 3-Ply 覆盖，并跳过防守策略改写。
 - AI controller、worker、主线程回退、座位序列化、座位相等比较均保留 `strategy`。
-- MaxN 不等同于穷举完整终局树，也不承诺必胜。Astra 当前记录 depth 3、1,230 nodes；13×13 与 17×17 都走到真实引擎。
+- MaxN 不等同于穷举完整终局树，也不承诺必胜。Astra 最终证据记录 depth 2、48 nodes；13×13 与 17×17 都走到真实引擎，且无 fallback。
 
 ## 真实验收
 
-最终浏览器重跑时间：`2026-11-15T10:04:07.354Z`（Asia/Shanghai 为 `2026-11-15 18:04:07`）
+最终浏览器重跑时间：`2026-11-15T10:44:17.043Z`（Asia/Shanghai 为 `2026-11-15 18:44:17`）
 
 最终完整结果：
-`results/fourmode-final-delivery-20261115-175739/browser-final/BROWSER_ACCEPTANCE.json`
+`results/fourmode-astra-reacceptance-20261115-184416/BROWSER_ACCEPTANCE.json`
 
-最终汇总：
-`results/fourmode-final-delivery-20261115-175739/ACCEPTANCE_SUMMARY.json`
-
-最终截图与执行日志：`results/fourmode-final-delivery-20261115-175739/`
+最终截图与执行日志：`results/fourmode-astra-reacceptance-20261115-184416/`
 
 更早的浏览器与测试记录继续保留，用于追踪失败和修复过程；本报告以
-`results/fourmode-final-delivery-20261115-175739/ACCEPTANCE_SUMMARY.json` 为最终证据索引。
+`results/fourmode-astra-reacceptance-20261115-184416/BROWSER_ACCEPTANCE.json`
+为最终浏览器证据索引。
 
 ### 四模式 × 布局
 
@@ -123,13 +121,14 @@
 
 ## 自动化验证
 
-本次最终自动化日志位于 `results/fourmode-final-delivery-20261115-175739/`；更早的完整验收记录
-继续保留在 `results/fourmode-20261115/`。
+本次最终自动化日志位于 `results/fourmode-astra-reacceptance-20261115-184416/`；
+产品套件汇总位于 `evidence/product/2026-11-15T10-47-55-069Z/product-report.json`。
+更早的完整验收记录继续保留，用于追踪调试过程。
 
 | 检查 | 结果 |
 |---|---|
 | 根/前端/后端 TypeScript | PASS |
-| Vitest | 25 files / 204 tests PASS |
+| Vitest | 25 files / 205 tests PASS |
 | WebSocket 集成 | ALL PASS |
 | Backend API integration | ALL PASS |
 | Results settlement | ALL PASS |
@@ -153,14 +152,14 @@
 
 ## Astra 真实轨迹
 
-证据：`results/fourmode-final-delivery-20261115-175739/ASTRA_ENGINE_TRACE.json`
+证据：`evidence/fourmode-chat/ASTRA_ENGINE_EVIDENCE.json`
 
 | 棋盘 | 选择 | 落点 | 深度 | 节点 | 引擎耗时 |
 |---|---|---|---:|---:|---:|
-| 13×13 | Astra pure MaxN | (6,6) | 3 | 1,230 | 129.29 ms |
-| 17×17 | Astra pure MaxN | (8,8) | 3 | 1,230 | 163.32 ms |
+| 13×13 | Astra pure MaxN | (6,6) | 2 | 48 | 16.01 ms |
+| 17×17 | Astra pure MaxN | (8,8) | 2 | 48 | 10.45 ms |
 
-分类为 `REAL_ENGINE_CALL_TRACE_PERFORMANCE_ONLY`，不构成棋力或胜率结论。
+分类为 `REAL_ENGINE_CALL_NOT_A_STRENGTH_RESULT`，不构成棋力或胜率结论。
 
 ## 关键源码与指纹
 
@@ -172,15 +171,17 @@
 | `shared/src/product/protocol.ts` | `f82376c488c2aad2f03ae84044cea5735269f4e4d4d4ea39308f5ae11511b1b6` |
 | `shared/src/ai/chooseAIMove.ts` | `5ffce87942719aa6ddb81583bfdcbb60a6ee97ae0afa174752e25c491d35b78b` |
 | `shared/src/ai/seats.ts` | `6c899b0cdd10355bc21f1d74c1d5af9b0b562fe42c9dd017d90515f0af94dc4d` |
+| `shared/src/ai/tests/brandProfiles.test.ts` | `80da8954e047b1cf62bfd83ba5d5f52321cbb8736e5055175cff7cb904e80975` |
 | `backend/src/chat.ts` | `20c89c8444a32f2fef9ee345cc962f28fbf4730da3ef53e80693d2221e81a7f6` |
 | `backend/src/ws/gameServer.ts` | `2adab04c38f17d0cb316f8cd8cd1c7417cb2e92a8c4f8c49e1bf010012441895` |
-| `results/fourmode-final-delivery-20261115-175739/browser-final/BROWSER_ACCEPTANCE.json` | `5a6b42bc8443011fd08bac552b391aeee0fcd19d6c1c528a5b430abf29e28a06` |
-| `results/fourmode-final-delivery-20261115-175739/ASTRA_ENGINE_TRACE.json` | `458c21b5fd78feda0dcf3f31168ff401b37e0ea78dade14848ce2e86d5d64251` |
-| `results/fourmode-final-delivery-20261115-175739/DEEPSEEK_STATUS.json` | `89807241148dd4315af9383de8a8607575d4dd601d5e2ed905bebf1717c6bbf3` |
+| `backend/tests/ws.integration.ts` | `d0040549fbe533e5021efb8737d7415bb23dec4a1b4f7896a4ee8eceedfa5e05` |
+| `results/fourmode-astra-reacceptance-20261115-184416/BROWSER_ACCEPTANCE.json` | `4f29495e8b66e7e2be4d8a215ad8872ee671b0e05ce0dd1260eb082e7226c760` |
+| `evidence/fourmode-chat/ASTRA_ENGINE_EVIDENCE.json` | `993ed4a9c6dfb48e38754b397c1c47835a65551b095224489250713dd6706bd2` |
+| `evidence/product/2026-11-15T10-47-55-069Z/product-report.json` | `9ee411166b3fefd7c71e824e8fb6c014ca26fde439c6b3905be114b1d36974ec` |
 
 ## 截图
 
-最终目录：`results/fourmode-final-delivery-20261115-175739/browser-final/`
+最终目录：`results/fourmode-astra-reacceptance-20261115-184416/`
 
 - 桌面：`01`, `02`, `06`, `07`, `10`, `11`
 - 390px 全高：`03`, `12`, `14`, `16`
@@ -212,4 +213,5 @@
 - 手机键盘是 Chromium 设备指标和短视口模拟，需要发布前在目标手机浏览器再做一次实体软键盘验收。
 - Astra 已做真实引擎调用轨迹，但没有新的独立棋力评估，不能据此宣称达到某星级或战胜强基线。
 - 在线 Astra 服务端补位仍沿用现有联网 AI 兼容路径；本轮 Astra 产品入口主要覆盖人机对战。
+- 新增的独立 Edge CDP 诊断脚本在本机隔离用户配置启动时未稳定建立调试端口；该失败未用于验收。最终四模式验收使用项目既有真实全栈 Chromium/Edge 验收器完成。
 - 未发布生产、未改 DNS/云平台、未替用户 Submit。

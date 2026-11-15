@@ -14,6 +14,14 @@
 3. 不执行 schema drop，不重写既有棋局、评分或用户记录。
 4. 若聊天体验需人工关闭，先关闭聊天入口和改写接口，再回退应用版本。
 
+## 验收范围
+
+- 本轮最终自动化：TypeScript 全量通过，Vitest 25 files / 205 tests，全部产品套件通过，生产前端构建通过。
+- 四模式真实本地全栈截图、双账号聊天与移动布局证据位于
+  `results/fourmode-astra-reacceptance-20261115-184416/`。
+- 手机键盘使用 Chromium 短视口模拟；目标手机上的实体软键盘仍应在上线窗口单独验收。
+- DeepSeek 当前为 `NOT_CONFIGURED_SERVER_SIDE`，本次只验证了预览、原文回退、取消和正常聊天不依赖模型。
+
 ## 数据与凭据
 
 - 交付包不包含 `.env`、API key、会话令牌、生产数据库、SQLite/WAL 或本地运行数据。

@@ -26,3 +26,7 @@ evidence/
 
 # Local release archives generated from a committed tree
 deliverables/
+
+# Ephemeral browser profile created by local acceptance diagnostics
+results/edge-debug-profile/
+results/_edge-*/
