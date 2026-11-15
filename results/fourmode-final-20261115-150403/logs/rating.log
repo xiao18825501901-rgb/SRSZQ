@@ -1,0 +1,60 @@
+
+> srszq@0.2.0 test:rating
+> tsx backend/tests/rating.policy.ts
+
+--- H V1 评分算法（规格第 4.2 节）---
+PASS  H1 规格自带例子：三人同分正常局 = +16 / -8 / -8
+PASS  H2 规格自带例子：三人同分单人退出 = -8 / +4 / +4
+PASS  H3 真平局：全员 y=1/3 -> 分差 0
+PASS  H4 系统中止：不更新 rating（规格 4.2）
+PASS  H5 三人全部退出：不更新 rating
+PASS  H6 两人退出只剩一人：幸存者 y=1
+PASS  H7 不同分值：ΣDelta 定点后精确为 0，精度 1e-4
+PASS  H8 不在 0 处 clamp：低分者继续扣分，总和不变正（规格 4.2）
+--- I 资格与策略选择（规格 4.1 / 55 / 142）---
+PASS  I1 快速人机局（AI 补位）永不产生真人竞技分
+PASS  I2 好友局 / 非 online 一律不计竞技分
+PASS  I3 beta 关闭时，恰好 3 真人仍走 legacy 过渡策略
+PASS  I4 门禁未过（未完成教学）不得进入 beta
+PASS  I5 无竞技后果的终局：不上分也不扣分（规格 4.2）
+PASS  I6 重复对手保护：同一三人组合 24h 内第 4 局起不计分（规格 4.2）
+PASS  I7 开局前预判：与结算同源，且第 4 局能在开局前就说出原因（规格 4.2「开局前提示」）
+--- J 真实对局：积分到底有没有被改（本轮修的缺陷）---
+{"event":"queue_join","queueId":"queue-1","userId":"e4000c3f-0b66-4c55-9654-aa954a0f951d","humanCount":1,"aiCount":2,"deadline":1794726324483,"timestamp":1794726324184}
+{"event":"deadline_reached","queueId":"queue-1","humanCount":1,"aiCount":2,"deadline":1794726324483,"trigger":"timer","timestamp":1794726324498}
+{"event":"ai_fill_begin","queueId":"queue-1","humanCount":1,"aiCount":2,"timestamp":1794726324498}
+{"event":"ai_fill_complete","queueId":"queue-1","roomId":"79df050d-316c-4aad-9132-4faa3dd16a2a","humanCount":1,"aiCount":2,"timestamp":1794726324504}
+{"event":"room_created","queueId":"queue-1","roomId":"79df050d-316c-4aad-9132-4faa3dd16a2a","humanCount":1,"aiCount":2,"timestamp":1794726324504}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"79df050d-316c-4aad-9132-4faa3dd16a2a","userId":"e4000c3f-0b66-4c55-9654-aa954a0f951d","humanCount":1,"aiCount":2,"timestamp":1794726324507}
+{"event":"match_started","queueId":"queue-1","roomId":"79df050d-316c-4aad-9132-4faa3dd16a2a","humanCount":1,"aiCount":2,"timestamp":1794726324508}
+{"event":"rating_policy_applied","roomId":"79df050d-316c-4aad-9132-4faa3dd16a2a","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726324540}
+PASS  J1 真实 1H+2AI 快速局：真人 rating 必须不变（修复前会被 -10/+30）
+{"event":"queue_join","queueId":"queue-2","userId":"233df696-76ce-43fa-8485-ae67ae5281df","humanCount":1,"aiCount":2,"deadline":1794726325306,"timestamp":1794726325007}
+{"event":"queue_join","queueId":"queue-2","userId":"25699e06-5cb9-4564-b0e3-2305daf09575","humanCount":2,"aiCount":1,"deadline":1794726325307,"timestamp":1794726325008}
+{"event":"queue_join","queueId":"queue-2","userId":"198c3e91-f77c-4107-9ae2-aa6bb07ac639","humanCount":3,"aiCount":0,"deadline":1794726325309,"timestamp":1794726325009}
+{"event":"ai_fill_begin","queueId":"queue-2","humanCount":3,"aiCount":0,"timestamp":1794726325010}
+{"event":"ai_fill_complete","queueId":"queue-2","roomId":"1568bea9-de79-4f24-8b18-d2957f5af55f","humanCount":3,"aiCount":0,"timestamp":1794726325012}
+{"event":"room_created","queueId":"queue-2","roomId":"1568bea9-de79-4f24-8b18-d2957f5af55f","humanCount":3,"aiCount":0,"timestamp":1794726325012}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"1568bea9-de79-4f24-8b18-d2957f5af55f","userId":"233df696-76ce-43fa-8485-ae67ae5281df","humanCount":3,"aiCount":0,"timestamp":1794726325014}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"1568bea9-de79-4f24-8b18-d2957f5af55f","userId":"25699e06-5cb9-4564-b0e3-2305daf09575","humanCount":3,"aiCount":0,"timestamp":1794726325015}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"1568bea9-de79-4f24-8b18-d2957f5af55f","userId":"198c3e91-f77c-4107-9ae2-aa6bb07ac639","humanCount":3,"aiCount":0,"timestamp":1794726325017}
+{"event":"match_started","queueId":"queue-2","roomId":"1568bea9-de79-4f24-8b18-d2957f5af55f","humanCount":3,"aiCount":0,"timestamp":1794726325017}
+PASS  J2 真实 3 真人 online 局：beta 关闭时仍按 legacy +30/-10 结算（过渡期保留）
+{"event":"queue_join","queueId":"queue-3","userId":"462d9696-4ba6-4f7e-8352-4ae9dadb02ee","humanCount":1,"aiCount":2,"deadline":1794726325928,"timestamp":1794726325630}
+{"event":"queue_join","queueId":"queue-3","userId":"155fd15f-2648-4d8d-98dd-3629d3dbacaa","humanCount":2,"aiCount":1,"deadline":1794726325930,"timestamp":1794726325633}
+{"event":"queue_join","queueId":"queue-3","userId":"4eb09dd1-51be-43cf-9624-8b52d2596463","humanCount":3,"aiCount":0,"deadline":1794726325933,"timestamp":1794726325635}
+{"event":"ai_fill_begin","queueId":"queue-3","humanCount":3,"aiCount":0,"timestamp":1794726325635}
+{"event":"ai_fill_complete","queueId":"queue-3","roomId":"14f73ccd-7481-44e7-a76b-04ad20bf25c5","humanCount":3,"aiCount":0,"timestamp":1794726325637}
+{"event":"room_created","queueId":"queue-3","roomId":"14f73ccd-7481-44e7-a76b-04ad20bf25c5","humanCount":3,"aiCount":0,"timestamp":1794726325637}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"14f73ccd-7481-44e7-a76b-04ad20bf25c5","userId":"462d9696-4ba6-4f7e-8352-4ae9dadb02ee","humanCount":3,"aiCount":0,"timestamp":1794726325640}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"14f73ccd-7481-44e7-a76b-04ad20bf25c5","userId":"155fd15f-2648-4d8d-98dd-3629d3dbacaa","humanCount":3,"aiCount":0,"timestamp":1794726325641}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"14f73ccd-7481-44e7-a76b-04ad20bf25c5","userId":"4eb09dd1-51be-43cf-9624-8b52d2596463","humanCount":3,"aiCount":0,"timestamp":1794726325643}
+{"event":"match_started","queueId":"queue-3","roomId":"14f73ccd-7481-44e7-a76b-04ad20bf25c5","humanCount":3,"aiCount":0,"timestamp":1794726325643}
+{"event":"rating_policy_applied","roomId":"14f73ccd-7481-44e7-a76b-04ad20bf25c5","policy":"none","sameTrioMatchNumber":4,"noContest":false,"provisionalSeats":0,"timestamp":1794726325670}
+PASS  J3 重复对手保护在真实流程中生效：第 4 局开局前就告知 REPEAT_OPPONENTS，且与结算一致
+PASS  J4 排行榜过滤合成/测试/演示账号（规格 4.1）
+PASS  J5 legacy 分差函数仍可用于历史对账（规格 4.1：旧分只读保留）
+PASS  J6 测试/合成账号按规则登记（规格 4.1：不得冒充真人进排行榜）
+--- 观测 ---
+OBSERVED {"h1":{"A":16,"B":-8,"C":-8},"h2":{"A":-8,"B":4,"C":4},"h7_sum":0,"h8_after":[26.9978,1488.0011,1488.0011],"j2_deltas":[-10,30,30],"j3_count":3,"j4_topRating":1290,"j6_source":"TEST"}
+RATING POLICY: ALL PASS 0

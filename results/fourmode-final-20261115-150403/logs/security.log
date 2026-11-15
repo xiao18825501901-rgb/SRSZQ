@@ -1,0 +1,64 @@
+
+> srszq@0.2.0 test:security
+> tsx backend/tests/security.worker.ts
+
+--- F worker 池：有界 / 硬超时 / 降级 / 过期 ---
+PASS  F1 S01 搜索已在 worker 线程：主线程事件循环不再被阻塞
+PASS  F2 S01 并发有界：队列满立即拒绝，不无限堆积
+{"event":"ai_pool_warmed","warmed":1,"poolSize":1,"timestamp":1794726317197}
+PASS  F3 S01 硬超时：杀线程并重建，后续任务仍能成功
+PASS  F4 S02 过期任务丢弃：旧 revision 的排队任务被作废
+--- G WS 安全边界：Origin / 体积 / 二进制 / 限流 / 会话撤销 ---
+PASS  G1 S05 Origin 判定：白名单外一律拒绝，缺 Origin 按非浏览器客户端处理
+{"event":"ws_origin_rejected","origin":"https://evil.example","reason":"DENIED_NOT_LISTED","timestamp":1794726317655}
+PASS  G2 S05 真实升级：伪造 Origin 连 WebSocket 都不建立
+{"event":"ws_frame_rejected","userId":"26aa825d-8296-498d-8eac-8a01223a995f","code":"TOO_LARGE","timestamp":1794726317738}
+{"event":"ws_frame_rejected","userId":"26aa825d-8296-498d-8eac-8a01223a995f","code":"BINARY_FRAME","timestamp":1794726320882}
+PASS  G3 S06 帧校验：64KB 上限与二进制帧
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321089}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321089}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321089}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321089}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321089}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321089}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321089}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321089}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321090}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321091}
+{"event":"ws_rate_limited","userId":"db9b10c6-3103-45b3-aee1-8a1ab0261c43","timestamp":1794726321092}
+PASS  G4 S06 限流：超速消息被拒且不计入对局
+{"event":"ws_session_revoked","userId":"2d5388bd-2cf1-411d-bc47-4b6527848d3e","reason":"LOGOUT","timestamp":1794726321310}
+{"event":"ws_unauthenticated_rejected","timestamp":1794726321725}
+PASS  G5 S07 登出即撤销长连接：旧 socket 立刻失效
+{"event":"queue_join","queueId":"queue-1","userId":"degrade-user","humanCount":1,"aiCount":2,"deadline":1794726321907,"timestamp":1794726321788}
+{"event":"deadline_reached","queueId":"queue-1","humanCount":1,"aiCount":2,"deadline":1794726321907,"trigger":"timer","timestamp":1794726321921}
+{"event":"ai_fill_begin","queueId":"queue-1","humanCount":1,"aiCount":2,"timestamp":1794726321922}
+{"event":"ai_fill_complete","queueId":"queue-1","roomId":"3f6bb9f6-2171-479b-9a7d-d2bac5122021","humanCount":1,"aiCount":2,"timestamp":1794726321926}
+{"event":"room_created","queueId":"queue-1","roomId":"3f6bb9f6-2171-479b-9a7d-d2bac5122021","humanCount":1,"aiCount":2,"timestamp":1794726321926}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"3f6bb9f6-2171-479b-9a7d-d2bac5122021","userId":"degrade-user","humanCount":1,"aiCount":2,"timestamp":1794726321928}
+{"event":"match_started","queueId":"queue-1","roomId":"3f6bb9f6-2171-479b-9a7d-d2bac5122021","humanCount":1,"aiCount":2,"timestamp":1794726321928}
+{"event":"ai_degraded_legal_fallback","difficulty":3,"selectedTactic":"legal-fallback","degraded":"QUEUE_FULL","moveLatency":0,"legal":true,"round":1,"seat":"A","roomId":"3f6bb9f6-2171-479b-9a7d-d2bac5122021","taskId":"ed011a53-7d0c-4248-947a-6b7432b9caf9","timestamp":1794726321937}
+{"event":"ai_degraded_legal_fallback","difficulty":2,"selectedTactic":"legal-fallback","degraded":"QUEUE_FULL","moveLatency":0,"legal":true,"round":1,"seat":"B","roomId":"3f6bb9f6-2171-479b-9a7d-d2bac5122021","taskId":"c46c5056-4bed-4b3f-8adc-784138bf258d","timestamp":1794726321952}
+PASS  G6 S03 AI 不可用时仍走合法一手，对局不卡死（确定性触发降级）
+--- 观测 ---
+OBSERVED {"f1_blockedMs":21.9,"f2_rejected":6,"f2_decided":2,"f3_firstOutcome":"timeout","f4_cancelled":3,"g4_rateLimited":true,"g6_mySeat":"C","g6_aiMovesUnderDegrade":2}
+SECURITY WORKER: ALL PASS 0

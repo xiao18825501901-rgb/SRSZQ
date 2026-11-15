@@ -67,9 +67,15 @@
 
 ## 真实验收
 
-验收时间：`2026-11-15T06:52:40.569Z`（Asia/Shanghai 为 `2026-11-15 14:52:40`）
+最终浏览器重跑时间：`2026-11-15T07:11:20.880Z`（Asia/Shanghai 为 `2026-11-15 15:11:20`）
 
-完整结果：`results/fourmode-20261115/BROWSER_ACCEPTANCE.json`
+最终完整结果：`results/fourmode-browser-rerun-20261115-v2/BROWSER_ACCEPTANCE.json`
+
+最终截图与执行日志：`results/fourmode-browser-rerun-20261115-v2/`
+
+最初一轮重跑曾从仓库根目录启动 Vite，页面返回 404，未进入产品验收；失败日志单独保留在
+`results/fourmode-browser-rerun-20261115/browser-acceptance.log`。修正为从 `frontend/`
+启动后，上述最终重跑完成并通过。早期验收记录 `results/fourmode-20261115/` 也继续保留。
 
 ### 四模式 × 布局
 
@@ -113,7 +119,8 @@
 
 ## 自动化验证
 
-最终日志位于 `results/fourmode-20261115/logs/`。
+本次最终自动化日志位于 `results/fourmode-final-20261115-150403/logs/`；更早的完整验收记录
+继续保留在 `results/fourmode-20261115/`。
 
 | 检查 | 结果 |
 |---|---|
@@ -168,7 +175,7 @@
 
 ## 截图
 
-目录：`results/fourmode-20261115/`
+最终目录：`results/fourmode-browser-rerun-20261115-v2/`
 
 - 桌面：`01`, `02`, `06`, `07`, `10`, `11`
 - 390px 全高：`03`, `12`, `14`, `16`

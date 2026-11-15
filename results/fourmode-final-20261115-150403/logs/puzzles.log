@@ -1,0 +1,39 @@
+
+> srszq@0.2.0 test:puzzles
+> tsx backend/tests/puzzles.bank.ts
+
+--- R07 题库 V1 ---
+PASS  R07a 首批题量在 30-60 之间，元信息与实际题目数组一致
+PASS  R07b 规格要求的三类必备都在首批里（且禁手冲突子类非空）
+PASS  R07c 每条轨迹都能用真实引擎完整重放（题目来自合法完整轨迹）
+PASS  R07d 每道题都能通过独立验证（起始局面 + 穷举重算的答案集）
+PASS  R07e 题库就是算法从这批轨迹产出的那一份（在测试里重算并逐条比对）
+PASS  R07f 即时胜利题枚举全部致胜点（独立数连复核，不只引擎选中的那一个）
+PASS  R07g 跨轮防守题不夸大：多威胁时只说占掉一个，并给出剩余威胁数
+PASS  R07h 禁手冲突题：答案必须合法，且题面标出被禁手排除的威胁点数量
+PASS  R07i 判题：集合内的点都算对，合法但非答案算错，非法手单独区分
+PASS  R07j 整盘切分：同一局的题不跨 split，且三等分后 train/dev/test 都非空
+PASS  R07k 去重：没有两道已发布题是同一局面 + 同一类型
+PASS  R07l 紧凑轨迹编码可逆（产物里的轨迹不是一次性快照）
+PASS  R07m 每日一题的选择只看已发布题，且按日期确定（同一天所有人同题）
+--- R08 每日题 / 错题 / 进度 ---
+PASS  R08a 未登录不得取每日题
+PASS  R08b 每日题对同一天稳定、跨天可变化，且不出售答案
+PASS  R08c 同一 attemptId 重发只记一次（attempt 去重）
+PASS  R08d 进度持久：答对后状态为 SOLVED，答错进错题本并可重练
+PASS  R08e 未证明答案集的题不会混进正式判题（本批次 0 道，机制上也不可能）
+PASS  R08f 尝试记录与进度都在数据库里（不是内存态）
+PASS  R08g 每日一题时间线与服务器自报的 round/eligiblePlayer 一致（同一规则源）
+PASS  R08h 复盘步进：时间线随“正在查看第几手”变化（R5 无胜权 → R6 白 → R7 绿 → R8 红）
+PASS  R08i 全部已发布题目的 round/eligiblePlayer 都符合正式规则（60 道逐条核对）
+PASS  R08j 用**前端同款编码**的 puzzleId 作答不得 404（本次线上缺陷的回归）
+PASS  R08k 不存在的 puzzleId 才返回 404（编码与原始都一样）
+PASS  R08l 正确答案 -> CORRECT；合法但非答案 -> INCORRECT（判题仍在服务端）
+PASS  R08m 非法落点给出明确结论（ILLEGAL 或 4xx），绝不能是 404
+PASS  R08n 同一 attemptId 重发：duplicate=true 且不重复计数（含编码 id 路径）
+PASS  R08o 作答后进度按人记录（答对后移出错题本）
+PASS  R08p 题面时间线：由真实题面局面算出，R13 绿 / R14 红 / 之后按循环继续
+PASS  R08q 复盘退回历史再回到当前局面后，仍可正常作答（不产生 404）
+--- 观测 ---
+OBSERVED {"r07":{"total":60,"byType":{"WIN_NOW":15,"PREEMPT_LAST_THREAT":15,"PREEMPT_ONE_THREAT":15,"FORBIDDEN_BLOCK":15},"bySource":{"HUMAN_ONLINE":5,"SYNTHETIC_SELFPLAY":55},"bySplit":{"dev":15,"test":8,"train":37}},"r07_conflict":{"forbidddenBlock":15,"realConflict":12},"r07_trails":{"count":29,"plies":2239},"r07_rebuild":{"published":60,"hash":"2d9e788425171e48384112fb8308724f"},"r07_winnow":{"puzzles":15,"withMultipleAnswers":13},"r07_preempt":{"last":15,"oneOf":15},"r07_split":{"dev":15,"test":8,"train":37},"r07_daily":{"distinctOver30Days":22},"r08_daily":{"distinct":8},"r08g":{"puzzleId":"selfplay-13-forbidden-s179:ply39:forbidden-A","round":13,"eligible":"B","window":8},"r08h":{"p0":null,"p14":null,"p15":"C","p18":"B","p21":"A"},"r08i":{"checked":60,"wrong":0},"r08j":{"puzzleId":"selfplay-13-forbidden-s151:ply17:forbidden-C","rawStatus":200,"encodedStatus":200},"r08k":{"raw":404,"encoded":404},"r08l":{"correct":"CORRECT","wrong":"INCORRECT","wrongPoint":[0,3]},"r08m":{"occupied":"200/ILLEGAL","outOfRange":"200/ILLEGAL","badArgs":400},"r08n":{"attempts":1,"duplicate":true},"r08o":{"afterWrong":1,"afterCorrect":1},"r08p":{"puzzleRound":6,"puzzleEligible":"C","r13":"B","r14":"A","cycle":["A","C","B"]},"r08q":{"replayTurn":44,"liveTurn":47,"verdict":"INCORRECT"}}
+PUZZLES: ALL PASS 0

@@ -1,0 +1,56 @@
+
+> srszq@0.2.0 test:history
+> tsx backend/tests/history.replay.ts
+
+{"event":"queue_join","queueId":"queue-1","userId":"b022f1fd-9198-4201-97b2-0f3e029c6ec6","humanCount":1,"aiCount":2,"deadline":1794726328536,"timestamp":1794726328137}
+{"event":"queue_join","queueId":"queue-1","userId":"c8c5d729-dee1-4bf6-8b96-8e0fee89ecb7","humanCount":2,"aiCount":1,"deadline":1794726328538,"timestamp":1794726328139}
+{"event":"queue_join","queueId":"queue-1","userId":"65e53f39-bd66-4ce0-847a-a73eecddee98","humanCount":3,"aiCount":0,"deadline":1794726328539,"timestamp":1794726328140}
+{"event":"ai_fill_begin","queueId":"queue-1","humanCount":3,"aiCount":0,"timestamp":1794726328140}
+{"event":"ai_fill_complete","queueId":"queue-1","roomId":"4b7885db-f414-4674-a4f1-c2d0c88529d0","humanCount":3,"aiCount":0,"timestamp":1794726328144}
+{"event":"room_created","queueId":"queue-1","roomId":"4b7885db-f414-4674-a4f1-c2d0c88529d0","humanCount":3,"aiCount":0,"timestamp":1794726328144}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"4b7885db-f414-4674-a4f1-c2d0c88529d0","userId":"b022f1fd-9198-4201-97b2-0f3e029c6ec6","humanCount":3,"aiCount":0,"timestamp":1794726328146}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"4b7885db-f414-4674-a4f1-c2d0c88529d0","userId":"c8c5d729-dee1-4bf6-8b96-8e0fee89ecb7","humanCount":3,"aiCount":0,"timestamp":1794726328147}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"4b7885db-f414-4674-a4f1-c2d0c88529d0","userId":"65e53f39-bd66-4ce0-847a-a73eecddee98","humanCount":3,"aiCount":0,"timestamp":1794726328149}
+{"event":"match_started","queueId":"queue-1","roomId":"4b7885db-f414-4674-a4f1-c2d0c88529d0","humanCount":3,"aiCount":0,"timestamp":1794726328149}
+--- R01 历史与分页 ---
+PASS  R01a 未登录不得读历史
+PASS  R01b 本人历史可读且顺序正确（本人视角，含结果与分差）
+PASS  R01c 历史不泄露对手内部 ID / 邮箱 / IP
+PASS  R01d 分页边界：limit 上限 50、offset 可推进、total 与过滤条件一致
+PASS  R01e 别人的对局不在我的历史里，也不能重放（404，不用 403 泄露存在性）
+--- R02 全谱重放 / 分支隔离 ---
+PASS  R02a 重放逐手走真实引擎，最终 hash 与服务器权威快照一致
+PASS  R02b 重放确定性：同一棋谱两次重放得到同一 hash
+PASS  R02c 伪造棋谱会被真实引擎拒绝（占位 / 违反行动序 / 禁手）
+PASS  R02d 终局后分支试下不写回原比赛：事件/快照/结算摘要全部不变
+PASS  R02e 17×17 满盘量级的重放/窗口预算可测量且远低于上限
+--- R03 关键三手解释 ---
+PASS  R03a 终局给出至多 3 个关键片段，覆盖 致胜 / 错失 / 跨轮遮挡
+PASS  R03b certainty 诚实：只给精确一步结论，绝不出现搜索估计或胜率
+PASS  R03c 坐标/执子/胜权/禁手与引擎一致（逐点复核）
+PASS  R03d 无关键片段的局面不编造解释（平局/中止返回空数组）
+--- R04 跨轮防守 / R05 多个好动作 ---
+PASS  R04a 从威胁出现到兑现前统计**全部**动作（含第三方、含跨轮）
+PASS  R04b 联合可防不写成对手必然合作（文案只有事实，无动机定性）
+PASS  R05a 真实对局：只列此刻仍可用的致胜点（(0,0) 已被占，不列) 
+PASS  R05b 有多个已证明答案时必须全部列出（独立复核每个点都真的成四）
+PASS  R05c 启发式第二名不会被说成唯一错误：候选是“集合”而非“唯一正解”
+--- R06 分享与撤销 ---
+PASS  R06a 只有终局后、由参与者本人才能创建分享链接（7 天 TTL）
+PASS  R06b 匿名可读，且不泄露内部 ID / 邮箱 / 用户名 / 会话信息
+PASS  R06c 撤销后不可访问（410），且只有创建者能撤销
+PASS  R06d 过期链接不可访问（7 天后 410 expired）
+{"event":"queue_join","queueId":"queue-2","userId":"514ae1b8-58b3-4f82-ba2f-3fbe5d8522f7","humanCount":1,"aiCount":2,"deadline":1794726338127,"timestamp":1794726337728}
+{"event":"deadline_reached","queueId":"queue-2","humanCount":1,"aiCount":2,"deadline":1794726338127,"trigger":"timer","timestamp":1794726338128}
+{"event":"ai_fill_begin","queueId":"queue-2","humanCount":1,"aiCount":2,"timestamp":1794726338128}
+{"event":"ai_fill_complete","queueId":"queue-2","roomId":"123ad586-2384-4e52-a546-4536545b84a9","humanCount":1,"aiCount":2,"timestamp":1794726338130}
+{"event":"room_created","queueId":"queue-2","roomId":"123ad586-2384-4e52-a546-4536545b84a9","humanCount":1,"aiCount":2,"timestamp":1794726338130}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"123ad586-2384-4e52-a546-4536545b84a9","userId":"514ae1b8-58b3-4f82-ba2f-3fbe5d8522f7","humanCount":1,"aiCount":2,"timestamp":1794726338131}
+{"event":"match_started","queueId":"queue-2","roomId":"123ad586-2384-4e52-a546-4536545b84a9","humanCount":1,"aiCount":2,"timestamp":1794726338132}
+{"event":"rating_policy_applied","roomId":"123ad586-2384-4e52-a546-4536545b84a9","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726338177}
+PASS  R06e 进行中的对局不能分享、不能重放（分析只在终局后）
+PASS  R06f 分享链接在数据库中可审计：不含 game_id 的公开发布面之外，行本身可核对
+PASS  R06g 公开分享按来源限流（未认证的昂贵重放不能被打满）
+--- 观测 ---
+OBSERVED {"r01_item":{"gameId":"4b7885db-f414-4674-a4f1-c2d0c88529d0","seat":"A","outcome":"LOSS","ratingDelta":-10,"mode":"online","boardSize":13,"endReason":"NORMAL_WIN","winnerSeat":"B","isRanked":true,"scorePolicy":"legacy-online-v1","settledAt":1794726328465,"moveCount":20,"hasShare":false},"r02":{"finalHash":"be6f08fd0d1950c1c6dfab4c9a0c199a","hashMatches":true,"moveCount":20},"r02d_code":"NO_ACTIVE_GAME","r02e":{"plies":218,"endStatus":"won","replayMs":10,"windowsMs":14,"keyMovesMs":4,"windows":57,"keyMoves":3},"r03":[{"ply":20,"type":"IMMEDIATE_WIN","seat":"B","row":6,"col":4,"round":7,"points":1},{"ply":18,"type":"MISSED_WIN","seat":"C","row":2,"col":2,"round":6,"points":1},{"ply":16,"type":"PREEMPTIVE_BLOCK","seat":"A","row":0,"col":0,"round":6,"points":1}],"r04_windows":9,"r04_window":{"openedAtPly":8,"resolvedAtPly":20,"actions":12,"selfResolved":true},"r05_points":[[0,0],[0,4]],"r06":{"ttlMs":604800000,"path":"/s/43f9380bb2814731a8091357a4829e67"},"r06_public_keys":["seat","label","kind","outcome","ratingDelta"],"r06g":{"ok":24,"limited":1,"firstLimitedAt":24}}
+HISTORY REPLAY: ALL PASS 0

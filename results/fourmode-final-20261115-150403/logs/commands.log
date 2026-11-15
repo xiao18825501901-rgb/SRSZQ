@@ -1,0 +1,74 @@
+
+> srszq@0.2.0 test:commands
+> tsx backend/tests/commands.protocol.ts
+
+--- D 命令信封 / 幂等 / revision ---
+{"event":"queue_join","queueId":"queue-1","userId":"4aebeece-df02-40c2-97f1-aad68c684c07","humanCount":1,"aiCount":2,"deadline":1794726310219,"timestamp":1794726309970}
+{"event":"deadline_reached","queueId":"queue-1","humanCount":1,"aiCount":2,"deadline":1794726310219,"trigger":"timer","timestamp":1794726310224}
+{"event":"ai_fill_begin","queueId":"queue-1","humanCount":1,"aiCount":2,"timestamp":1794726310224}
+{"event":"ai_fill_complete","queueId":"queue-1","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","humanCount":1,"aiCount":2,"timestamp":1794726310227}
+{"event":"room_created","queueId":"queue-1","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","humanCount":1,"aiCount":2,"timestamp":1794726310227}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","userId":"4aebeece-df02-40c2-97f1-aad68c684c07","humanCount":1,"aiCount":2,"timestamp":1794726310229}
+{"event":"match_started","queueId":"queue-1","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","humanCount":1,"aiCount":2,"timestamp":1794726310229}
+PASS  D1 缺少命令信封 -> BAD_ENVELOPE，且不落子、不推进 revision
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":292.7815999999998,"legal":true,"round":1,"seat":"A","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"de272525-969d-483b-a5a7-859a0c04853a","timestamp":1794726310499}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"tactical","degraded":null,"moveLatency":1.804399999999987,"legal":true,"round":1,"seat":"B","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"7bcc0489-63f5-49c8-983f-0ccf292491eb","timestamp":1794726310519}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":129.68360000000007,"legal":true,"round":2,"seat":"A","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"ecaf0a4d-c1bc-46fb-9394-b82e9f102fa6","timestamp":1794726310629}
+PASS  D2 同一 commandId 重发：回放 ACK，不二次落子
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"random","degraded":null,"moveLatency":1.1911999999999807,"legal":true,"round":2,"seat":"B","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"34f1b688-58f8-42cb-ae5a-ba909ffe215b","timestamp":1794726310765}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"tactical","degraded":null,"moveLatency":1.2027999999997974,"legal":true,"round":3,"seat":"A","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"d5dc720f-3d66-41ff-ad01-f9b7eaea3a7e","timestamp":1794726310796}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"selfish","degraded":null,"moveLatency":43.384700000000066,"legal":true,"round":3,"seat":"B","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"775b90f2-1b0f-419f-86bc-f37095f9ada2","timestamp":1794726310832}
+PASS  D3 同一 commandId 不同 payload -> IDEMPOTENCY_CONFLICT
+PASS  D4 过期 revision -> STALE_REVISION，命令不生效
+PASS  D5 非法落子不推进 revision、不重置落子时钟
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"tactical","degraded":null,"moveLatency":1.3553999999999178,"legal":true,"round":4,"seat":"A","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"284df4ac-9b08-4506-9fa5-88e9d1498d56","timestamp":1794726311434}
+PASS  D6 先持久化后广播：每条 game.state 的 revision 都能在库里找到
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"tactical","degraded":null,"moveLatency":1.6574999999998,"legal":true,"round":4,"seat":"B","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"18fddf52-698e-496d-9b33-f521811c2b11","timestamp":1794726311635}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":167.4634000000001,"legal":true,"round":5,"seat":"A","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","taskId":"9b9218c9-b0a1-4572-b672-ee1539cc0b33","timestamp":1794726311764}
+PASS  D7 房间串行：连发两条命令，revision 严格 +1 且按顺序生效
+--- E 重启恢复 / 系统中止 / 版本核验 ---
+{"event":"queue_join","queueId":"queue-2","userId":"f9222d79-0d76-4f41-a889-380a59bda915","humanCount":1,"aiCount":2,"deadline":1794726312165,"timestamp":1794726311916}
+{"event":"deadline_reached","queueId":"queue-2","humanCount":1,"aiCount":2,"deadline":1794726312165,"trigger":"sweeper","timestamp":1794726312171}
+{"event":"ai_fill_begin","queueId":"queue-2","humanCount":1,"aiCount":2,"timestamp":1794726312171}
+{"event":"ai_fill_complete","queueId":"queue-2","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","humanCount":1,"aiCount":2,"timestamp":1794726312175}
+{"event":"room_created","queueId":"queue-2","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","humanCount":1,"aiCount":2,"timestamp":1794726312175}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","userId":"f9222d79-0d76-4f41-a889-380a59bda915","humanCount":1,"aiCount":2,"timestamp":1794726312178}
+{"event":"match_started","queueId":"queue-2","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","humanCount":1,"aiCount":2,"timestamp":1794726312178}
+{"event":"ai_tactic_selected","difficulty":5,"selectedTactic":"3ply","degraded":null,"moveLatency":104.86079999999993,"legal":true,"round":1,"seat":"A","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","taskId":"cf630010-1282-486f-9a38-4f56ade9b44b","timestamp":1794726312239}
+{"event":"ai_tactic_selected","difficulty":2,"selectedTactic":"3ply","degraded":null,"moveLatency":82.76410000000033,"legal":true,"round":1,"seat":"B","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","taskId":"219114d7-cfc4-45bd-bb1f-e164305a85ec","timestamp":1794726312304}
+{"event":"ai_tactic_selected","difficulty":5,"selectedTactic":"random","degraded":null,"moveLatency":1.0889999999999418,"legal":true,"round":2,"seat":"A","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","taskId":"2518d17e-83af-418d-bfb8-29a3d3c0dd09","timestamp":1794726312325}
+{"event":"rating_policy_applied","roomId":"0ca22110-fcc5-4f8d-95ec-216fcf142686","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726312390}
+{"event":"recovery_paused","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","mode":"online","revision":4,"deadlineAt":1794726313291,"humans":1,"timestamp":1794726312491}
+{"event":"recovery_resumed","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","revision":4,"timestamp":1794726312498}
+PASS  E1 重启后未完成对局进入 RECOVERY_PAUSED，窗口内 resume 可继续
+{"event":"queue_join","queueId":"queue-3","userId":"4c43d0bb-014a-476e-963d-5cb8b5d59f2d","humanCount":1,"aiCount":2,"deadline":1794726312989,"timestamp":1794726312741}
+{"event":"ai_tactic_selected","difficulty":2,"selectedTactic":"selfish","degraded":null,"moveLatency":287.4052999999999,"legal":true,"round":2,"seat":"B","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","taskId":"fdcae6f6-bb3b-45d9-9395-23c88a226779","timestamp":1794726312770}
+{"event":"deadline_reached","queueId":"queue-3","humanCount":1,"aiCount":2,"deadline":1794726312989,"trigger":"timer","timestamp":1794726313001}
+{"event":"ai_fill_begin","queueId":"queue-3","humanCount":1,"aiCount":2,"timestamp":1794726313001}
+{"event":"ai_fill_complete","queueId":"queue-3","roomId":"39d9dbc5-ef1c-4d92-81f8-a54034b2c36e","humanCount":1,"aiCount":2,"timestamp":1794726313007}
+{"event":"room_created","queueId":"queue-3","roomId":"39d9dbc5-ef1c-4d92-81f8-a54034b2c36e","humanCount":1,"aiCount":2,"timestamp":1794726313007}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"39d9dbc5-ef1c-4d92-81f8-a54034b2c36e","userId":"4c43d0bb-014a-476e-963d-5cb8b5d59f2d","humanCount":1,"aiCount":2,"timestamp":1794726313011}
+{"event":"match_started","queueId":"queue-3","roomId":"39d9dbc5-ef1c-4d92-81f8-a54034b2c36e","humanCount":1,"aiCount":2,"timestamp":1794726313011}
+{"event":"ai_degraded_legal_fallback","difficulty":4,"selectedTactic":"legal-fallback","degraded":"CLOSED","moveLatency":0,"legal":true,"round":1,"seat":"B","roomId":"39d9dbc5-ef1c-4d92-81f8-a54034b2c36e","taskId":"6fd461e5-79dd-439b-847d-75b1d732f5e3","timestamp":1794726313048}
+{"event":"recovery_paused","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","mode":"online","revision":5,"deadlineAt":1794726313508,"humans":1,"timestamp":1794726313208}
+{"event":"recovery_paused","roomId":"39d9dbc5-ef1c-4d92-81f8-a54034b2c36e","mode":"online","revision":2,"deadlineAt":1794726313509,"humans":1,"timestamp":1794726313209}
+{"event":"rating_policy_applied","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726313217}
+{"event":"recovery_expired","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","revision":5,"timestamp":1794726313513}
+{"event":"rating_policy_applied","roomId":"efd800d3-cdda-4e44-a67e-77a4518f77d9","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726313513}
+{"event":"recovery_expired","roomId":"39d9dbc5-ef1c-4d92-81f8-a54034b2c36e","revision":2,"timestamp":1794726313514}
+{"event":"rating_policy_applied","roomId":"39d9dbc5-ef1c-4d92-81f8-a54034b2c36e","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726313514}
+PASS  E2 恢复窗口到期 -> SYSTEM_ABORT，全员 VOID、评分不变
+PASS  E3 协议版本不一致 -> 连接被拒绝（不做静默降级）
+{"event":"queue_join","queueId":"queue-4","userId":"9f61403c-b383-4ee8-9056-e971c1d02cf2","humanCount":1,"aiCount":2,"deadline":1794726313815,"timestamp":1794726313567}
+{"event":"deadline_reached","queueId":"queue-4","humanCount":1,"aiCount":2,"deadline":1794726313815,"trigger":"timer","timestamp":1794726313821}
+{"event":"ai_fill_begin","queueId":"queue-4","humanCount":1,"aiCount":2,"timestamp":1794726313821}
+{"event":"ai_fill_complete","queueId":"queue-4","roomId":"92a18690-ddc2-4644-b0c3-a313d445e6cf","humanCount":1,"aiCount":2,"timestamp":1794726313825}
+{"event":"room_created","queueId":"queue-4","roomId":"92a18690-ddc2-4644-b0c3-a313d445e6cf","humanCount":1,"aiCount":2,"timestamp":1794726313825}
+{"event":"broadcast_start","queueId":"queue-4","roomId":"92a18690-ddc2-4644-b0c3-a313d445e6cf","userId":"9f61403c-b383-4ee8-9056-e971c1d02cf2","humanCount":1,"aiCount":2,"timestamp":1794726313827}
+{"event":"match_started","queueId":"queue-4","roomId":"92a18690-ddc2-4644-b0c3-a313d445e6cf","humanCount":1,"aiCount":2,"timestamp":1794726313827}
+{"event":"ai_degraded_legal_fallback","difficulty":3,"selectedTactic":"legal-fallback","degraded":"CLOSED","moveLatency":0,"legal":true,"round":1,"seat":"A","roomId":"92a18690-ddc2-4644-b0c3-a313d445e6cf","taskId":"4abfb923-20a6-46fb-899b-f7bf6b8ced5f","timestamp":1794726313837}
+{"event":"ai_degraded_legal_fallback","difficulty":4,"selectedTactic":"legal-fallback","degraded":"CLOSED","moveLatency":0,"legal":true,"round":1,"seat":"B","roomId":"92a18690-ddc2-4644-b0c3-a313d445e6cf","taskId":"efab3f2e-6b29-4cb7-bff8-b468d66ff618","timestamp":1794726313853}
+PASS  E4 /api/version 与 socket 使用同一套版本，且与源码常量一致
+--- 本轮观测样本 ---
+OBSERVED {"ackReplays":1,"staleRejected":1,"conflictRejected":1,"recoveredRooms":1,"recoveryExpired":1}
+COMMANDS PROTOCOL: ALL PASS 0

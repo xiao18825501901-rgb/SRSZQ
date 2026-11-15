@@ -1,0 +1,12 @@
+
+> srszq@0.2.0 typecheck
+> tsc --noEmit -p tsconfig.json && npm run typecheck -w frontend && npm run typecheck -w backend
+
+
+> @srszq/frontend@0.2.0 typecheck
+> tsc --noEmit
+
+
+> @srszq/backend@0.2.0 typecheck
+> tsc --noEmit
+

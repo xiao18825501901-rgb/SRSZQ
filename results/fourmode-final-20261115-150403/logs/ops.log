@@ -1,0 +1,20 @@
+
+> srszq@0.2.0 test:ops
+> tsx backend/tests/ops.readiness.ts
+
+--- O05 备份恢复演练 ---
+PASS  O05a 用 SQLite 在线备份 API 取一致性快照（含已提交的 WAL 页）
+PASS  O05b 在隔离目录恢复：integrity_check=ok 且关键行数、最近 resultId、评分全部一致
+--- 就绪探针 ---
+PASS  R1 /health 只表示存活：不依赖 DB 与 worker 也能回 200
+PASS  R2 /ready 三项检查齐备，全通过时 200 且给出 worker 预热数
+PASS  R3 迁移缺表 -> MIGRATIONS failed 且整体不就绪（/ready 会返回 503）
+PASS  R4 DB 不可写 -> DB_WRITABLE failed（写路径真的被走过）
+PASS  R5 /version 给出协议三元组与前后端源码标识，且不含任何密钥
+--- 管理端控制台接口 ---
+PASS  A1 管理端接口要求 ADMIN：普通账号 403，管理员可见实时快照且不含身份信息
+--- 迁移向后兼容 ---
+PASS  M1 旧库（只有 P0A 之前的表）用当前代码打开：补表补列、旧数据一行不丢
+--- 观测 ---
+OBSERVED {"o05_backupBytes":352256,"o05":{"restoredBytes":352256,"results":1,"latestGame":"ops-game-1"},"r2":["MIGRATIONS=25 张表与 4 个关键列齐备","DB_WRITABLE=写事务成功并已回滚（无副作用）","AI_WORKER=预热 2/2"],"r5":{"releaseId":"p4b-20260930","checks":["MIGRATIONS","DB_WRITABLE","AI_WORKER"]},"a1":{"liveOps":{"rooms":3,"roomsEnded":1,"wsClients":7,"queuedEntries":2,"worker":{"poolSize":2,"warm":2,"running":1,"queued":0,"submitted":10,"decided":9,"timedOut":0,"failed":0,"rejected":1,"cancelled":0,"respawns":0}},"db":{"liveGames":0,"settledToday":0,"pendingReports":0,"pendingDataTasks":0,"datasetRuns":0,"publishedPuzzles":60},"taskCount":1},"m1":{"legacyUsers":1,"tables":25}}
+OPS READINESS: ALL PASS 0

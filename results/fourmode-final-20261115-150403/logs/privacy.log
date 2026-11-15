@@ -1,0 +1,29 @@
+
+> srszq@0.2.0 test:privacy
+> tsx backend/tests/privacy.dataset.ts
+
+--- D01 训练许可 ---
+PASS  D01a 默认不纳入：没有记录时一律按不允许处理
+PASS  D01b 授予/撤回/版本不符三种状态各自可判定，并写审计
+PASS  D01c 一局里只要有一位参与者未授权，这一局就不纳入
+--- D02/D03 数据集切分与对称去重 ---
+PASS  D02a 空间镜像对局被识别为重复样本，只保留一份
+PASS  D03a 红绿白颜色置换**不**视为等价（规格明写不等价）
+PASS  D03b stateKey 含棋盘尺寸/ruleset/turnIndex 与资格 phase
+PASS  D02b 整盘切分：同一局不跨 split，且 test 不得用于选权重
+PASS  D02c 未授权的人类棋谱被排除，合成棋谱可纳入（默认不纳入私密真人数据）
+PASS  D02d 端到端：真实棋谱先被排除，授予许可后纳入，撤回后停止纳入
+--- D04 运行登记（同 seed/配置/轨迹不算新增独立样本）---
+PASS  D04 阶段重跑登记一次为独立样本，重复登记被识别
+--- O01 事件表 ---
+PASS  O01a eventId 去重；bot/合成在真人口径里被排除
+PASS  O01b 客户端不能伪造对局事实（白名单外的事件被拒）
+--- O04 数据导出与删除 ---
+PASS  O04a 导出为任务形态：DONE 后取回本人数据，且不含凭据与他人身份
+PASS  O04b 删除账号：多人记录去标识、分享被撤销、他人记录不受影响
+--- O03 举报 / 屏蔽 / 审计 ---
+PASS  O03a 举报只登记不自动处罚，进人工队列
+PASS  O03b 举报复核与屏蔽/解除都留审计，且不影响历史评分
+--- 观测 ---
+OBSERVED {"d02_duplicates":1,"d02_splits":{"train":2,"test":1},"d02_build":{"candidates":1,"withoutConsent":0,"withConsent":1,"afterRevoke":0,"bySplit":{"train":1}},"o01":{"humanOnly":{"total":1,"distinctUsers":0,"samples":0},"all":{"total":3,"distinctUsers":0,"samples":0}},"o04_delete":{"deidentifiedParticipants":2,"revokedShares":1,"deletedSessions":1,"policy":"多人记录去标识（不删除他人合法记录）；已撤销全部分享链接；账号本体改为已注销占位","taskId":"2b1ae39e-587e-488b-854a-108bf222a376"}}
+PRIVACY DATASET: ALL PASS 0

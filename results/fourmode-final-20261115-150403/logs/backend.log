@@ -1,0 +1,18 @@
+
+> srszq@0.2.0 test:backend
+> tsx backend/tests/api.integration.ts
+
+PASS  CORS 仅回显生产与回退白名单来源
+PASS  CORS preflight 拒绝非白名单来源
+PASS  注册成功并返回 token/user
+PASS  me 返回本人资料
+PASS  登出后 token 失效
+PASS  登录成功
+PASS  错误密码 → 401
+PASS  非法邮箱/短密码 → 400
+PASS  重复邮箱/用户名 → 409
+PASS  教学完成标记生效
+PASS  排行榜返回注册用户（按 rating 排序）
+PASS  邀请拒绝流程（reject）
+
+BACKEND API INTEGRATION: ALL PASS

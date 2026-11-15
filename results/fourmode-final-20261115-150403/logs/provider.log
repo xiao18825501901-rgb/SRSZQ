@@ -1,0 +1,24 @@
+
+> srszq@0.2.0 test:provider
+> tsx backend/tests/ai.provider.ts
+
+--- D07 续训声明校验 ---
+PASS  D07a 字段齐全时 EXACT_RESUME 通过；缺 RNG/优化器/步数时被拒绝并列出缺失项
+PASS  D07b WEIGHTS_ONLY_LOAD 通过，但必须明确列出“没有恢复什么”
+PASS  D07c 连权重都没有时任何声明都不成立；不存在静默升级
+PASS  D07d 研究协议门槛：训练量 0 -> PARTIAL；有非法手/崩溃 -> BLOCKED；全满足 -> READY
+--- 6.3 provider 接口 ---
+PASS  P1 生产 provider 是默认且唯一会落子的实现：逐手合法
+PASS  P2 shadow flag 默认关闭时，shadow provider 完全不会被调用
+PASS  P3 shadow 即使开启也只观察：落子永远来自生产 provider
+PASS  P4 Invitus 形态的适配器：元数据不全时拒绝运行，并说明缺什么
+PASS  P5 provider 现状描述如实：未接入 Invitus、未训练任何模型
+--- D06/D08 评测矩阵 ---
+PASS  D06a 分层聚合：按棋盘/对手族/档位/座位分别统计，不只 pooled
+PASS  D06b 延迟分位与合法性、崩溃、拒绝都进统计
+PASS  D06c 矩阵哈希稳定：同输入同哈希，改一手即变
+PASS  D06d 真实引擎路径：预算不成为约束时，同种子两局逐手一致
+PASS  D06e 可复现的前提被验证：单次决策耗时远低于时间预算（预算没卡住搜索）
+--- 观测 ---
+OBSERVED {"d07_required":12,"d07_gates":{"zero":"PARTIAL","bad":"BLOCKED","good":"READY"},"p1_moves":40,"p3_shadow":"DIFFERS","d06_cells":2,"d06_real":{"plies":27,"hash":"afa525a443e7fadc9f9af6c04654c174","budget":{"timeBudgetMs":3000,"maxDepth":3}},"d06_budget":{"maxMs":117.97,"budgetMs":3000,"pressure":0.039}}
+AI PROVIDER: ALL PASS 0

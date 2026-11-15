@@ -1,0 +1,75 @@
+
+> srszq@0.2.0 test:results
+> tsx backend/tests/results.settlement.ts
+
+--- A 纯模型（服务器结算语义，无 IO） ---
+PASS  A1 真平局：全员 DRAW，无 LOSS，零积分变化
+PASS  A2 AI 成四：保留获胜棋色，winnerUserIds 为空是正常情况
+PASS  A3 真人成四：胜者 +30，其余 -10，摘要可绑定证据
+PASS  A4 系统中止：全员 VOID，零竞技变更
+PASS  A5 断线宽限：仍在自身宽限期的玩家记 VOID，不被别人的超时连坐
+PASS  A6 功能开关：默认关闭，解析严格，且服务端实际值可核验
+--- B 真实 SQLite：原子、幂等、回滚、迁移 ---
+PASS  B1 原子落库：结果 + 参与者 + 账本 + 评分在同一事务内一致
+PASS  B2 重复终局 100 次：同一结果，不额外写统计/账本
+PASS  B3 数据库失败注入：整笔回滚，无半份结果；恢复后一次重试成功
+PASS  B5 真实引擎终局 + 真实库：AI 棋色落盘，winnerUserId 为空
+PASS  B4 迁移可重复执行：重开库两次，schema 齐备且历史评分/战绩不被重置
+--- C 真实 WebSocket 端到端（真库 + 真广播） ---
+{"event":"queue_join","queueId":"queue-1","userId":"8eacf664-e97d-415c-8f5a-588872dd0bfa","humanCount":1,"aiCount":2,"deadline":1794726304707,"timestamp":1794726304408}
+{"event":"queue_join","queueId":"queue-1","userId":"7aec709c-a443-4b6f-844d-75a26eada95b","humanCount":2,"aiCount":1,"deadline":1794726304708,"timestamp":1794726304409}
+{"event":"queue_join","queueId":"queue-1","userId":"dfe7c4d7-ac1a-4559-a7d3-4555e1b6ae18","humanCount":3,"aiCount":0,"deadline":1794726304710,"timestamp":1794726304411}
+{"event":"ai_fill_begin","queueId":"queue-1","humanCount":3,"aiCount":0,"timestamp":1794726304411}
+{"event":"ai_fill_complete","queueId":"queue-1","roomId":"abe43d59-f047-47ca-a969-c726f698c13e","humanCount":3,"aiCount":0,"timestamp":1794726304415}
+{"event":"room_created","queueId":"queue-1","roomId":"abe43d59-f047-47ca-a969-c726f698c13e","humanCount":3,"aiCount":0,"timestamp":1794726304415}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"abe43d59-f047-47ca-a969-c726f698c13e","userId":"8eacf664-e97d-415c-8f5a-588872dd0bfa","humanCount":3,"aiCount":0,"timestamp":1794726304418}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"abe43d59-f047-47ca-a969-c726f698c13e","userId":"7aec709c-a443-4b6f-844d-75a26eada95b","humanCount":3,"aiCount":0,"timestamp":1794726304420}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"abe43d59-f047-47ca-a969-c726f698c13e","userId":"dfe7c4d7-ac1a-4559-a7d3-4555e1b6ae18","humanCount":3,"aiCount":0,"timestamp":1794726304421}
+{"event":"match_started","queueId":"queue-1","roomId":"abe43d59-f047-47ca-a969-c726f698c13e","humanCount":3,"aiCount":0,"timestamp":1794726304422}
+PASS  C1 3H 真实成四/平局：广播的胜负与库内已提交行逐字一致
+{"event":"queue_join","queueId":"queue-2","userId":"8eacf664-e97d-415c-8f5a-588872dd0bfa","humanCount":1,"aiCount":2,"deadline":1794726306557,"timestamp":1794726306258}
+{"event":"queue_join","queueId":"queue-2","userId":"7aec709c-a443-4b6f-844d-75a26eada95b","humanCount":2,"aiCount":1,"deadline":1794726306558,"timestamp":1794726306260}
+{"event":"queue_join","queueId":"queue-2","userId":"dfe7c4d7-ac1a-4559-a7d3-4555e1b6ae18","humanCount":3,"aiCount":0,"deadline":1794726306560,"timestamp":1794726306261}
+{"event":"ai_fill_begin","queueId":"queue-2","humanCount":3,"aiCount":0,"timestamp":1794726306261}
+{"event":"ai_fill_complete","queueId":"queue-2","roomId":"79afb3ae-f2a6-4d26-b552-f8206f949fae","humanCount":3,"aiCount":0,"timestamp":1794726306263}
+{"event":"room_created","queueId":"queue-2","roomId":"79afb3ae-f2a6-4d26-b552-f8206f949fae","humanCount":3,"aiCount":0,"timestamp":1794726306263}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"79afb3ae-f2a6-4d26-b552-f8206f949fae","userId":"8eacf664-e97d-415c-8f5a-588872dd0bfa","humanCount":3,"aiCount":0,"timestamp":1794726306265}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"79afb3ae-f2a6-4d26-b552-f8206f949fae","userId":"7aec709c-a443-4b6f-844d-75a26eada95b","humanCount":3,"aiCount":0,"timestamp":1794726306267}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"79afb3ae-f2a6-4d26-b552-f8206f949fae","userId":"dfe7c4d7-ac1a-4559-a7d3-4555e1b6ae18","humanCount":3,"aiCount":0,"timestamp":1794726306268}
+{"event":"match_started","queueId":"queue-2","roomId":"79afb3ae-f2a6-4d26-b552-f8206f949fae","humanCount":3,"aiCount":0,"timestamp":1794726306268}
+PASS  C2 3H 主动退出：只有退出者判负，胜负/座位与库内一致
+{"event":"queue_join","queueId":"queue-3","userId":"f2b68c92-66f9-4c35-86c8-f0f0d0e4de1a","humanCount":1,"aiCount":2,"deadline":1794726307164,"timestamp":1794726306865}
+{"event":"queue_join","queueId":"queue-3","userId":"b824c609-c34d-4fab-84a5-c85f4d067f50","humanCount":2,"aiCount":1,"deadline":1794726307165,"timestamp":1794726306866}
+{"event":"queue_join","queueId":"queue-3","userId":"3a088585-7c4e-4029-8154-8df91d286db5","humanCount":3,"aiCount":0,"deadline":1794726307167,"timestamp":1794726306868}
+{"event":"ai_fill_begin","queueId":"queue-3","humanCount":3,"aiCount":0,"timestamp":1794726306868}
+{"event":"ai_fill_complete","queueId":"queue-3","roomId":"a1b5ca07-6fff-4ae2-8ff3-c8993d86d543","humanCount":3,"aiCount":0,"timestamp":1794726306870}
+{"event":"room_created","queueId":"queue-3","roomId":"a1b5ca07-6fff-4ae2-8ff3-c8993d86d543","humanCount":3,"aiCount":0,"timestamp":1794726306870}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"a1b5ca07-6fff-4ae2-8ff3-c8993d86d543","userId":"f2b68c92-66f9-4c35-86c8-f0f0d0e4de1a","humanCount":3,"aiCount":0,"timestamp":1794726306872}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"a1b5ca07-6fff-4ae2-8ff3-c8993d86d543","userId":"b824c609-c34d-4fab-84a5-c85f4d067f50","humanCount":3,"aiCount":0,"timestamp":1794726306873}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"a1b5ca07-6fff-4ae2-8ff3-c8993d86d543","userId":"3a088585-7c4e-4029-8154-8df91d286db5","humanCount":3,"aiCount":0,"timestamp":1794726306875}
+{"event":"match_started","queueId":"queue-3","roomId":"a1b5ca07-6fff-4ae2-8ff3-c8993d86d543","humanCount":3,"aiCount":0,"timestamp":1794726306875}
+PASS  C3 断线宽限：仍在自身宽限期的玩家记 VOID，评分不变
+{"event":"queue_join","queueId":"queue-1","userId":"fault-user-1","humanCount":1,"aiCount":2,"deadline":1794726307431,"timestamp":1794726307312}
+{"event":"deadline_reached","queueId":"queue-1","humanCount":1,"aiCount":2,"deadline":1794726307431,"trigger":"timer","timestamp":1794726307437}
+{"event":"ai_fill_begin","queueId":"queue-1","humanCount":1,"aiCount":2,"timestamp":1794726307437}
+{"event":"ai_fill_complete","queueId":"queue-1","roomId":"b99628ab-a5cd-4619-a786-b135c0897d4b","humanCount":1,"aiCount":2,"timestamp":1794726307441}
+{"event":"room_created","queueId":"queue-1","roomId":"b99628ab-a5cd-4619-a786-b135c0897d4b","humanCount":1,"aiCount":2,"timestamp":1794726307441}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"b99628ab-a5cd-4619-a786-b135c0897d4b","userId":"fault-user-1","humanCount":1,"aiCount":2,"timestamp":1794726307443}
+{"event":"match_started","queueId":"queue-1","roomId":"b99628ab-a5cd-4619-a786-b135c0897d4b","humanCount":1,"aiCount":2,"timestamp":1794726307443}
+{"event":"rating_policy_applied","roomId":"b99628ab-a5cd-4619-a786-b135c0897d4b","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726307470}
+{"event":"settlement_attempt_failed","gameId":"b99628ab-a5cd-4619-a786-b135c0897d4b","attempt":1,"maxAttempts":3,"error":"INJECTED_SETTLE_FAILURE","timestamp":1794726307470}
+{"event":"settlement_attempt_failed","gameId":"b99628ab-a5cd-4619-a786-b135c0897d4b","attempt":2,"maxAttempts":3,"error":"INJECTED_SETTLE_FAILURE","timestamp":1794726307471}
+{"event":"settlement_attempt_failed","gameId":"b99628ab-a5cd-4619-a786-b135c0897d4b","attempt":3,"maxAttempts":3,"error":"INJECTED_SETTLE_FAILURE","timestamp":1794726307471}
+{"event":"settlement_failed","gameId":"b99628ab-a5cd-4619-a786-b135c0897d4b","reason":"PLAYER_FORFEIT","attempts":3,"error":"INJECTED_SETTLE_FAILURE","timestamp":1794726307471}
+{"event":"rating_policy_applied","roomId":"b99628ab-a5cd-4619-a786-b135c0897d4b","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726307500}
+PASS  C4 服务端结算失败：不广播成功，房间保留；重试后正确完成
+{"event":"ai_fill_complete","queueId":"invite-f2fed6d3-5df8-4de4-926f-96f10cf542a5","roomId":"f7881534-9c0a-4123-809d-46eccda2bda9","humanCount":2,"aiCount":1,"timestamp":1794726307997}
+{"event":"room_created","queueId":"invite-f2fed6d3-5df8-4de4-926f-96f10cf542a5","roomId":"f7881534-9c0a-4123-809d-46eccda2bda9","humanCount":2,"aiCount":1,"timestamp":1794726307997}
+{"event":"broadcast_start","queueId":"invite-f2fed6d3-5df8-4de4-926f-96f10cf542a5","roomId":"f7881534-9c0a-4123-809d-46eccda2bda9","userId":"b087036f-ce3e-48f9-b7d0-5b885b75b7d4","humanCount":2,"aiCount":1,"timestamp":1794726307998}
+{"event":"broadcast_start","queueId":"invite-f2fed6d3-5df8-4de4-926f-96f10cf542a5","roomId":"f7881534-9c0a-4123-809d-46eccda2bda9","userId":"17bf61ba-b2f5-49b8-b4b4-48313ae32aa2","humanCount":2,"aiCount":1,"timestamp":1794726307999}
+{"event":"match_started","queueId":"invite-f2fed6d3-5df8-4de4-926f-96f10cf542a5","roomId":"f7881534-9c0a-4123-809d-46eccda2bda9","humanCount":2,"aiCount":1,"timestamp":1794726307999}
+{"event":"rating_policy_applied","roomId":"f7881534-9c0a-4123-809d-46eccda2bda9","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726308003}
+PASS  C5 好友局全员离开 → SYSTEM_ABORT 落盘，全员 VOID、零竞技变更
+--- 本轮观测样本（用于如实报告，不作强度结论） ---
+OBSERVED {"terminated":1,"aiBoardWins":0,"humanBoardWins":1,"draws":0}
+RESULTS SETTLEMENT: ALL PASS 0

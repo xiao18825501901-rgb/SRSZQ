@@ -1,0 +1,251 @@
+
+> srszq@0.2.0 test:ws
+> tsx backend/tests/ws.integration.ts
+
+{"event":"queue_join","queueId":"queue-1","userId":"92019424-0568-418e-b31d-a52470a06612","humanCount":1,"aiCount":2,"deadline":1794726280364,"timestamp":1794726280116}
+{"event":"deadline_reached","queueId":"queue-1","humanCount":1,"aiCount":2,"deadline":1794726280364,"trigger":"timer","timestamp":1794726280378}
+{"event":"ai_fill_begin","queueId":"queue-1","humanCount":1,"aiCount":2,"timestamp":1794726280378}
+{"event":"ai_fill_complete","queueId":"queue-1","roomId":"42464def-224e-4a73-9c87-092a8d512b40","humanCount":1,"aiCount":2,"timestamp":1794726280388}
+{"event":"room_created","queueId":"queue-1","roomId":"42464def-224e-4a73-9c87-092a8d512b40","humanCount":1,"aiCount":2,"timestamp":1794726280389}
+{"event":"broadcast_start","queueId":"queue-1","roomId":"42464def-224e-4a73-9c87-092a8d512b40","userId":"92019424-0568-418e-b31d-a52470a06612","humanCount":1,"aiCount":2,"timestamp":1794726280394}
+{"event":"match_started","queueId":"queue-1","roomId":"42464def-224e-4a73-9c87-092a8d512b40","humanCount":1,"aiCount":2,"timestamp":1794726280394}
+{"event":"rating_policy_applied","roomId":"42464def-224e-4a73-9c87-092a8d512b40","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726280767}
+PASS  W9 1H timeout → 2AI → room/game.start + 13×13 + BAC payload
+{"event":"queue_join","queueId":"queue-2","userId":"e96116e4-1eb9-46b0-83f0-45db50365ed1","humanCount":1,"aiCount":2,"deadline":1794726281118,"timestamp":1794726280869}
+{"event":"queue_join","queueId":"queue-2","userId":"58d6d208-8edc-45f4-80fc-fbc9281c66d2","humanCount":2,"aiCount":1,"deadline":1794726281120,"timestamp":1794726280871}
+{"event":"deadline_reached","queueId":"queue-2","humanCount":2,"aiCount":1,"deadline":1794726281118,"trigger":"sweeper","timestamp":1794726281121}
+{"event":"ai_fill_begin","queueId":"queue-2","humanCount":2,"aiCount":1,"timestamp":1794726281122}
+{"event":"ai_fill_complete","queueId":"queue-2","roomId":"48442729-9e1a-462b-ae6c-895289b37427","humanCount":2,"aiCount":1,"timestamp":1794726281125}
+{"event":"room_created","queueId":"queue-2","roomId":"48442729-9e1a-462b-ae6c-895289b37427","humanCount":2,"aiCount":1,"timestamp":1794726281125}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"48442729-9e1a-462b-ae6c-895289b37427","userId":"e96116e4-1eb9-46b0-83f0-45db50365ed1","humanCount":2,"aiCount":1,"timestamp":1794726281127}
+{"event":"broadcast_start","queueId":"queue-2","roomId":"48442729-9e1a-462b-ae6c-895289b37427","userId":"58d6d208-8edc-45f4-80fc-fbc9281c66d2","humanCount":2,"aiCount":1,"timestamp":1794726281130}
+{"event":"match_started","queueId":"queue-2","roomId":"48442729-9e1a-462b-ae6c-895289b37427","humanCount":2,"aiCount":1,"timestamp":1794726281130}
+{"event":"rating_policy_applied","roomId":"48442729-9e1a-462b-ae6c-895289b37427","policy":"none","sameTrioMatchNumber":1,"noContest":false,"provisionalSeats":0,"timestamp":1794726281494}
+PASS  W9 2H timeout → 1AI → both clients receive identical room/seats/BAC
+{"event":"queue_join","queueId":"queue-3","userId":"b5f425fb-613d-4e38-876e-12ab55de4e07","humanCount":1,"aiCount":2,"deadline":1794726281848,"timestamp":1794726281600}
+{"event":"queue_join","queueId":"queue-3","userId":"73834979-bf54-450c-abb5-07133373984c","humanCount":2,"aiCount":1,"deadline":1794726281850,"timestamp":1794726281602}
+{"event":"queue_join","queueId":"queue-3","userId":"25d49de2-1dc5-4e1e-a852-b5d8e32406e6","humanCount":3,"aiCount":0,"deadline":1794726281853,"timestamp":1794726281605}
+{"event":"ai_fill_begin","queueId":"queue-3","humanCount":3,"aiCount":0,"timestamp":1794726281605}
+{"event":"ai_fill_complete","queueId":"queue-3","roomId":"04a801dd-a282-4d0a-baba-cffc853a266f","humanCount":3,"aiCount":0,"timestamp":1794726281609}
+{"event":"room_created","queueId":"queue-3","roomId":"04a801dd-a282-4d0a-baba-cffc853a266f","humanCount":3,"aiCount":0,"timestamp":1794726281610}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"04a801dd-a282-4d0a-baba-cffc853a266f","userId":"b5f425fb-613d-4e38-876e-12ab55de4e07","humanCount":3,"aiCount":0,"timestamp":1794726281614}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"04a801dd-a282-4d0a-baba-cffc853a266f","userId":"73834979-bf54-450c-abb5-07133373984c","humanCount":3,"aiCount":0,"timestamp":1794726281617}
+{"event":"broadcast_start","queueId":"queue-3","roomId":"04a801dd-a282-4d0a-baba-cffc853a266f","userId":"25d49de2-1dc5-4e1e-a852-b5d8e32406e6","humanCount":3,"aiCount":0,"timestamp":1794726281620}
+{"event":"match_started","queueId":"queue-3","roomId":"04a801dd-a282-4d0a-baba-cffc853a266f","humanCount":3,"aiCount":0,"timestamp":1794726281620}
+PASS  W9 3H → immediate normal match without AI
+{"event":"queue_join","queueId":"queue-4","userId":"4130328c-7760-49a5-83ff-89466fc4bf93","humanCount":1,"aiCount":2,"deadline":1794726282351,"timestamp":1794726282102}
+{"event":"deadline_reached","queueId":"queue-4","humanCount":1,"aiCount":2,"deadline":1794726282351,"trigger":"timer","timestamp":1794726282363}
+{"event":"ai_fill_begin","queueId":"queue-4","humanCount":1,"aiCount":2,"timestamp":1794726282363}
+{"event":"ai_fill_complete","queueId":"queue-4","roomId":"f9889186-b3c4-4556-96bd-62bd02a19b8f","humanCount":1,"aiCount":2,"timestamp":1794726282367}
+{"event":"room_created","queueId":"queue-4","roomId":"f9889186-b3c4-4556-96bd-62bd02a19b8f","humanCount":1,"aiCount":2,"timestamp":1794726282367}
+{"event":"broadcast_start","queueId":"queue-4","roomId":"f9889186-b3c4-4556-96bd-62bd02a19b8f","userId":"4130328c-7760-49a5-83ff-89466fc4bf93","humanCount":1,"aiCount":2,"timestamp":1794726282369}
+{"event":"match_started","queueId":"queue-4","roomId":"f9889186-b3c4-4556-96bd-62bd02a19b8f","humanCount":1,"aiCount":2,"timestamp":1794726282369}
+{"event":"client_resume","roomId":"f9889186-b3c4-4556-96bd-62bd02a19b8f","userId":"4130328c-7760-49a5-83ff-89466fc4bf93","timestamp":1794726282383}
+{"event":"ai_tactic_selected","difficulty":3,"selectedTactic":"tactical","degraded":null,"moveLatency":232.8418999999999,"legal":true,"round":1,"seat":"A","roomId":"f9889186-b3c4-4556-96bd-62bd02a19b8f","taskId":"d33a70b9-fa7d-4a86-a7a2-ca472b4f9f25","timestamp":1794726282614}
+{"event":"rating_policy_applied","roomId":"f9889186-b3c4-4556-96bd-62bd02a19b8f","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726282767}
+PASS  W10 dropped game.start → queue.sync MATCHED replays authoritative room
+{"event":"queue_join","queueId":"queue-5","userId":"f94d267b-4ce3-4e02-838e-93c364a751fc","humanCount":1,"aiCount":2,"deadline":1794726283112,"timestamp":1794726282863}
+{"event":"queue_leave","queueId":"queue-5","userId":"f94d267b-4ce3-4e02-838e-93c364a751fc","humanCount":0,"aiCount":3,"deadline":1794726283112,"timestamp":1794726282892}
+PASS  W10 cancel before deadline → NOT_QUEUED and no ghost room
+{"event":"queue_join","queueId":"queue-6","userId":"f3f0c665-89be-4728-8d1b-e893cfaa9ffc","humanCount":1,"aiCount":2,"deadline":1794726283568,"timestamp":1794726283320}
+{"event":"queue_leave","queueId":"queue-6","userId":"f3f0c665-89be-4728-8d1b-e893cfaa9ffc","humanCount":0,"aiCount":3,"deadline":1794726283568,"timestamp":1794726283342}
+PASS  W10 disconnect before deadline → no ghost user or room
+{"event":"queue_join","queueId":"queue-7","userId":"00f249e9-8327-4ba1-be91-ed8fd36f1262","humanCount":1,"aiCount":2,"deadline":1794726283984,"timestamp":1794726283736}
+{"event":"ws_connection_replaced","userId":"00f249e9-8327-4ba1-be91-ed8fd36f1262","at":1794726283759}
+{"event":"queue_join","queueId":"queue-7","userId":"00f249e9-8327-4ba1-be91-ed8fd36f1262","humanCount":1,"aiCount":2,"deadline":1794726283984,"timestamp":1794726283762}
+{"event":"deadline_reached","queueId":"queue-7","humanCount":1,"aiCount":2,"deadline":1794726283984,"trigger":"timer","timestamp":1794726283991}
+{"event":"ai_fill_begin","queueId":"queue-7","humanCount":1,"aiCount":2,"timestamp":1794726283991}
+{"event":"ai_fill_complete","queueId":"queue-7","roomId":"4794b26e-6aa4-49a4-a084-9764e300321c","humanCount":1,"aiCount":2,"timestamp":1794726283995}
+{"event":"room_created","queueId":"queue-7","roomId":"4794b26e-6aa4-49a4-a084-9764e300321c","humanCount":1,"aiCount":2,"timestamp":1794726283995}
+{"event":"broadcast_start","queueId":"queue-7","roomId":"4794b26e-6aa4-49a4-a084-9764e300321c","userId":"00f249e9-8327-4ba1-be91-ed8fd36f1262","humanCount":1,"aiCount":2,"timestamp":1794726283997}
+{"event":"match_started","queueId":"queue-7","roomId":"4794b26e-6aa4-49a4-a084-9764e300321c","humanCount":1,"aiCount":2,"timestamp":1794726283997}
+{"event":"rating_policy_applied","roomId":"4794b26e-6aa4-49a4-a084-9764e300321c","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726284351}
+PASS  W10 stale socket close cannot evict a newer queued connection
+{"event":"queue_join","queueId":"queue-8","userId":"854bc819-70e8-4c69-9f4a-bdee3df7ab7f","humanCount":1,"aiCount":2,"deadline":1794726284808,"timestamp":1794726284561}
+{"event":"queue_join","queueId":"queue-8","userId":"27828c51-7b30-49e5-a01f-5beff8f9beab","humanCount":2,"aiCount":1,"deadline":1794726284811,"timestamp":1794726284562}
+{"event":"deadline_reached","queueId":"queue-8","humanCount":2,"aiCount":1,"deadline":1794726284808,"trigger":"timer","timestamp":1794726284819}
+{"event":"ai_fill_begin","queueId":"queue-8","humanCount":2,"aiCount":1,"timestamp":1794726284819}
+{"event":"ai_fill_complete","queueId":"queue-8","roomId":"3b61f31d-786e-41ff-9c84-a684eb3a00dc","humanCount":2,"aiCount":1,"timestamp":1794726284822}
+{"event":"room_created","queueId":"queue-8","roomId":"3b61f31d-786e-41ff-9c84-a684eb3a00dc","humanCount":2,"aiCount":1,"timestamp":1794726284822}
+{"event":"broadcast_start","queueId":"queue-8","roomId":"3b61f31d-786e-41ff-9c84-a684eb3a00dc","userId":"854bc819-70e8-4c69-9f4a-bdee3df7ab7f","humanCount":2,"aiCount":1,"timestamp":1794726284823}
+{"event":"broadcast_start","queueId":"queue-8","roomId":"3b61f31d-786e-41ff-9c84-a684eb3a00dc","userId":"27828c51-7b30-49e5-a01f-5beff8f9beab","humanCount":2,"aiCount":1,"timestamp":1794726284824}
+{"event":"match_started","queueId":"queue-8","roomId":"3b61f31d-786e-41ff-9c84-a684eb3a00dc","humanCount":2,"aiCount":1,"timestamp":1794726284825}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":119.02130000000034,"legal":true,"round":1,"seat":"A","roomId":"3b61f31d-786e-41ff-9c84-a684eb3a00dc","taskId":"1d946756-4eae-4a4a-952b-c2a042ebc485","timestamp":1794726284895}
+{"event":"rating_policy_applied","roomId":"3b61f31d-786e-41ff-9c84-a684eb3a00dc","policy":"none","sameTrioMatchNumber":1,"noContest":false,"provisionalSeats":0,"timestamp":1794726287572}
+PASS  W11 两真实账号局内聊天：身份绑定、幂等、限速、补历史和跨房间拒绝
+PASS  未完成教学不能匹配（tutorial required）
+{"event":"queue_join","queueId":"queue-9","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726287895,"timestamp":1794726287646}
+{"event":"deadline_reached","queueId":"queue-9","humanCount":1,"aiCount":2,"deadline":1794726287895,"trigger":"timer","timestamp":1794726287903}
+{"event":"ai_fill_begin","queueId":"queue-9","humanCount":1,"aiCount":2,"timestamp":1794726287903}
+{"event":"ai_fill_complete","queueId":"queue-9","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","humanCount":1,"aiCount":2,"timestamp":1794726287906}
+{"event":"room_created","queueId":"queue-9","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","humanCount":1,"aiCount":2,"timestamp":1794726287906}
+{"event":"broadcast_start","queueId":"queue-9","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"timestamp":1794726287907}
+{"event":"match_started","queueId":"queue-9","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","humanCount":1,"aiCount":2,"timestamp":1794726287907}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":146.99259999999958,"legal":true,"round":1,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"d98499f8-cf21-45b9-aa4c-638a877104bf","timestamp":1794726287993}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"tactical","degraded":null,"moveLatency":0.26490000000012515,"legal":true,"round":1,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"249667d4-676a-4dce-9bb0-b66181e06a56","timestamp":1794726288026}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"selfish","degraded":null,"moveLatency":73.09439999999995,"legal":true,"round":2,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"c5daf163-d978-49c9-8853-071abd8261fa","timestamp":1794726288078}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":129.21899999999914,"legal":true,"round":2,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"452513e9-f7ce-4487-8201-9bf7d4fc921c","timestamp":1794726288182}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"selfish","degraded":null,"moveLatency":40.79479999999967,"legal":true,"round":3,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"bc463d3a-2d5c-4c78-abab-83afa7bcae4f","timestamp":1794726288231}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":128.70219999999972,"legal":true,"round":3,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"e4ccb469-dd83-484f-ad42-b15855a5d746","timestamp":1794726288338}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":137.46270000000004,"legal":true,"round":4,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"5ec0e97d-ac1c-476b-ab92-4bd8078605cd","timestamp":1794726288420}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"tactical","degraded":null,"moveLatency":1.3284000000003289,"legal":true,"round":4,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"4f45346b-ab98-49cc-9b2a-fa3624a9e67f","timestamp":1794726288460}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":146.72279999999955,"legal":true,"round":5,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"7f09948c-ce1f-4038-ac64-eaa8b610f662","timestamp":1794726288548}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":143.89749999999913,"legal":true,"round":5,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"1b413192-47cb-44e0-87d1-ea5477797ace","timestamp":1794726288655}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"tactical","degraded":null,"moveLatency":1.2652999999991152,"legal":true,"round":6,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"006bd22a-b39f-4afe-9ae1-5bd08abb1796","timestamp":1794726288677}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":142.09459999999854,"legal":true,"round":6,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"1e450ce4-15e0-46eb-9dd1-f6b472adddb4","timestamp":1794726288794}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":125.0663999999997,"legal":true,"round":7,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"cc26bccd-9ae0-434b-a7f7-50eedc8d5973","timestamp":1794726288879}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":129.9966999999997,"legal":true,"round":7,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"9536c545-9892-4c75-8852-569c8c04ad4b","timestamp":1794726288973}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":123.04299999999967,"legal":true,"round":8,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"a751f884-efe8-4d44-8a95-859a51690b2a","timestamp":1794726289062}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":129.4982999999993,"legal":true,"round":8,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"b3f2c9c4-599f-48e0-8b05-cdcf9817ca64","timestamp":1794726289174}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"selfish","degraded":null,"moveLatency":32.78620000000046,"legal":true,"round":9,"seat":"A","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"c5709bc8-293c-4ae4-ba64-e5eafdb23c22","timestamp":1794726289203}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":1.503500000000713,"legal":true,"round":9,"seat":"C","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","taskId":"95f1c3e3-c7dc-44b7-bf7b-5b45378942c3","timestamp":1794726289249}
+{"event":"rating_policy_applied","roomId":"0f8ac266-e662-4d3e-aeda-71f561a4768c","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726289253}
+PASS  Test1 正常终局：MATCH_ENDED NORMAL_WIN + 排行 ±30/-10 + matches 落盘
+{"event":"ws_connection_replaced","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","at":1794726289317}
+{"event":"queue_join","queueId":"queue-10","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726289585,"timestamp":1794726289336}
+{"event":"queue_join","queueId":"queue-10","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":2,"aiCount":1,"deadline":1794726289587,"timestamp":1794726289338}
+{"event":"queue_join","queueId":"queue-10","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"deadline":1794726289588,"timestamp":1794726289339}
+{"event":"ai_fill_begin","queueId":"queue-10","humanCount":3,"aiCount":0,"timestamp":1794726289339}
+{"event":"ai_fill_complete","queueId":"queue-10","roomId":"4a2c3659-f723-41b2-9c84-63b918ace846","humanCount":3,"aiCount":0,"timestamp":1794726289344}
+{"event":"room_created","queueId":"queue-10","roomId":"4a2c3659-f723-41b2-9c84-63b918ace846","humanCount":3,"aiCount":0,"timestamp":1794726289344}
+{"event":"broadcast_start","queueId":"queue-10","roomId":"4a2c3659-f723-41b2-9c84-63b918ace846","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":3,"aiCount":0,"timestamp":1794726289348}
+{"event":"broadcast_start","queueId":"queue-10","roomId":"4a2c3659-f723-41b2-9c84-63b918ace846","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":3,"aiCount":0,"timestamp":1794726289352}
+{"event":"broadcast_start","queueId":"queue-10","roomId":"4a2c3659-f723-41b2-9c84-63b918ace846","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"timestamp":1794726289355}
+{"event":"match_started","queueId":"queue-10","roomId":"4a2c3659-f723-41b2-9c84-63b918ace846","humanCount":3,"aiCount":0,"timestamp":1794726289355}
+PASS  Test2 主动离开判负：A loss / B,C win（PLAYER_FORFEIT）
+{"event":"queue_join","queueId":"queue-11","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726289880,"timestamp":1794726289632}
+{"event":"deadline_reached","queueId":"queue-11","humanCount":1,"aiCount":2,"deadline":1794726289880,"trigger":"sweeper","timestamp":1794726289884}
+{"event":"ai_fill_begin","queueId":"queue-11","humanCount":1,"aiCount":2,"timestamp":1794726289884}
+{"event":"ai_fill_complete","queueId":"queue-11","roomId":"e44c0fc3-bd3a-4a29-b349-da71ec2f4130","humanCount":1,"aiCount":2,"timestamp":1794726289888}
+{"event":"room_created","queueId":"queue-11","roomId":"e44c0fc3-bd3a-4a29-b349-da71ec2f4130","humanCount":1,"aiCount":2,"timestamp":1794726289889}
+{"event":"broadcast_start","queueId":"queue-11","roomId":"e44c0fc3-bd3a-4a29-b349-da71ec2f4130","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"timestamp":1794726289891}
+{"event":"match_started","queueId":"queue-11","roomId":"e44c0fc3-bd3a-4a29-b349-da71ec2f4130","humanCount":1,"aiCount":2,"timestamp":1794726289891}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":98.51130000000012,"legal":true,"round":1,"seat":"A","roomId":"e44c0fc3-bd3a-4a29-b349-da71ec2f4130","taskId":"42239625-7f49-42b6-8f79-93028063c92b","timestamp":1794726289952}
+PASS  Test5 结束后可再次匹配（A 重新入队得到新局）
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"random","degraded":null,"moveLatency":0.20980000000054133,"legal":true,"round":1,"seat":"B","roomId":"e44c0fc3-bd3a-4a29-b349-da71ec2f4130","taskId":"14e9c297-e542-4489-b739-1a0b82745939","timestamp":1794726290086}
+{"event":"rating_policy_applied","roomId":"e44c0fc3-bd3a-4a29-b349-da71ec2f4130","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726290455}
+PASS  Test3 掉线超宽限判负：PLAYER_DISCONNECT，AI 不继续，可重匹配
+{"event":"queue_join","queueId":"queue-12","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726291063,"timestamp":1794726290814}
+{"event":"queue_join","queueId":"queue-12","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":2,"aiCount":1,"deadline":1794726291065,"timestamp":1794726290815}
+{"event":"queue_join","queueId":"queue-12","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"deadline":1794726291066,"timestamp":1794726290816}
+{"event":"ai_fill_begin","queueId":"queue-12","humanCount":3,"aiCount":0,"timestamp":1794726290817}
+{"event":"ai_fill_complete","queueId":"queue-12","roomId":"4484fc34-dd49-4eb4-ad04-764331ba09b6","humanCount":3,"aiCount":0,"timestamp":1794726290819}
+{"event":"room_created","queueId":"queue-12","roomId":"4484fc34-dd49-4eb4-ad04-764331ba09b6","humanCount":3,"aiCount":0,"timestamp":1794726290819}
+{"event":"broadcast_start","queueId":"queue-12","roomId":"4484fc34-dd49-4eb4-ad04-764331ba09b6","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":3,"aiCount":0,"timestamp":1794726290820}
+{"event":"broadcast_start","queueId":"queue-12","roomId":"4484fc34-dd49-4eb4-ad04-764331ba09b6","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":3,"aiCount":0,"timestamp":1794726290822}
+{"event":"broadcast_start","queueId":"queue-12","roomId":"4484fc34-dd49-4eb4-ad04-764331ba09b6","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"timestamp":1794726290824}
+{"event":"match_started","queueId":"queue-12","roomId":"4484fc34-dd49-4eb4-ad04-764331ba09b6","humanCount":3,"aiCount":0,"timestamp":1794726290824}
+PASS  Test4 宽限内重连恢复：resume 续局不判负
+{"event":"queue_join","queueId":"queue-13","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726292325,"timestamp":1794726292077}
+{"event":"queue_join","queueId":"queue-13","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":2,"aiCount":1,"deadline":1794726292327,"timestamp":1794726292078}
+{"event":"queue_join","queueId":"queue-13","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"deadline":1794726292328,"timestamp":1794726292079}
+{"event":"ai_fill_begin","queueId":"queue-13","humanCount":3,"aiCount":0,"timestamp":1794726292079}
+{"event":"ai_fill_complete","queueId":"queue-13","roomId":"9b33ac4e-3332-4374-a71e-cab011964321","humanCount":3,"aiCount":0,"timestamp":1794726292081}
+{"event":"room_created","queueId":"queue-13","roomId":"9b33ac4e-3332-4374-a71e-cab011964321","humanCount":3,"aiCount":0,"timestamp":1794726292081}
+{"event":"broadcast_start","queueId":"queue-13","roomId":"9b33ac4e-3332-4374-a71e-cab011964321","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":3,"aiCount":0,"timestamp":1794726292083}
+{"event":"broadcast_start","queueId":"queue-13","roomId":"9b33ac4e-3332-4374-a71e-cab011964321","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":3,"aiCount":0,"timestamp":1794726292084}
+{"event":"broadcast_start","queueId":"queue-13","roomId":"9b33ac4e-3332-4374-a71e-cab011964321","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"timestamp":1794726292086}
+{"event":"match_started","queueId":"queue-13","roomId":"9b33ac4e-3332-4374-a71e-cab011964321","humanCount":3,"aiCount":0,"timestamp":1794726292086}
+{"event":"queue_join","queueId":"queue-14","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726293155,"timestamp":1794726292906}
+{"event":"deadline_reached","queueId":"queue-14","humanCount":1,"aiCount":2,"deadline":1794726293155,"trigger":"timer","timestamp":1794726293164}
+{"event":"ai_fill_begin","queueId":"queue-14","humanCount":1,"aiCount":2,"timestamp":1794726293164}
+{"event":"ai_fill_complete","queueId":"queue-14","roomId":"3bbc739a-3b03-4647-b781-c1b51c7894a3","humanCount":1,"aiCount":2,"timestamp":1794726293166}
+{"event":"room_created","queueId":"queue-14","roomId":"3bbc739a-3b03-4647-b781-c1b51c7894a3","humanCount":1,"aiCount":2,"timestamp":1794726293166}
+{"event":"broadcast_start","queueId":"queue-14","roomId":"3bbc739a-3b03-4647-b781-c1b51c7894a3","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"timestamp":1794726293168}
+{"event":"match_started","queueId":"queue-14","roomId":"3bbc739a-3b03-4647-b781-c1b51c7894a3","humanCount":1,"aiCount":2,"timestamp":1794726293168}
+{"event":"ai_tactic_selected","difficulty":3,"selectedTactic":"tactical","degraded":null,"moveLatency":0.18460000000050059,"legal":true,"round":1,"seat":"A","roomId":"3bbc739a-3b03-4647-b781-c1b51c7894a3","taskId":"1e0c8f9a-8f36-4540-8ade-42920c831102","timestamp":1794726293180}
+{"event":"rating_policy_applied","roomId":"3bbc739a-3b03-4647-b781-c1b51c7894a3","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726293536}
+PASS  3H 全员关闭：宽限后终局清理，用户可再次匹配
+{"event":"queue_join","queueId":"queue-15","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726293805,"timestamp":1794726293556}
+{"event":"deadline_reached","queueId":"queue-15","humanCount":1,"aiCount":2,"deadline":1794726293805,"trigger":"timer","timestamp":1794726293814}
+{"event":"ai_fill_begin","queueId":"queue-15","humanCount":1,"aiCount":2,"timestamp":1794726293815}
+{"event":"ai_fill_complete","queueId":"queue-15","roomId":"d750b223-be22-4361-8726-1b844509182b","humanCount":1,"aiCount":2,"timestamp":1794726293817}
+{"event":"room_created","queueId":"queue-15","roomId":"d750b223-be22-4361-8726-1b844509182b","humanCount":1,"aiCount":2,"timestamp":1794726293817}
+{"event":"broadcast_start","queueId":"queue-15","roomId":"d750b223-be22-4361-8726-1b844509182b","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"timestamp":1794726293818}
+{"event":"match_started","queueId":"queue-15","roomId":"d750b223-be22-4361-8726-1b844509182b","humanCount":1,"aiCount":2,"timestamp":1794726293818}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":121.54379999999946,"legal":true,"round":1,"seat":"B","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"29a5ed90-59a8-476c-9ec4-64cf573f8158","timestamp":1794726293906}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"selfish","degraded":null,"moveLatency":27.649600000000646,"legal":true,"round":1,"seat":"C","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"df2dfca9-23c7-4abe-a022-8c48d761b39f","timestamp":1794726293936}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"selfish","degraded":null,"moveLatency":29.4984000000004,"legal":true,"round":2,"seat":"B","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"8fed421b-ab13-4b0e-a03e-95ae226f7645","timestamp":1794726293984}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":91.53880000000026,"legal":true,"round":2,"seat":"C","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"9ef85782-954f-4f73-817e-ac785ad215c2","timestamp":1794726294046}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"random","degraded":null,"moveLatency":1.0683000000008178,"legal":true,"round":3,"seat":"B","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"40bbc948-9e65-4885-bbed-0242e0015f8c","timestamp":1794726294091}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"selfish","degraded":null,"moveLatency":27.283300000000963,"legal":true,"round":3,"seat":"C","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"848aa134-47eb-46d0-a4bb-47b3d89deed8","timestamp":1794726294120}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":121.42489999999998,"legal":true,"round":4,"seat":"B","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"3d180a8b-6020-41f8-8a68-1e29184fa207","timestamp":1794726294213}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"selfish","degraded":null,"moveLatency":31.002000000000407,"legal":true,"round":4,"seat":"C","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"5bdd93eb-41bf-4e24-9e1e-6a8496a581a2","timestamp":1794726294246}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"3ply","degraded":null,"moveLatency":147.80059999999867,"legal":true,"round":5,"seat":"B","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"9b9d75fa-07d2-494c-9c51-de8e07d20f4f","timestamp":1794726294350}
+{"event":"ai_tactic_selected","difficulty":4,"selectedTactic":"maxn","degraded":null,"moveLatency":129.15560000000005,"legal":true,"round":5,"seat":"C","roomId":"d750b223-be22-4361-8726-1b844509182b","taskId":"d748fcce-328c-4e11-a96f-333e634dd599","timestamp":1794726294432}
+{"event":"rating_policy_applied","roomId":"d750b223-be22-4361-8726-1b844509182b","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726294813}
+PASS  W4 BAC payload：开局 R1 NONE + 未来8轮；随回合推进自动更新
+{"event":"queue_join","queueId":"queue-16","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726295089,"timestamp":1794726294840}
+{"event":"queue_join","queueId":"queue-16","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":2,"aiCount":1,"deadline":1794726295091,"timestamp":1794726294842}
+{"event":"queue_join","queueId":"queue-16","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"deadline":1794726295092,"timestamp":1794726294843}
+{"event":"ai_fill_begin","queueId":"queue-16","humanCount":3,"aiCount":0,"timestamp":1794726294843}
+{"event":"ai_fill_complete","queueId":"queue-16","roomId":"81c76283-bdae-432c-a579-e5d2022a8b44","humanCount":3,"aiCount":0,"timestamp":1794726294846}
+{"event":"room_created","queueId":"queue-16","roomId":"81c76283-bdae-432c-a579-e5d2022a8b44","humanCount":3,"aiCount":0,"timestamp":1794726294846}
+{"event":"broadcast_start","queueId":"queue-16","roomId":"81c76283-bdae-432c-a579-e5d2022a8b44","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":3,"aiCount":0,"timestamp":1794726294847}
+{"event":"broadcast_start","queueId":"queue-16","roomId":"81c76283-bdae-432c-a579-e5d2022a8b44","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":3,"aiCount":0,"timestamp":1794726294849}
+{"event":"broadcast_start","queueId":"queue-16","roomId":"81c76283-bdae-432c-a579-e5d2022a8b44","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"timestamp":1794726294850}
+{"event":"match_started","queueId":"queue-16","roomId":"81c76283-bdae-432c-a579-e5d2022a8b44","humanCount":3,"aiCount":0,"timestamp":1794726294850}
+PASS  W4 BAC 多人同步：三方 qualification 一致；resume 恢复 timeline
+{"event":"queue_join","queueId":"queue-17","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726296279,"timestamp":1794726296030}
+{"event":"queue_join","queueId":"queue-17","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":2,"aiCount":1,"deadline":1794726296281,"timestamp":1794726296031}
+{"event":"queue_join","queueId":"queue-17","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"deadline":1794726296282,"timestamp":1794726296033}
+{"event":"ai_fill_begin","queueId":"queue-17","humanCount":3,"aiCount":0,"timestamp":1794726296033}
+{"event":"ai_fill_complete","queueId":"queue-17","roomId":"4a0af8fc-327a-49eb-ba31-e2aff6c0d8fd","humanCount":3,"aiCount":0,"timestamp":1794726296035}
+{"event":"room_created","queueId":"queue-17","roomId":"4a0af8fc-327a-49eb-ba31-e2aff6c0d8fd","humanCount":3,"aiCount":0,"timestamp":1794726296035}
+{"event":"broadcast_start","queueId":"queue-17","roomId":"4a0af8fc-327a-49eb-ba31-e2aff6c0d8fd","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":3,"aiCount":0,"timestamp":1794726296036}
+{"event":"broadcast_start","queueId":"queue-17","roomId":"4a0af8fc-327a-49eb-ba31-e2aff6c0d8fd","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":3,"aiCount":0,"timestamp":1794726296038}
+{"event":"broadcast_start","queueId":"queue-17","roomId":"4a0af8fc-327a-49eb-ba31-e2aff6c0d8fd","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"timestamp":1794726296040}
+{"event":"match_started","queueId":"queue-17","roomId":"4a0af8fc-327a-49eb-ba31-e2aff6c0d8fd","humanCount":3,"aiCount":0,"timestamp":1794726296040}
+PASS  Online 座位随机分配 + 全端一致（3H 座位互异且 seats 完全一致）
+{"event":"ai_fill_complete","queueId":"invite-8d405fd0-fd42-4ce2-9bbb-91b726186054","roomId":"f9b6b059-920f-4828-8d96-c56bccfb8c93","humanCount":2,"aiCount":1,"timestamp":1794726296805}
+{"event":"room_created","queueId":"invite-8d405fd0-fd42-4ce2-9bbb-91b726186054","roomId":"f9b6b059-920f-4828-8d96-c56bccfb8c93","humanCount":2,"aiCount":1,"timestamp":1794726296805}
+{"event":"broadcast_start","queueId":"invite-8d405fd0-fd42-4ce2-9bbb-91b726186054","roomId":"f9b6b059-920f-4828-8d96-c56bccfb8c93","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":2,"aiCount":1,"timestamp":1794726296806}
+{"event":"broadcast_start","queueId":"invite-8d405fd0-fd42-4ce2-9bbb-91b726186054","roomId":"f9b6b059-920f-4828-8d96-c56bccfb8c93","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":2,"aiCount":1,"timestamp":1794726296808}
+{"event":"match_started","queueId":"invite-8d405fd0-fd42-4ce2-9bbb-91b726186054","roomId":"f9b6b059-920f-4828-8d96-c56bccfb8c93","humanCount":2,"aiCount":1,"timestamp":1794726296808}
+{"event":"rating_policy_applied","roomId":"f9b6b059-920f-4828-8d96-c56bccfb8c93","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726296859}
+PASS  Test6 好友局：PLAYER_RESIGN 被拒；不计排位（排行仅 Online）
+{"event":"queue_join","queueId":"queue-18","userId":"6d2dfb64-8b5b-4a86-a092-1e75496de873","humanCount":1,"aiCount":2,"deadline":1794726298007,"timestamp":1794726297759}
+{"event":"queue_join","queueId":"queue-18","userId":"79c7e7d5-fd74-4262-9744-c8e58260ced4","humanCount":2,"aiCount":1,"deadline":1794726298009,"timestamp":1794726297761}
+{"event":"deadline_reached","queueId":"queue-18","humanCount":2,"aiCount":1,"deadline":1794726298007,"trigger":"timer","timestamp":1794726298017}
+{"event":"ai_fill_begin","queueId":"queue-18","humanCount":2,"aiCount":1,"timestamp":1794726298017}
+{"event":"ai_fill_complete","queueId":"queue-18","roomId":"dd4dff6e-65d2-480d-a24c-85ce97394361","humanCount":2,"aiCount":1,"timestamp":1794726298019}
+{"event":"room_created","queueId":"queue-18","roomId":"dd4dff6e-65d2-480d-a24c-85ce97394361","humanCount":2,"aiCount":1,"timestamp":1794726298019}
+{"event":"broadcast_start","queueId":"queue-18","roomId":"dd4dff6e-65d2-480d-a24c-85ce97394361","userId":"6d2dfb64-8b5b-4a86-a092-1e75496de873","humanCount":2,"aiCount":1,"timestamp":1794726298021}
+{"event":"broadcast_start","queueId":"queue-18","roomId":"dd4dff6e-65d2-480d-a24c-85ce97394361","userId":"79c7e7d5-fd74-4262-9744-c8e58260ced4","humanCount":2,"aiCount":1,"timestamp":1794726298023}
+{"event":"match_started","queueId":"queue-18","roomId":"dd4dff6e-65d2-480d-a24c-85ce97394361","humanCount":2,"aiCount":1,"timestamp":1794726298023}
+{"event":"rating_policy_applied","roomId":"dd4dff6e-65d2-480d-a24c-85ce97394361","policy":"none","sameTrioMatchNumber":1,"noContest":false,"provisionalSeats":0,"timestamp":1794726298034}
+{"event":"queue_join","queueId":"queue-19","userId":"79c7e7d5-fd74-4262-9744-c8e58260ced4","humanCount":1,"aiCount":2,"deadline":1794726298852,"timestamp":1794726298604}
+{"event":"deadline_reached","queueId":"queue-19","humanCount":1,"aiCount":2,"deadline":1794726298852,"trigger":"timer","timestamp":1794726298858}
+{"event":"ai_fill_begin","queueId":"queue-19","humanCount":1,"aiCount":2,"timestamp":1794726298858}
+{"event":"ai_fill_complete","queueId":"queue-19","roomId":"79af8ba8-c788-4570-9251-28e1295d9f47","humanCount":1,"aiCount":2,"timestamp":1794726298862}
+{"event":"room_created","queueId":"queue-19","roomId":"79af8ba8-c788-4570-9251-28e1295d9f47","humanCount":1,"aiCount":2,"timestamp":1794726298862}
+{"event":"broadcast_start","queueId":"queue-19","roomId":"79af8ba8-c788-4570-9251-28e1295d9f47","userId":"79c7e7d5-fd74-4262-9744-c8e58260ced4","humanCount":1,"aiCount":2,"timestamp":1794726298865}
+{"event":"match_started","queueId":"queue-19","roomId":"79af8ba8-c788-4570-9251-28e1295d9f47","humanCount":1,"aiCount":2,"timestamp":1794726298865}
+{"event":"rating_policy_applied","roomId":"79af8ba8-c788-4570-9251-28e1295d9f47","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726299229}
+PASS  Test7 AI 补位（2H+1AI）：A 退出即终局，B 胜、AI 不继续
+{"event":"ai_fill_complete","queueId":"invite-c523770d-9c4d-4943-992a-a8eda3af27b2","roomId":"48698e40-81a0-4438-be94-758b592d8e42","humanCount":3,"aiCount":0,"timestamp":1794726299907}
+{"event":"room_created","queueId":"invite-c523770d-9c4d-4943-992a-a8eda3af27b2","roomId":"48698e40-81a0-4438-be94-758b592d8e42","humanCount":3,"aiCount":0,"timestamp":1794726299907}
+{"event":"broadcast_start","queueId":"invite-c523770d-9c4d-4943-992a-a8eda3af27b2","roomId":"48698e40-81a0-4438-be94-758b592d8e42","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":3,"aiCount":0,"timestamp":1794726299909}
+{"event":"broadcast_start","queueId":"invite-c523770d-9c4d-4943-992a-a8eda3af27b2","roomId":"48698e40-81a0-4438-be94-758b592d8e42","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":3,"aiCount":0,"timestamp":1794726299912}
+{"event":"broadcast_start","queueId":"invite-c523770d-9c4d-4943-992a-a8eda3af27b2","roomId":"48698e40-81a0-4438-be94-758b592d8e42","userId":"d99163c0-9c8f-4826-aec1-1d3df31694a3","humanCount":3,"aiCount":0,"timestamp":1794726299914}
+{"event":"match_started","queueId":"invite-c523770d-9c4d-4943-992a-a8eda3af27b2","roomId":"48698e40-81a0-4438-be94-758b592d8e42","humanCount":3,"aiCount":0,"timestamp":1794726299915}
+{"event":"rating_policy_applied","roomId":"48698e40-81a0-4438-be94-758b592d8e42","policy":"none","sameTrioMatchNumber":2,"noContest":true,"provisionalSeats":0,"timestamp":1794726299923}
+PASS  两个好友接受 → 3 真人开局（无 AI）
+{"event":"ai_fill_complete","queueId":"invite-1ecc5af1-be42-47b1-9584-11e391a0d3c2","roomId":"674c6e40-8cac-49a4-ac74-7f39a80cc9f8","humanCount":2,"aiCount":1,"timestamp":1794726301049}
+{"event":"room_created","queueId":"invite-1ecc5af1-be42-47b1-9584-11e391a0d3c2","roomId":"674c6e40-8cac-49a4-ac74-7f39a80cc9f8","humanCount":2,"aiCount":1,"timestamp":1794726301049}
+{"event":"broadcast_start","queueId":"invite-1ecc5af1-be42-47b1-9584-11e391a0d3c2","roomId":"674c6e40-8cac-49a4-ac74-7f39a80cc9f8","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":2,"aiCount":1,"timestamp":1794726301051}
+{"event":"broadcast_start","queueId":"invite-1ecc5af1-be42-47b1-9584-11e391a0d3c2","roomId":"674c6e40-8cac-49a4-ac74-7f39a80cc9f8","userId":"bf00cc97-088c-4e53-994a-fa0cc7143f8e","humanCount":2,"aiCount":1,"timestamp":1794726301053}
+{"event":"match_started","queueId":"invite-1ecc5af1-be42-47b1-9584-11e391a0d3c2","roomId":"674c6e40-8cac-49a4-ac74-7f39a80cc9f8","humanCount":2,"aiCount":1,"timestamp":1794726301053}
+{"event":"rating_policy_applied","roomId":"674c6e40-8cac-49a4-ac74-7f39a80cc9f8","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726301082}
+PASS  两好友邀请仅 1 人接受：GATHER 超时后 2H+1AI
+{"event":"queue_join","queueId":"queue-20","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"deadline":1794726301921,"timestamp":1794726301673}
+{"event":"deadline_reached","queueId":"queue-20","humanCount":1,"aiCount":2,"deadline":1794726301921,"trigger":"timer","timestamp":1794726301929}
+{"event":"ai_fill_begin","queueId":"queue-20","humanCount":1,"aiCount":2,"timestamp":1794726301929}
+{"event":"ai_fill_complete","queueId":"queue-20","roomId":"04e2b767-b339-402e-bc2f-0b2fc570d13b","humanCount":1,"aiCount":2,"timestamp":1794726301934}
+{"event":"room_created","queueId":"queue-20","roomId":"04e2b767-b339-402e-bc2f-0b2fc570d13b","humanCount":1,"aiCount":2,"timestamp":1794726301934}
+{"event":"broadcast_start","queueId":"queue-20","roomId":"04e2b767-b339-402e-bc2f-0b2fc570d13b","userId":"b243c21a-e15a-48e5-86d1-90bf57541040","humanCount":1,"aiCount":2,"timestamp":1794726301936}
+{"event":"match_started","queueId":"queue-20","roomId":"04e2b767-b339-402e-bc2f-0b2fc570d13b","humanCount":1,"aiCount":2,"timestamp":1794726301936}
+PASS  离线接受邀请不产生空转房间（用户可再匹配）
+{"event":"rating_policy_applied","roomId":"04e2b767-b339-402e-bc2f-0b2fc570d13b","policy":"none","sameTrioMatchNumber":1,"noContest":true,"provisionalSeats":0,"timestamp":1794726302301}
+
+WS INTEGRATION: ALL PASS
